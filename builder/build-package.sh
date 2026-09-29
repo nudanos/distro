@@ -39,9 +39,15 @@ main() {
     apt-get -y --no-install-recommends build-dep ./
     chown -R builder:builder /build
     runuser -u builder -- env DEB_BUILD_OPTIONS="parallel=${JOBS:-1}" dpkg-buildpackage -us -uc -I -i
-    # dir-or-file-in-opt: DANOS installs under /opt/vyatta by design; lintian-profile-vyatta
-    # disables this tag. Use that profile once it is ported (plan 2).
-    lintian --fail-on error --suppress-tags dir-or-file-in-opt ../*.changes
+    if apt-cache show lintian-profile-vyatta >/dev/null 2>&1; then
+        apt-get install -y --no-install-recommends lintian-profile-vyatta >/dev/null
+        lintian --profile vyatta --fail-on error ../*.changes
+    else
+        # Bootstrap only: before lintian-profile-vyatta is in the pool, mirror the
+        # one tag it disables (DANOS installs under /opt/vyatta by design).
+        lintian --fail-on error --suppress-tags dir-or-file-in-opt ../*.changes
+    fi
+
     cp ../*.deb ../*.dsc ../*.tar.* ../*.buildinfo ../*.changes /out/
     chown -R "$HOST_UID:$HOST_GID" /out
 }

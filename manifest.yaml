@@ -328,7 +328,8 @@ packages:
     ref: "trixie"
   - name: "lintian-profile-vyatta"
     kind: "danos"
-    milestone: "later"
+    milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/lintian-profile-vyatta"
     ref: "trixie"
   - name: "linux-firmware"
