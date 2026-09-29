@@ -104,6 +104,10 @@ func saveState(path string, st map[string]string) error {
 // tier. A package whose dependency failed or was skipped is skipped. Results
 // come back in tier order. The error return is reserved for state-file I/O,
 // the BeforeTier hook and cancellation.
+//
+// Each tier runs in three phases: decide what is cached and empty the output
+// of everything that will rebuild; run BeforeTier (which indexes the pool, so
+// the index cannot list files about to disappear); then build.
 func (b *Builder) Run(ctx context.Context, tiers [][]string, deps map[string][]string) ([]Result, error) {
 	state, err := loadState(b.StateFile)
 	if err != nil {
@@ -113,22 +117,19 @@ func (b *Builder) Run(ctx context.Context, tiers [][]string, deps map[string][]s
 	if workers < 1 {
 		workers = 1
 	}
-	var mu sync.Mutex // guards state, bad, and state-file writes
+	var mu sync.Mutex // guards state and state-file writes during a tier's builds
 	bad := map[string]bool{}
 	var results []Result
+	type job struct {
+		i         int
+		name, key string
+	}
 	for _, tier := range tiers {
 		if err := ctx.Err(); err != nil {
 			return results, err
 		}
-		if b.BeforeTier != nil {
-			if err := b.BeforeTier(ctx); err != nil {
-				return results, err
-			}
-		}
 		tierResults := make([]Result, len(tier))
-		errs := make([]error, len(tier))
-		sem := make(chan struct{}, workers)
-		var wg sync.WaitGroup
+		var jobs []job
 		for i, name := range tier {
 			blocker := ""
 			for _, d := range deps[name] {
@@ -141,13 +142,37 @@ func (b *Builder) Run(ctx context.Context, tiers [][]string, deps map[string][]s
 				tierResults[i] = Result{name, Skipped, "dependency " + blocker + " did not build"}
 				continue
 			}
+			key, err := b.key(name, deps[name], state)
+			if err != nil {
+				tierResults[i] = Result{name, Failed, err.Error()}
+				continue
+			}
+			out := filepath.Join(b.OutRoot, name)
+			if state[name] == key && HasArtifacts(out) {
+				tierResults[i] = Result{name, Cached, ""}
+				continue
+			}
+			if err := EmptyDir(out); err != nil {
+				return results, err
+			}
+			jobs = append(jobs, job{i, name, key})
+		}
+		if len(jobs) > 0 && b.BeforeTier != nil {
+			if err := b.BeforeTier(ctx); err != nil {
+				return results, err
+			}
+		}
+		errs := make([]error, len(tier))
+		sem := make(chan struct{}, workers)
+		var wg sync.WaitGroup
+		for _, j := range jobs {
 			wg.Add(1)
 			sem <- struct{}{}
-			go func(i int, name string) {
+			go func(j job) {
 				defer wg.Done()
 				defer func() { <-sem }()
-				tierResults[i], errs[i] = b.one(ctx, name, deps[name], state, &mu)
-			}(i, name)
+				tierResults[j.i], errs[j.i] = b.build(ctx, j.name, j.key, state, &mu)
+			}(j)
 		}
 		wg.Wait()
 		for i, r := range tierResults {
@@ -164,30 +189,26 @@ func (b *Builder) Run(ctx context.Context, tiers [][]string, deps map[string][]s
 	return results, nil
 }
 
-// one builds a single package. It reads dependency keys from state (those
-// packages finished in earlier tiers) and records its own key under mu.
-func (b *Builder) one(ctx context.Context, name string, deps []string, state map[string]string, mu *sync.Mutex) (Result, error) {
-	src, out := b.SrcDirs[name], filepath.Join(b.OutRoot, name)
-	hash, err := TreeHash(src)
+// key is the cache key of name: its source hash, the builder salt, and its
+// dependencies' keys (so a rebuilt dependency rebuilds its dependents,
+// transitively). Dependencies finished in earlier tiers, so state is stable.
+func (b *Builder) key(name string, deps []string, state map[string]string) (string, error) {
+	hash, err := TreeHash(b.SrcDirs[name])
 	if err != nil {
-		return Result{name, Failed, err.Error()}, nil
+		return "", err
 	}
-	mu.Lock()
-	// Dependencies' keys are part of ours, so a rebuilt dependency rebuilds
-	// its dependents (transitively, since their keys change in turn).
 	key := hash + ":" + b.KeySalt
 	for _, d := range deps {
 		key += ":" + d + "=" + state[d]
 	}
-	cached := state[name] == key && HasArtifacts(out)
-	mu.Unlock()
-	if cached {
-		return Result{name, Cached, ""}, nil
-	}
-	if err := EmptyDir(out); err != nil {
-		return Result{}, err
-	}
-	err = b.Build(ctx, name, src, out)
+	return key, nil
+}
+
+// build runs one package's build into its (already emptied) output directory
+// and records the outcome under mu.
+func (b *Builder) build(ctx context.Context, name, key string, state map[string]string, mu *sync.Mutex) (Result, error) {
+	out := filepath.Join(b.OutRoot, name)
+	err := b.Build(ctx, name, b.SrcDirs[name], out)
 	if err == nil && !HasArtifacts(out) {
 		err = errors.New("build produced no .deb files")
 	}

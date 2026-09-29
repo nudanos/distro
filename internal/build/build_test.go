@@ -269,3 +269,25 @@ func TestRebuildEmptiesOutputDirInPlace(t *testing.T) {
 		t.Error("stale artifact survived the rebuild")
 	}
 }
+
+// The pool index must not list a package that is about to be rebuilt: its old
+// files are removed before the build, so an index taken earlier points at
+// files that no longer exist (lintian-profile-vyatta installs itself).
+func TestIndexRunsAfterRebuildingOutputsAreCleared(t *testing.T) {
+	f := newFixture(t, "a")
+	if _, err := f.b.Run(context.Background(), [][]string{{"a"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	f.b.KeySalt = "builder-v2" // force a rebuild
+	sawOld := false
+	f.b.BeforeTier = func(ctx context.Context) error {
+		sawOld = HasArtifacts(filepath.Join(f.b.OutRoot, "a"))
+		return nil
+	}
+	if _, err := f.b.Run(context.Background(), [][]string{{"a"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if sawOld {
+		t.Error("index hook ran while a rebuilding package's old artifacts were still in the pool")
+	}
+}
