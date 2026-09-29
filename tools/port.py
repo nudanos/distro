@@ -239,7 +239,7 @@ def port_install(text: str) -> tuple[str, list[str]]:
 
 
 def port_links(text: str) -> str:
-    """Move .links paths out of /lib, /bin, /sbin (merged-usr)."""
+    """Move .links and .dirs paths out of /lib, /bin, /sbin (merged-usr)."""
     return "\n".join(" ".join(_usr(t) for t in line.split()) if line.strip() and not line.lstrip().startswith("#")
                      else line for line in text.split("\n"))
 
@@ -289,7 +289,7 @@ def port_tree(d: str, repo: str, date: str | None = None) -> list[str]:
         elif f.endswith(".transform"):
             new = port_transform(open(path).read())  # read fully before truncating for write
             open(path, "w").write(new)
-        elif f == "links" or f.endswith(".links"):
+        elif f in ("links", "dirs") or f.endswith((".links", ".dirs")):
             new = port_links(open(path).read())
             open(path, "w").write(new)
     cl = os.path.join(deb, "changelog")

@@ -216,6 +216,14 @@ class TreeTest(unittest.TestCase):
         again = {p: open(os.path.join(self.d, "debian", p)).read() for p in ("control", "rules", "changelog")}
         self.assertEqual(snapshot, again)
 
+    def test_dirs_move_out_of_aliased_locations(self):
+        # vci's deb-vci-helper.dirs created lib/vci/components (lintian aliased-location).
+        with open(os.path.join(self.d, "debian", "deb-vci-helper.dirs"), "w") as f:
+            f.write("lib/vci/components\n/sbin\nopt/vyatta/etc\n")
+        port.port_tree(self.d, "vyatta-cfg-system", date="Tue, 29 Sep 2026 12:00:00 +0000")
+        self.assertEqual(open(os.path.join(self.d, "debian", "deb-vci-helper.dirs")).read(),
+                         "usr/lib/vci/components\n/usr/sbin\nopt/vyatta/etc\n")
+
 
 if __name__ == "__main__":
     unittest.main()
