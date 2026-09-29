@@ -69,3 +69,21 @@ func TestParseSourceRejectsMissingSource(t *testing.T) {
 		t.Error("want error for control file without Source paragraph")
 	}
 }
+
+// deb822 field names are case-insensitive; libvci writes "Build-depends:".
+func TestFieldNamesAreCaseInsensitive(t *testing.T) {
+	s, err := ParseSource("SOURCE: libvci\nBuild-depends: golang-github-danos-vci-dev\nbuild-depends-INDEP: dh-yang\n\npackage: libvci1\nPROVIDES: libvci\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Name != "libvci" {
+		t.Errorf("Name = %q", s.Name)
+	}
+	want := [][]string{{"golang-github-danos-vci-dev"}, {"dh-yang"}}
+	if !reflect.DeepEqual(s.BuildDepends, want) {
+		t.Errorf("BuildDepends = %v, want %v", s.BuildDepends, want)
+	}
+	if !reflect.DeepEqual(s.Binaries, []string{"libvci1"}) || !reflect.DeepEqual(s.Provides, []string{"libvci"}) {
+		t.Errorf("Binaries = %v Provides = %v", s.Binaries, s.Provides)
+	}
+}

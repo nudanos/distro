@@ -12,7 +12,21 @@ import (
 )
 
 // Paragraph maps field names to values. Continuation lines are joined with a space.
+// Field names are case-insensitive in deb822, so keys are stored canonically
+// (see Canonical): look fields up as "Build-Depends", "Source", "Package".
 type Paragraph map[string]string
+
+// Canonical returns a field name with each dash-separated word capitalised and
+// the rest lower-cased: "build-depends-INDEP" -> "Build-Depends-Indep".
+func Canonical(field string) string {
+	words := strings.Split(strings.ToLower(field), "-")
+	for i, w := range words {
+		if w != "" {
+			words[i] = strings.ToUpper(w[:1]) + w[1:]
+		}
+	}
+	return strings.Join(words, "-")
+}
 
 // Parse splits deb822 text into paragraphs. Lines starting with '#' are ignored.
 func Parse(text string) []Paragraph {
@@ -40,7 +54,7 @@ func Parse(text string) []Paragraph {
 			if !ok {
 				continue
 			}
-			key = strings.TrimSpace(k)
+			key = Canonical(strings.TrimSpace(k))
 			cur[key] = strings.TrimSpace(v)
 		}
 	}
