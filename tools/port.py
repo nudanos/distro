@@ -18,7 +18,8 @@ STANDARDS = "4.7.2"
 PORT_LINE = "Port to Debian 13 (trixie): debhelper-compat 13, Standards-Version 4.7.2, Rules-Requires-Root, NuDanOS Vcs."
 DROP_DEPS = {"dh-systemd", "python3-pytest-pep8", "python3-pep8", "autotools-dev"}
 RENAME_DEPS = {"pylint3": "pylint", "python-setuptools": "python3-setuptools",
-               "bvnos-linux-libc-dev": "linux-libc-dev", "bvnos-linux-libc-dev-vyatta": "linux-libc-dev"}
+               "bvnos-linux-libc-dev": "linux-libc-dev", "bvnos-linux-libc-dev-vyatta": "linux-libc-dev",
+               "python3-pytest-lazy-fixture": "python3-pytest-lazy-fixtures"}
 
 
 def paragraphs(text: str) -> list[list[str]]:

@@ -61,6 +61,12 @@ class ControlTest(unittest.TestCase):
         self.assertNotIn("Priority", binp)
         self.assertIn("Description: system config", binp)
 
+    def test_lazy_fixture_package_renamed(self):
+        # pytest-lazy-fixture broke with pytest 8; Debian 13 ships the maintained pytest-lazy-fixtures.
+        text, _ = port.port_control("Source: v\nBuild-Depends: debhelper (>= 9), python3-pytest-lazy-fixture\n\nPackage: v\n", "v")
+        self.assertIn("python3-pytest-lazy-fixtures", text)
+        self.assertNotIn("python3-pytest-lazy-fixture,", text + ",")
+
     def test_idempotent(self):
         once, _ = port.port_control(OLD_CONTROL, "vyatta-cfg-system")
         twice, notes = port.port_control(once, "vyatta-cfg-system")
