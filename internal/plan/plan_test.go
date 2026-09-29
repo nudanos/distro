@@ -68,3 +68,26 @@ func TestBuildRejectsDuplicateProducers(t *testing.T) {
 		t.Fatalf("err = %v, want duplicate producer error naming the binary and sources", err)
 	}
 }
+func TestClosureIncludesTransitiveDependenciesOnly(t *testing.T) {
+	g := &Graph{Deps: map[string][]string{"a": nil, "b": {"a"}, "c": {"b"}, "d": {"a"}, "e": nil}}
+	got, err := g.Closure([]string{"c"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{"a": true, "b": true, "c": true}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Closure(c) = %v, want %v", got, want)
+	}
+	if _, err := g.Closure([]string{"nope"}); err == nil || !strings.Contains(err.Error(), "nope") {
+		t.Errorf("unknown name: err = %v", err)
+	}
+}
+
+func TestFilterKeepsOrderAndDropsEmptyTiers(t *testing.T) {
+	tiers := [][]string{{"a", "e"}, {"b", "d"}, {"c"}}
+	got := Filter(tiers, map[string]bool{"a": true, "c": true})
+	want := [][]string{{"a"}, {"c"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Filter = %v, want %v", got, want)
+	}
+}

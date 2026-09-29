@@ -105,3 +105,41 @@ func (g *Graph) Tiers() ([][]string, error) {
 	}
 	return tiers, nil
 }
+
+// Closure returns names plus everything they transitively build-depend on.
+func (g *Graph) Closure(names []string) (map[string]bool, error) {
+	out := map[string]bool{}
+	stack := append([]string(nil), names...)
+	for _, n := range names {
+		if _, ok := g.Deps[n]; !ok {
+			return nil, fmt.Errorf("%s is not a ready package in the manifest", n)
+		}
+	}
+	for len(stack) > 0 {
+		n := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if out[n] {
+			continue
+		}
+		out[n] = true
+		stack = append(stack, g.Deps[n]...)
+	}
+	return out, nil
+}
+
+// Filter restricts tiers to the names in keep, preserving order.
+func Filter(tiers [][]string, keep map[string]bool) [][]string {
+	var out [][]string
+	for _, t := range tiers {
+		var kept []string
+		for _, n := range t {
+			if keep[n] {
+				kept = append(kept, n)
+			}
+		}
+		if len(kept) > 0 {
+			out = append(out, kept)
+		}
+	}
+	return out
+}

@@ -176,7 +176,7 @@ func (a *app) builderSalt(ctx context.Context) (string, error) {
 	return want, checkBuilder(a.image, label, want)
 }
 
-func (a *app) run(ctx context.Context, cmd string) error {
+func (a *app) run(ctx context.Context, cmd string, names []string) error {
 	switch cmd {
 	case "builder":
 		hash, err := build.TreeHash(a.builderDir)
@@ -201,6 +201,13 @@ func (a *app) run(ctx context.Context, cmd string) error {
 	g, tiers, err := graph(dirs)
 	if err != nil {
 		return err
+	}
+	if len(names) > 0 {
+		keep, err := g.Closure(names)
+		if err != nil {
+			return err
+		}
+		tiers = plan.Filter(tiers, keep)
 	}
 	if cmd == "plan" {
 		for i, t := range tiers {
@@ -287,11 +294,11 @@ func main() {
 	flag.StringVar(&a.key, "key", "", "archive signing key fingerprint (repo)")
 	flag.Var(a.local, "local", "use a local checkout for a ready danos entry: name=dir (repeatable)")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "usage: distro-build [flags] builder|fetch|plan|build|repo\n")
+		fmt.Fprintf(os.Stderr, "usage: distro-build [flags] builder|fetch|plan|build|repo|check-updates [name…]\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
-	if flag.NArg() != 1 {
+	if flag.NArg() < 1 {
 		flag.Usage()
 		os.Exit(2)
 	}
@@ -306,7 +313,7 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	if err := a.run(ctx, flag.Arg(0)); err != nil {
+	if err := a.run(ctx, flag.Arg(0), flag.Args()[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
