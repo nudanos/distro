@@ -1,0 +1,4 @@
+# Go toolchain from trixie-backports (spec §4.2: Go 1.26).
+Package: golang-go golang-src golang-doc golang-1.26-go golang-1.26-src golang-1.26-doc
+Pin: release n=trixie-backports
+Pin-Priority: 990
