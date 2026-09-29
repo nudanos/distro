@@ -22,8 +22,20 @@ jobs:
         run: |
           mkdir -p "$HOME/.nudanos/gnupg" && chmod 700 "$HOME/.nudanos/gnupg"
           printf '%s\n' "$NUDANOS_ARCHIVE_KEY" | GNUPGHOME="$HOME/.nudanos/gnupg" gpg --batch --import
-      - name: Build, sign, install
-        run: WORK="$RUNNER_TEMP/work" KEY="$(cat keys/FINGERPRINT)" tests/integration/pilot.sh
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ${{ runner.temp }}/work/out
+            ${{ runner.temp }}/work/state.json
+            ${{ runner.temp }}/work/mirror-state.json
+          key: work-nightly-${{ github.run_id }}
+          restore-keys: work-nightly-
+      - name: Build all ready packages, sign, install the pilot set
+        run: |
+          go build -o distro-build ./cmd/distro-build
+          ./distro-build -work "$RUNNER_TEMP/work" builder
+          ./distro-build -work "$RUNNER_TEMP/work" -jobs 2 build
+          WORK="$RUNNER_TEMP/work" KEY="$(cat keys/FINGERPRINT)" tests/integration/pilot.sh
       - uses: actions/upload-artifact@v7
         with:
           name: apt-repo

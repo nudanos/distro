@@ -22,12 +22,20 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: distro/go.mod
-      - name: Build against the manifest, using this checkout for the package
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ${{ runner.temp }}/work/out
+            ${{ runner.temp }}/work/state.json
+            ${{ runner.temp }}/work/mirror-state.json
+          key: work-${{ inputs.package }}-${{ github.run_id }}
+          restore-keys: work-${{ inputs.package }}-
+      - name: Build this package and its build-dependency closure
         working-directory: distro
         run: |
           go build -o distro-build ./cmd/distro-build
           ./distro-build -work "$RUNNER_TEMP/work" builder
-          ./distro-build -work "$RUNNER_TEMP/work" -local "${{ inputs.package }}=$GITHUB_WORKSPACE/pkg" build
+          ./distro-build -work "$RUNNER_TEMP/work" -jobs 2 -local "${{ inputs.package }}=$GITHUB_WORKSPACE/pkg" build "${{ inputs.package }}"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
