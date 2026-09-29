@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 func write(t *testing.T, path, body string) {
@@ -41,6 +43,7 @@ func TestTreeHashIgnoresGitButNotContentOrMode(t *testing.T) {
 }
 
 type fixture struct {
+	mu    sync.Mutex
 	b     *Builder
 	built []string
 	fail  map[string]bool
@@ -57,7 +60,9 @@ func newFixture(t *testing.T, names ...string) *fixture {
 	f.b = &Builder{SrcDirs: dirs, OutRoot: filepath.Join(root, "out"), StateFile: filepath.Join(root, "state.json"),
 		KeySalt: "builder-v1", Log: io.Discard,
 		Build: func(ctx context.Context, name, src, out string) error {
+			f.mu.Lock()
 			f.built = append(f.built, name)
+			f.mu.Unlock()
 			if f.fail[name] {
 				return errors.New("boom")
 			}
@@ -158,5 +163,109 @@ func TestRunRebuildsDependentsWhenADependencyChanges(t *testing.T) {
 	write(t, filepath.Join(f.b.SrcDirs["a"], "debian", "rules"), "#!/usr/bin/make -f\n")
 	if s := run(); s["a"].Status != Built || s["b"].Status != Built {
 		t.Fatalf("after changing a: a=%s b=%s, want both built", s["a"].Status, s["b"].Status)
+	}
+}
+
+func TestRunBuildsATierConcurrently(t *testing.T) {
+	f := newFixture(t, "a", "b", "c")
+	var mu sync.Mutex
+	started, release := 0, make(chan struct{})
+	inner := f.b.Build
+	f.b.Workers = 3
+	f.b.Build = func(ctx context.Context, name, src, out string) error {
+		mu.Lock()
+		started++
+		if started == 3 {
+			close(release)
+		}
+		mu.Unlock()
+		select {
+		case <-release:
+		case <-time.After(5 * time.Second):
+			return errors.New("builds in one tier did not run concurrently")
+		}
+		return inner(ctx, name, src, out)
+	}
+	rs, err := f.b.Run(context.Background(), [][]string{{"a", "b", "c"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, r := range rs {
+		if r.Status != Built {
+			t.Errorf("%s = %s %s", r.Name, r.Status, r.Detail)
+		}
+		names = append(names, r.Name)
+	}
+	if strings.Join(names, ",") != "a,b,c" {
+		t.Errorf("result order = %v, want tier order a,b,c", names)
+	}
+}
+
+func TestParallelFailureStillSkipsDependents(t *testing.T) {
+	f := newFixture(t, "a", "b", "c", "d")
+	f.b.Workers = 4
+	f.fail["b"] = true
+	rs, err := f.b.Run(context.Background(), [][]string{{"a", "b", "c"}, {"d"}}, map[string][]string{"d": {"b"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := statuses(rs)
+	if s["b"].Status != Failed || s["d"].Status != Skipped || s["a"].Status != Built || s["c"].Status != Built {
+		t.Errorf("statuses = %+v", s)
+	}
+	st, err := loadState(f.b.StateFile)
+	if err != nil {
+		t.Fatalf("state file unreadable after parallel run: %v", err)
+	}
+	if st["a"] == "" || st["c"] == "" || st["b"] != "" {
+		t.Errorf("state = %v, want a and c recorded, b absent", st)
+	}
+}
+
+func TestBeforeTierRunsOncePerTierBeforeItsBuilds(t *testing.T) {
+	f := newFixture(t, "a", "b")
+	var events []string
+	f.b.BeforeTier = func(ctx context.Context) error { events = append(events, "index"); return nil }
+	inner := f.b.Build
+	f.b.Build = func(ctx context.Context, name, src, out string) error {
+		events = append(events, name)
+		return inner(ctx, name, src, out)
+	}
+	if _, err := f.b.Run(context.Background(), [][]string{{"a"}, {"b"}}, map[string][]string{"b": {"a"}}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(events, ",") != "index,a,index,b" {
+		t.Errorf("events = %v", events)
+	}
+}
+
+// Rebuilding must not delete and recreate the output directory: container
+// engines that share host folders through a VM (Docker Desktop) keep a stale
+// view of a recreated directory while its parent is mounted elsewhere.
+func TestRebuildEmptiesOutputDirInPlace(t *testing.T) {
+	f := newFixture(t, "a")
+	if _, err := f.b.Run(context.Background(), [][]string{{"a"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(f.b.OutRoot, "a")
+	before, err := os.Stat(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(out, "stale_0_all.deb"), "old")
+	f.b.KeySalt = "builder-v2"
+	if _, err := f.b.Run(context.Background(), [][]string{{"a"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Stat(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !os.SameFile(before, after) {
+		t.Error("output directory was recreated instead of emptied in place")
+	}
+	if _, err := os.Stat(filepath.Join(out, "stale_0_all.deb")); !os.IsNotExist(err) {
+		t.Error("stale artifact survived the rebuild")
 	}
 }

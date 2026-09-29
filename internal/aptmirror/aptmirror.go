@@ -71,10 +71,7 @@ func Mirror(ctx context.Context, eng engine.Engine, image string, e manifest.Ent
 	if st[e.Name] == key && build.HasArtifacts(out) {
 		return true, nil
 	}
-	if err := os.RemoveAll(out); err != nil {
-		return false, err
-	}
-	if err := os.MkdirAll(out, 0o755); err != nil {
+	if err := build.EmptyDir(out); err != nil {
 		return false, err
 	}
 	uid, gid := eng.OwnerIDs(os.Getuid(), os.Getgid())

@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 // Status is the outcome of one package in a run.
@@ -35,12 +36,35 @@ type Func func(ctx context.Context, name, srcDir, outDir string) error
 // Builder builds packages tier by tier. Artifacts for package N go to
 // OutRoot/N; the whole OutRoot is what later builds install dependencies from.
 type Builder struct {
-	SrcDirs   map[string]string // manifest name -> source checkout
-	OutRoot   string
-	StateFile string // JSON: name -> cache key of the last successful build
-	KeySalt   string // part of every cache key; change it to invalidate all
-	Build     Func
-	Log       io.Writer
+	SrcDirs    map[string]string // manifest name -> source checkout
+	OutRoot    string
+	StateFile  string // JSON: name -> cache key of the last successful build
+	KeySalt    string // part of every cache key; change it to invalidate all
+	Build      Func
+	Log        io.Writer
+	Workers    int                             // builds run at once within a tier; <=1 means serial
+	BeforeTier func(ctx context.Context) error // e.g. index the pool; nil means none
+
+}
+
+// EmptyDir makes dir an empty directory without deleting dir itself. Engines
+// that share host folders through a VM (Docker Desktop) keep a stale view of a
+// directory that is deleted and recreated while its parent is mounted by
+// another container, so output directories are emptied in place instead.
+func EmptyDir(dir string) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if err := os.RemoveAll(filepath.Join(dir, e.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // HasArtifacts reports whether dir holds at least one .deb.
@@ -76,27 +100,36 @@ func saveState(path string, st map[string]string) error {
 	return os.Rename(tmp, path)
 }
 
-// Run builds every package in tiers order. A package whose dependency failed or
-// was skipped is skipped. The error return is reserved for state-file I/O.
+// Run builds every package in tiers order, up to Workers at once within a
+// tier. A package whose dependency failed or was skipped is skipped. Results
+// come back in tier order. The error return is reserved for state-file I/O,
+// the BeforeTier hook and cancellation.
 func (b *Builder) Run(ctx context.Context, tiers [][]string, deps map[string][]string) ([]Result, error) {
 	state, err := loadState(b.StateFile)
 	if err != nil {
 		return nil, err
 	}
+	workers := b.Workers
+	if workers < 1 {
+		workers = 1
+	}
+	var mu sync.Mutex // guards state, bad, and state-file writes
 	bad := map[string]bool{}
 	var results []Result
-	record := func(r Result) {
-		if r.Status == Failed || r.Status == Skipped {
-			bad[r.Name] = true
-		}
-		results = append(results, r)
-		fmt.Fprintf(b.Log, "==> %-40s %s %s\n", r.Name, r.Status, r.Detail)
-	}
 	for _, tier := range tiers {
-		for _, name := range tier {
-			if err := ctx.Err(); err != nil {
+		if err := ctx.Err(); err != nil {
+			return results, err
+		}
+		if b.BeforeTier != nil {
+			if err := b.BeforeTier(ctx); err != nil {
 				return results, err
 			}
+		}
+		tierResults := make([]Result, len(tier))
+		errs := make([]error, len(tier))
+		sem := make(chan struct{}, workers)
+		var wg sync.WaitGroup
+		for i, name := range tier {
 			blocker := ""
 			for _, d := range deps[name] {
 				if bad[d] {
@@ -105,46 +138,67 @@ func (b *Builder) Run(ctx context.Context, tiers [][]string, deps map[string][]s
 				}
 			}
 			if blocker != "" {
-				record(Result{name, Skipped, "dependency " + blocker + " did not build"})
+				tierResults[i] = Result{name, Skipped, "dependency " + blocker + " did not build"}
 				continue
 			}
-			src, out := b.SrcDirs[name], filepath.Join(b.OutRoot, name)
-			hash, err := TreeHash(src)
-			if err != nil {
-				record(Result{name, Failed, err.Error()})
-				continue
+			wg.Add(1)
+			sem <- struct{}{}
+			go func(i int, name string) {
+				defer wg.Done()
+				defer func() { <-sem }()
+				tierResults[i], errs[i] = b.one(ctx, name, deps[name], state, &mu)
+			}(i, name)
+		}
+		wg.Wait()
+		for i, r := range tierResults {
+			if errs[i] != nil {
+				return results, errs[i]
 			}
-			// Dependencies' keys are part of ours, so a rebuilt dependency rebuilds
-			// its dependents (transitively, since their keys change in turn).
-			key := hash + ":" + b.KeySalt
-			for _, d := range deps[name] {
-				key += ":" + d + "=" + state[d]
+			if r.Status == Failed || r.Status == Skipped {
+				bad[r.Name] = true
 			}
-			if state[name] == key && HasArtifacts(out) {
-				record(Result{name, Cached, ""})
-				continue
-			}
-			if err := os.RemoveAll(out); err != nil {
-				return results, err
-			}
-			if err := os.MkdirAll(out, 0o755); err != nil {
-				return results, err
-			}
-			err = b.Build(ctx, name, src, out)
-			if err == nil && !HasArtifacts(out) {
-				err = errors.New("build produced no .deb files")
-			}
-			if err != nil {
-				delete(state, name)
-				record(Result{name, Failed, err.Error()})
-			} else {
-				state[name] = key
-				record(Result{name, Built, ""})
-			}
-			if err := saveState(b.StateFile, state); err != nil {
-				return results, err
-			}
+			results = append(results, r)
+			fmt.Fprintf(b.Log, "==> %-40s %s %s\n", r.Name, r.Status, r.Detail)
 		}
 	}
 	return results, nil
+}
+
+// one builds a single package. It reads dependency keys from state (those
+// packages finished in earlier tiers) and records its own key under mu.
+func (b *Builder) one(ctx context.Context, name string, deps []string, state map[string]string, mu *sync.Mutex) (Result, error) {
+	src, out := b.SrcDirs[name], filepath.Join(b.OutRoot, name)
+	hash, err := TreeHash(src)
+	if err != nil {
+		return Result{name, Failed, err.Error()}, nil
+	}
+	mu.Lock()
+	// Dependencies' keys are part of ours, so a rebuilt dependency rebuilds
+	// its dependents (transitively, since their keys change in turn).
+	key := hash + ":" + b.KeySalt
+	for _, d := range deps {
+		key += ":" + d + "=" + state[d]
+	}
+	cached := state[name] == key && HasArtifacts(out)
+	mu.Unlock()
+	if cached {
+		return Result{name, Cached, ""}, nil
+	}
+	if err := EmptyDir(out); err != nil {
+		return Result{}, err
+	}
+	err = b.Build(ctx, name, src, out)
+	if err == nil && !HasArtifacts(out) {
+		err = errors.New("build produced no .deb files")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	r := Result{name, Built, ""}
+	if err != nil {
+		delete(state, name)
+		r = Result{name, Failed, err.Error()}
+	} else {
+		state[name] = key
+	}
+	return r, saveState(b.StateFile, state)
 }
