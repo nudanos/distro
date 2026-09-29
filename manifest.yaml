@@ -44,11 +44,13 @@ packages:
   - name: "config"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/config"
     ref: "trixie"
   - name: "configd"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/configd"
     ref: "trixie"
   - name: "danos-service-flowstat"
@@ -86,12 +88,14 @@ packages:
     ref: "trixie"
   - name: "encoding"
     kind: "danos"
-    milestone: "later"
+    milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/encoding"
     ref: "trixie"
   - name: "ephemerad"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/ephemerad"
     ref: "trixie"
   - name: "fluent-bit"
@@ -119,21 +123,17 @@ packages:
     milestone: "1.0"
     note: "trixie-backports Go 1.26"
   - name: "golang-dbus"
-    kind: "danos"
+    kind: "debian"
     milestone: "1.0"
-    ready: true
-    repo: "https://github.com/nudanos/golang-dbus"
-    ref: "trixie"
-    note: "vendored Go module dependency from M1.1"
+    note: "Debian 13 golang-dbus-dev 5.1 provides every API DANOS uses at the same GOPATH import path; the 2017 v4 fork conflicted with Debian go-systemd (needs >= 5.0.4)"
   - name: "golang-defaults"
     kind: "debian"
     milestone: "1.0"
     note: "trixie-backports"
   - name: "golang-github-danos-encoding-rfc7951"
-    kind: "danos"
-    milestone: "1.0"
-    repo: "https://github.com/nudanos/golang-github-danos-encoding-rfc7951"
-    ref: "trixie"
+    kind: "drop"
+    milestone: "none"
+    note: "superseded by encoding: same source and binary package, stale at 0.8 (encoding is 0.10 and has the transient objects config needs)"
   - name: "golang-github-josharian-native"
     kind: "debian"
     milestone: "1.0"
@@ -177,6 +177,7 @@ packages:
   - name: "golang-jsouthworth-etm"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/golang-jsouthworth-etm"
     ref: "trixie"
   - name: "golang-jsouthworth-hash"
@@ -188,6 +189,7 @@ packages:
   - name: "golang-jsouthworth-immutable"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/golang-jsouthworth-immutable"
     ref: "trixie"
   - name: "golang-jsouthworth-seq"
@@ -233,6 +235,7 @@ packages:
   - name: "ifmgrd"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/ifmgrd"
     ref: "trixie"
   - name: "iperf"
@@ -321,6 +324,7 @@ packages:
   - name: "libvci"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/libvci"
     ref: "trixie"
     note: "build-depends on mgmterror and vci (waves B/C); built in wave C"
@@ -425,6 +429,7 @@ packages:
   - name: "notifyd"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/notifyd"
     ref: "trixie"
   - name: "ntp"
@@ -441,11 +446,13 @@ packages:
   - name: "op"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/op"
     ref: "trixie"
   - name: "opd"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/opd"
     ref: "trixie"
   - name: "opennsl-binary"
@@ -482,6 +489,7 @@ packages:
   - name: "provisiond"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/provisiond"
     ref: "trixie"
   - name: "pyang"
@@ -564,6 +572,7 @@ packages:
   - name: "vci"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vci"
     ref: "trixie"
   - name: "vci-dhcpv6-pd"
@@ -768,6 +777,7 @@ packages:
   - name: "vyatta-interfaces"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-interfaces"
     ref: "trixie"
   - name: "vyatta-interfaces-l2tpeth"
@@ -794,6 +804,7 @@ packages:
   - name: "vyatta-kdump"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-kdump"
     ref: "trixie"
   - name: "vyatta-lldp"
@@ -844,16 +855,19 @@ packages:
   - name: "vyatta-protocols-common"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-protocols-common"
     ref: "trixie"
   - name: "vyatta-protocols-frr"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-protocols-frr"
     ref: "trixie"
   - name: "vyatta-rest"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-rest"
     ref: "trixie"
   - name: "vyatta-route-broker"
@@ -885,6 +899,7 @@ packages:
   - name: "vyatta-service-dns"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-service-dns"
     ref: "trixie"
   - name: "vyatta-service-dpi"
@@ -1012,11 +1027,13 @@ packages:
   - name: "xpath-plugins"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/xpath-plugins"
     ref: "trixie"
   - name: "yang"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/yang"
     ref: "trixie"
   - name: "yangd"
