@@ -5,7 +5,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
@@ -13,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/nudanos/distro/internal/aptmirror"
 	"github.com/nudanos/distro/internal/aptrepo"
@@ -22,6 +25,7 @@ import (
 	"github.com/nudanos/distro/internal/fetch"
 	"github.com/nudanos/distro/internal/manifest"
 	"github.com/nudanos/distro/internal/plan"
+	"github.com/nudanos/distro/internal/updates"
 	"github.com/nudanos/distro/internal/upstream"
 	"github.com/nudanos/distro/internal/workspace"
 )
@@ -200,6 +204,8 @@ func (a *app) run(ctx context.Context, cmd string, names []string) error {
 	case "fetch", "plan", "build":
 	case "repo":
 		return a.repo(ctx)
+	case "check-updates":
+		return a.checkUpdates(ctx)
 	default:
 		return fmt.Errorf("unknown command %q", cmd)
 	}
@@ -344,4 +350,65 @@ func (a *app) indexPool(ctx context.Context) error {
 		Network: "none",
 		Cmd:     []string{"/usr/local/bin/index-pool"},
 	}, os.Stderr, os.Stderr)
+}
+
+func remoteTags(ctx context.Context, repo string) ([]string, error) {
+	out, err := exec.CommandContext(ctx, "git", "ls-remote", "--tags", "--refs", repo).Output()
+	if err != nil {
+		return nil, fmt.Errorf("git ls-remote %s: %w", repo, err)
+	}
+	var tags []string
+	for _, line := range strings.Split(string(out), "\n") {
+		if _, ref, ok := strings.Cut(line, "\trefs/tags/"); ok {
+			tags = append(tags, ref)
+		}
+	}
+	return tags, nil
+}
+
+// checkUpdates reports pinned versions that upstream has superseded.
+func (a *app) checkUpdates(ctx context.Context) error {
+	m, err := manifest.Load(a.manifest)
+	if err != nil {
+		return err
+	}
+	var drift []updates.Drift
+	for _, e := range m.Packages {
+		if e.Kind != manifest.Upstream || e.TagPattern == "" || e.Version == "" {
+			continue
+		}
+		tags, err := remoteTags(ctx, e.Upstream)
+		if err != nil {
+			return err
+		}
+		d, err := updates.CheckUpstream(e, tags)
+		if err != nil {
+			return err
+		}
+		if d != nil {
+			drift = append(drift, *d)
+		}
+	}
+	client := &http.Client{Timeout: 60 * time.Second}
+	for _, e := range m.Packages {
+		if e.Kind != manifest.Apt {
+			continue
+		}
+		ds, err := updates.CheckApt(ctx, e, client)
+		if err != nil {
+			return err
+		}
+		drift = append(drift, ds...)
+	}
+	if len(drift) == 0 {
+		fmt.Println("all pinned versions are current")
+		return nil
+	}
+	tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+	fmt.Fprintln(tw, "PACKAGE\tPINNED\tLATEST\tWHERE")
+	for _, d := range drift {
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", d.Name, d.Current, d.Latest, d.Detail)
+	}
+	tw.Flush()
+	return fmt.Errorf("%d pinned versions have newer releases", len(drift))
 }

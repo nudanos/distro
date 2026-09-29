@@ -1,0 +1,33 @@
+name: updates
+on:
+  schedule:
+    - cron: "41 7 * * 1"
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Check pinned versions against upstream
+        id: check
+        run: |
+          go build -o distro-build ./cmd/distro-build
+          set +e
+          ./distro-build check-updates > report.txt 2>&1
+          echo "rc=$?" >> "$GITHUB_OUTPUT"
+          cat report.txt
+      - name: Open or update the tracking issue
+        if: steps.check.outputs.rc != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Upstream updates available"
+          body=$(printf 'Weekly `distro-build check-updates` (run %s):\n\n```\n%s\n```\n' "$GITHUB_RUN_ID" "$(cat report.txt)")
+          num=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number')
+          if [ -n "$num" ]; then gh issue edit "$num" --body "$body"; else gh issue create --title "$title" --body "$body"; fi
