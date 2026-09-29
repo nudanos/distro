@@ -33,7 +33,9 @@ main() {
     apt-get -y --no-install-recommends build-dep ./
     chown -R builder:builder /build
     runuser -u builder -- dpkg-buildpackage -us -uc -I -i
-    lintian --fail-on error ../*.changes
+    # dir-or-file-in-opt: DANOS installs under /opt/vyatta by design; lintian-profile-vyatta
+    # disables this tag. Use that profile once it is ported (plan 2).
+    lintian --fail-on error --suppress-tags dir-or-file-in-opt ../*.changes
     cp ../*.deb ../*.dsc ../*.tar.* ../*.buildinfo ../*.changes /out/
     chown -R "$HOST_UID:$HOST_GID" /out
 }
