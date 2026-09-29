@@ -14,3 +14,6 @@ RUN chmod 0755 /usr/local/bin/build-package
 COPY mirror-apt.sh /usr/local/bin/mirror-apt
 COPY make-repo.sh /usr/local/bin/make-repo
 RUN chmod 0755 /usr/local/bin/mirror-apt /usr/local/bin/make-repo
+COPY apt-retries /etc/apt/apt.conf.d/80retries
+COPY index-pool.sh /usr/local/bin/index-pool
+RUN chmod 0755 /usr/local/bin/index-pool

@@ -10,14 +10,12 @@ shopt -s nullglob
 : "${PKG:?}" "${HOST_UID:=0}" "${HOST_GID:=0}"
 
 setup_local_repo() {
-    mkdir -p /tmp/pool
-    find /pool -name '*.deb' -exec cp -t /tmp/pool {} +
-    # apt 3.0 probes compressed indexes first and logs read errors when only the plain one exists
-    (cd /tmp/pool && apt-ftparchive packages . > Packages && gzip -9kf Packages && xz -kf Packages)
-    echo 'deb [trusted=yes] file:/tmp/pool ./' > /etc/apt/sources.list.d/000-local.list
+    # /pool is indexed once per tier by index-pool; read it in place.
+    echo 'deb [trusted=yes] file:/pool ./' > /etc/apt/sources.list.d/000-local.list
     printf 'Package: *\nPin: origin ""\nPin-Priority: 999\n' > /etc/apt/preferences.d/000-local
     apt-get update
 }
+
 
 main() {
     setup_local_repo
@@ -32,7 +30,7 @@ main() {
     fi
     apt-get -y --no-install-recommends build-dep ./
     chown -R builder:builder /build
-    runuser -u builder -- dpkg-buildpackage -us -uc -I -i
+    runuser -u builder -- env DEB_BUILD_OPTIONS="parallel=${JOBS:-1}" dpkg-buildpackage -us -uc -I -i
     # dir-or-file-in-opt: DANOS installs under /opt/vyatta by design; lintian-profile-vyatta
     # disables this tag. Use that profile once it is ported (plan 2).
     lintian --fail-on error --suppress-tags dir-or-file-in-opt ../*.changes

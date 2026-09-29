@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -64,6 +65,7 @@ type app struct {
 	manifest, work, image, builderDir, gnupg, key string
 	eng                                           engine.Engine
 	local                                         localFlags
+	jobs                                          int
 }
 
 func (a *app) outRoot() string { return filepath.Join(a.work, "out") }
@@ -157,7 +159,8 @@ func (a *app) containerBuild() build.Func {
 				{Host: a.outRoot(), Container: "/pool", ReadOnly: true},
 				{Host: out, Container: "/out"},
 			},
-			Env: map[string]string{"PKG": name, "HOST_UID": uid, "HOST_GID": gid},
+			Env: map[string]string{"PKG": name, "HOST_UID": uid, "HOST_GID": gid,
+				"JOBS": strconv.Itoa(max(1, runtime.NumCPU()/max(1, a.jobs)))},
 			Cmd: []string{"/usr/local/bin/build-package"},
 		}, os.Stderr, os.Stderr)
 	}
@@ -220,7 +223,7 @@ func (a *app) run(ctx context.Context, cmd string, names []string) error {
 		return err
 	}
 	b := &build.Builder{SrcDirs: dirs, OutRoot: a.outRoot(), StateFile: filepath.Join(a.work, "state.json"),
-		KeySalt: a.image + ":" + salt, Build: a.containerBuild(), Log: os.Stderr}
+		KeySalt: a.image + ":" + salt, Build: a.containerBuild(), Log: os.Stderr, Workers: a.jobs, BeforeTier: a.indexPool}
 	results, err := b.Run(ctx, tiers, g.Deps)
 	if err != nil {
 		return err
@@ -292,6 +295,7 @@ func main() {
 	flag.StringVar(&a.builderDir, "builder-dir", "builder", "directory holding the builder Dockerfile")
 	flag.StringVar(&a.gnupg, "gnupg", filepath.Join(home, ".nudanos", "gnupg"), "GnuPG home with the archive signing key (repo)")
 	flag.StringVar(&a.key, "key", "", "archive signing key fingerprint (repo)")
+	flag.IntVar(&a.jobs, "jobs", 1, "packages built at once within a tier")
 	flag.Var(a.local, "local", "use a local checkout for a ready danos entry: name=dir (repeatable)")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "usage: distro-build [flags] builder|fetch|plan|build|repo|check-updates [name…]\n")
@@ -317,4 +321,17 @@ func main() {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
+}
+
+// indexPool writes the pool's apt index once, before a tier's builds start.
+func (a *app) indexPool(ctx context.Context) error {
+	if err := os.MkdirAll(a.outRoot(), 0o755); err != nil {
+		return err
+	}
+	return a.eng.Run(ctx, engine.RunSpec{
+		Image:   a.image,
+		Mounts:  []engine.Mount{{Host: a.outRoot(), Container: "/pool"}},
+		Network: "none",
+		Cmd:     []string{"/usr/local/bin/index-pool"},
+	}, os.Stderr, os.Stderr)
 }
