@@ -76,8 +76,11 @@ def port_control(text: str, repo: str) -> tuple[str, list[str]]:
     paras = paragraphs(text)
     src = []
     for k, v in fields(paras[0]):
-        if k in ("Uploaders", "DM-Upload-Allowed") or k.startswith(("Vcs-", "XS-Vcs-")):
+        kl = k.lower()  # deb822 field names are case-insensitive (libvci: "Build-depends")
+        if kl in ("uploaders", "dm-upload-allowed") or kl.startswith(("vcs-", "xs-vcs-")):
             continue
+        if kl == "build-depends":
+            k = "Build-Depends"
         if k == "Maintainer":
             v = MAINTAINER
         elif k == "Standards-Version":
@@ -89,10 +92,10 @@ def port_control(text: str, repo: str) -> tuple[str, list[str]]:
         elif k == "Build-Depends":
             v = port_deps(v, notes)
         src.append((k, v))
-    names = [k for k, _ in src]
-    if "Build-Depends" not in names:
+    names = [k.lower() for k, _ in src]
+    if "build-depends" not in names:
         src.append(("Build-Depends", "debhelper-compat (= 13)"))
-    if "Rules-Requires-Root" not in names:
+    if "rules-requires-root" not in names:
         src.append(("Rules-Requires-Root", "no"))
     src.append(("Vcs-Git", f"https://github.com/nudanos/{repo}.git"))
     src.append(("Vcs-Browser", f"https://github.com/nudanos/{repo}"))
@@ -113,14 +116,28 @@ def port_control(text: str, repo: str) -> tuple[str, list[str]]:
 
 
 def port_rules(text: str) -> str:
+    """Drop obsolete dh addons; put GOPATH-style Go builds in GOPATH mode.
+
+    DANOS Go packages run `go vet` from custom targets with GOPATH set; Go 1.26
+    defaults to module mode ("go: cannot find main module") unless GO111MODULE=off.
+    """
     def fix(m: re.Match) -> str:
         addons = [a for a in m.group(2).split(",") if a and a not in ("systemd", "autotools_dev", "autotools-dev")]
         return f" --with {','.join(addons)}" if addons else ""
     text = re.sub(r" --with(=| )([A-Za-z0-9_,-]+)", fix, text)
-    return re.sub(r" --parallel\b", "", text)
+    text = re.sub(r" --parallel\b", "", text)
+    if re.search(r"--buildsystem[= ]golang|--with[= ][^\n]*\bgolang\b", text) and "GO111MODULE" not in text:
+        lines = text.split("\n")
+        at = 1 if lines and lines[0].startswith("#!") else 0
+        lines.insert(at, "export GO111MODULE := off")
+        text = "\n".join(lines)
+    return text
 
 
-def bump_version(v: str) -> str:
+def bump_version(v: str, native: bool = False) -> str:
+    if "-" in v and native:
+        # A native version may not carry a Debian revision.
+        return v.rsplit("-", 1)[0] + "+nudanos1"
     if "-" in v:
         return v + "+nudanos1"
     m = re.match(r"^(.*?)(\d+)$", v)
@@ -150,11 +167,14 @@ def port_tree(d: str, repo: str, date: str | None = None) -> list[str]:
         open(rules, "w").write(new)
     cl = os.path.join(deb, "changelog")
     old = open(cl).read()
+    fmt = os.path.join(deb, "source", "format")
+    quilt = os.path.exists(fmt) and "quilt" in open(fmt).read()
     if PORT_LINE not in old.split("\n -- ", 1)[0]:
         top = re.match(r"^\S+ \(([^)]+)\)", old).group(1)
-        open(cl, "w").write(new_changelog(old, bump_version(top), date or email.utils.formatdate(localtime=True)))
-    fmt = os.path.join(deb, "source", "format")
-    if os.path.exists(fmt) and "quilt" in open(fmt).read():
+        # 3.0 (native) and 1.0 without an orig tarball both build as native.
+        open(cl, "w").write(new_changelog(old, bump_version(top, native=not quilt),
+                                          date or email.utils.formatdate(localtime=True)))
+    if quilt:
         notes.append("NOTE: 3.0 (quilt): the builder generates the orig tarball from the tree minus debian/")
     return notes
 

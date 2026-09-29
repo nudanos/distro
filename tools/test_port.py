@@ -68,7 +68,23 @@ class ControlTest(unittest.TestCase):
         self.assertEqual(notes, [])
 
 
+class FieldCaseTest(unittest.TestCase):
+    def test_lowercase_build_depends_is_recognised(self):
+        # libvci writes "Build-depends:"; a second Build-Depends field breaks dpkg.
+        text, _ = port.port_control("Source: libvci\nBuild-depends: debhelper (>= 9), dh-golang\n\nPackage: libvci1\n", "libvci")
+        src = text.split("\n\n")[0]
+        self.assertEqual(src.lower().count("build-depends:"), 1)
+        self.assertIn("Build-Depends: debhelper-compat (= 13),\n dh-golang", src)
+
+
 class RulesTest(unittest.TestCase):
+    def test_golang_rules_get_gopath_mode(self):
+        rules = "#!/usr/bin/make -f\nexport DH_GOPKG := github.com/danos/utils\n\n%:\n\tdh $@ --buildsystem=golang --with golang\n"
+        out = port.port_rules(rules)
+        self.assertIn("export GO111MODULE := off\n", out)
+        self.assertEqual(port.port_rules(out), out)
+        self.assertNotIn("GO111MODULE", port.port_rules("%:\n\tdh $@\n"))
+
     def test_drops_obsolete_addons(self):
         rules = "%:\n\tdh $@ --with systemd,python3,yang --parallel\n\noverride_x:\n\tdh $@ --with=autotools_dev\n"
         out = port.port_rules(rules)
@@ -85,6 +101,13 @@ class VersionTest(unittest.TestCase):
         self.assertEqual(port.bump_version("0.1.27"), "0.1.28")
         self.assertEqual(port.bump_version("1.0.1-1"), "1.0.1-1+nudanos1")
         self.assertEqual(port.bump_version("4.0.0~git20170308-0vyatta3"), "4.0.0~git20170308-0vyatta3+nudanos1")
+
+    def test_bump_native_drops_the_revision(self):
+        # A native package's version may not contain '-' (lintian malformed-debian-changelog-version).
+        self.assertEqual(port.bump_version("1.0.1-1", native=True), "1.0.1+nudanos1")
+        self.assertEqual(port.bump_version("4.2.0-1", native=True), "4.2.0+nudanos1")
+        self.assertEqual(port.bump_version("2:1.3-0vyatta2", native=True), "2:1.3+nudanos1")
+        self.assertEqual(port.bump_version("1.29", native=True), "1.30")
 
 
 class TreeTest(unittest.TestCase):
