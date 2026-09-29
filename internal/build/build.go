@@ -114,7 +114,12 @@ func (b *Builder) Run(ctx context.Context, tiers [][]string, deps map[string][]s
 				record(Result{name, Failed, err.Error()})
 				continue
 			}
+			// Dependencies' keys are part of ours, so a rebuilt dependency rebuilds
+			// its dependents (transitively, since their keys change in turn).
 			key := hash + ":" + b.KeySalt
+			for _, d := range deps[name] {
+				key += ":" + d + "=" + state[d]
+			}
 			if state[name] == key && HasArtifacts(out) {
 				record(Result{name, Cached, ""})
 				continue

@@ -138,3 +138,25 @@ func TestRunFailsWhenBuildProducesNoDebs(t *testing.T) {
 		t.Errorf("status = %s, want failed", rs[0].Status)
 	}
 }
+
+// A rebuilt dependency must invalidate its dependents: Go -dev libraries are
+// compiled statically into their consumers.
+func TestRunRebuildsDependentsWhenADependencyChanges(t *testing.T) {
+	f := newFixture(t, "a", "b")
+	tiers, deps := [][]string{{"a"}, {"b"}}, map[string][]string{"b": {"a"}}
+	run := func() map[string]Result {
+		rs, err := f.b.Run(context.Background(), tiers, deps)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return statuses(rs)
+	}
+	run()
+	if s := run(); s["a"].Status != Cached || s["b"].Status != Cached {
+		t.Fatalf("second run a=%s b=%s, want cached", s["a"].Status, s["b"].Status)
+	}
+	write(t, filepath.Join(f.b.SrcDirs["a"], "debian", "rules"), "#!/usr/bin/make -f\n")
+	if s := run(); s["a"].Status != Built || s["b"].Status != Built {
+		t.Fatalf("after changing a: a=%s b=%s, want both built", s["a"].Status, s["b"].Status)
+	}
+}
