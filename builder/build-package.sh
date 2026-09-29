@@ -12,7 +12,8 @@ shopt -s nullglob
 setup_local_repo() {
     mkdir -p /tmp/pool
     find /pool -name '*.deb' -exec cp -t /tmp/pool {} +
-    (cd /tmp/pool && apt-ftparchive packages . > Packages)
+    # apt 3.0 probes compressed indexes first and logs read errors when only the plain one exists
+    (cd /tmp/pool && apt-ftparchive packages . > Packages && gzip -9kf Packages && xz -kf Packages)
     echo 'deb [trusted=yes] file:/tmp/pool ./' > /etc/apt/sources.list.d/000-local.list
     printf 'Package: *\nPin: origin ""\nPin-Priority: 999\n' > /etc/apt/preferences.d/000-local
     apt-get update
