@@ -3,6 +3,7 @@ packages:
   - name: "aaa"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/aaa"
     ref: "trixie"
   - name: "accton-hwdiag"
@@ -33,6 +34,7 @@ packages:
   - name: "cli-sandbox"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/cli-sandbox"
     ref: "trixie"
   - name: "cloud-init"
@@ -139,6 +141,7 @@ packages:
   - name: "golang-github-jsouthworth-objtree"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/golang-github-jsouthworth-objtree"
     ref: "trixie"
     note: "vendored Go module dependency from M1.1"
@@ -190,16 +193,19 @@ packages:
   - name: "golang-jsouthworth-seq"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/golang-jsouthworth-seq"
     ref: "trixie"
   - name: "golang-jsouthworth-transduce"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/golang-jsouthworth-transduce"
     ref: "trixie"
   - name: "golang-jsouthworth-try"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/golang-jsouthworth-try"
     ref: "trixie"
   - name: "grub"
@@ -373,6 +379,7 @@ packages:
   - name: "mgmterror"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/mgmterror"
     ref: "trixie"
   - name: "mstpd"
@@ -504,6 +511,7 @@ packages:
   - name: "routing-instance"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/routing-instance"
     ref: "trixie"
   - name: "rsyslog"
@@ -609,6 +617,7 @@ packages:
   - name: "vyatta-cfg"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-cfg"
     ref: "trixie"
   - name: "vyatta-cfg-bonding"
@@ -616,11 +625,13 @@ packages:
     milestone: "1.0"
     repo: "https://github.com/nudanos/vyatta-cfg-bonding"
     ref: "trixie"
+    note: "build-depends on libvci-perl (wave C) and libvyatta-dataplane-proto-support (wave E); built in wave E"
   - name: "vyatta-cfg-dataplane"
     kind: "danos"
     milestone: "1.0"
     repo: "https://github.com/nudanos/vyatta-cfg-dataplane"
     ref: "trixie"
+    note: "build-depends on the dataplane protobuf libraries; built in wave E"
   - name: "vyatta-cfg-default"
     kind: "danos"
     milestone: "1.0"
@@ -630,6 +641,7 @@ packages:
   - name: "vyatta-cfg-journalbeat"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-cfg-journalbeat"
     ref: "trixie"
   - name: "vyatta-cfg-sflow"
@@ -640,16 +652,19 @@ packages:
   - name: "vyatta-cfg-system"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-cfg-system"
     ref: "trixie"
   - name: "vyatta-client-ssh"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-client-ssh"
     ref: "trixie"
   - name: "vyatta-config-mgmt"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-config-mgmt"
     ref: "trixie"
   - name: "vyatta-config-migrate"
@@ -747,6 +762,7 @@ packages:
   - name: "vyatta-image-tools"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-image-tools"
     ref: "trixie"
   - name: "vyatta-interfaces"
@@ -757,6 +773,7 @@ packages:
   - name: "vyatta-interfaces-l2tpeth"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-interfaces-l2tpeth"
     ref: "trixie"
   - name: "vyatta-ipmi"
@@ -788,11 +805,13 @@ packages:
   - name: "vyatta-log"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-log"
     ref: "trixie"
   - name: "vyatta-login"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-login"
     ref: "trixie"
   - name: "vyatta-mibs-misc"
@@ -804,11 +823,13 @@ packages:
   - name: "vyatta-op"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-op"
     ref: "trixie"
   - name: "vyatta-openvpn-yang"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-openvpn-yang"
     ref: "trixie"
   - name: "vyatta-platform"
@@ -853,6 +874,7 @@ packages:
   - name: "vyatta-service-bridge"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-service-bridge"
     ref: "trixie"
   - name: "vyatta-service-dhcp"
@@ -878,11 +900,13 @@ packages:
   - name: "vyatta-service-gnss"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-service-gnss"
     ref: "trixie"
   - name: "vyatta-service-ntp"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-service-ntp"
     ref: "trixie"
   - name: "vyatta-service-pcp"
@@ -894,31 +918,37 @@ packages:
   - name: "vyatta-service-portmonitor"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-service-portmonitor"
     ref: "trixie"
   - name: "vyatta-service-snmp"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-service-snmp"
     ref: "trixie"
   - name: "vyatta-service-ssh"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-service-ssh"
     ref: "trixie"
   - name: "vyatta-service-switch"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-service-switch"
     ref: "trixie"
   - name: "vyatta-service-telnet"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-service-telnet"
     ref: "trixie"
   - name: "vyatta-service-twamp"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-service-twamp"
     ref: "trixie"
   - name: "vyatta-snmp-vrf-agent"
@@ -926,14 +956,17 @@ packages:
     milestone: "1.0"
     repo: "https://github.com/nudanos/vyatta-snmp-vrf-agent"
     ref: "trixie"
+    note: "build-depends on libsnmp-dev (< 5.8) | libsnmp-dev-vyatta; rebuilt against net-snmp 5.9 after wave D"
   - name: "vyatta-sssd"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-sssd"
     ref: "trixie"
   - name: "vyatta-syslog"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-syslog"
     ref: "trixie"
   - name: "vyatta-system-timing"
@@ -944,11 +977,13 @@ packages:
   - name: "vyatta-tacacs"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-tacacs"
     ref: "trixie"
   - name: "vyatta-tech-support"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-tech-support"
     ref: "trixie"
   - name: "vyatta-util"
@@ -971,6 +1006,7 @@ packages:
   - name: "vyatta-vrrp"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-vrrp"
     ref: "trixie"
   - name: "xpath-plugins"
