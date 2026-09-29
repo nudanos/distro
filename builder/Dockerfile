@@ -11,3 +11,6 @@ RUN echo 'deb http://deb.debian.org/debian trixie-backports main' > /etc/apt/sou
 COPY preferences /etc/apt/preferences.d/nudanos
 COPY build-package.sh /usr/local/bin/build-package
 RUN chmod 0755 /usr/local/bin/build-package
+COPY mirror-apt.sh /usr/local/bin/mirror-apt
+COPY make-repo.sh /usr/local/bin/make-repo
+RUN chmod 0755 /usr/local/bin/mirror-apt /usr/local/bin/make-repo

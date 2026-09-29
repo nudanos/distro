@@ -13,6 +13,8 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/nudanos/distro/internal/aptmirror"
+	"github.com/nudanos/distro/internal/aptrepo"
 	"github.com/nudanos/distro/internal/build"
 	"github.com/nudanos/distro/internal/control"
 	"github.com/nudanos/distro/internal/engine"
@@ -95,9 +97,6 @@ func (a *app) fetch(ctx context.Context, m *manifest.Manifest) (map[string]strin
 	}
 	return dirs, nil
 }
-
-// mirror is replaced in Task 11.
-func (a *app) mirror(ctx context.Context, m *manifest.Manifest) error { return nil }
 
 func graph(dirs map[string]string) (*plan.Graph, [][]string, error) {
 	srcs := map[string]*control.Source{}
@@ -182,8 +181,36 @@ func (a *app) run(ctx context.Context, cmd string) error {
 	return nil
 }
 
-// repo is replaced in Task 11.
-func (a *app) repo(ctx context.Context) error { return fmt.Errorf("repo: not available yet") }
+func (a *app) mirror(ctx context.Context, m *manifest.Manifest) error {
+	for _, e := range m.Ready(manifest.Apt) {
+		cached, err := aptmirror.Mirror(ctx, a.eng, a.image, e, a.outRoot(),
+			filepath.Join(a.work, "mirror-state.json"), os.Stderr)
+		if err != nil {
+			return err
+		}
+		status := "downloaded"
+		if cached {
+			status = "cached"
+		}
+		fmt.Fprintf(os.Stderr, "==> mirror %s %s\n", e.Name, status)
+	}
+	return nil
+}
+
+func (a *app) repo(ctx context.Context) error {
+	if a.key == "" {
+		return fmt.Errorf("repo: -key <fingerprint> is required")
+	}
+	if err := a.checkWork(); err != nil {
+		return err
+	}
+	dir := filepath.Join(a.work, "repo")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	return a.eng.Run(ctx, aptrepo.Spec(a.image, a.outRoot(), dir, a.gnupg, a.key, os.Getuid(), os.Getgid()),
+		os.Stderr, os.Stderr)
+}
 
 func main() {
 	home, _ := os.UserHomeDir()
