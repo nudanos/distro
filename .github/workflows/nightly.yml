@@ -8,6 +8,9 @@ permissions:
 jobs:
   pilot:
     runs-on: ubuntu-24.04
+    # The signing key lives only in this environment, whose deployment rule
+    # admits the main branch alone: no other repo, branch or PR can read it.
+    environment: release
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
