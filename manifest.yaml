@@ -12,6 +12,7 @@ packages:
   - name: "base-files"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/base-files"
     ref: "trixie"
   - name: "bcm-kbp-linux-modules"
@@ -118,6 +119,7 @@ packages:
   - name: "golang-dbus"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/golang-dbus"
     ref: "trixie"
     note: "vendored Go module dependency from M1.1"
@@ -155,6 +157,7 @@ packages:
   - name: "golang-github-zeromq-goczmq"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/golang-github-zeromq-goczmq"
     ref: "trixie"
     note: "vendored Go module dependency from M1.1"
@@ -165,6 +168,7 @@ packages:
   - name: "golang-jsouthworth-dyn"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/golang-jsouthworth-dyn"
     ref: "trixie"
   - name: "golang-jsouthworth-etm"
@@ -175,6 +179,7 @@ packages:
   - name: "golang-jsouthworth-hash"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/golang-jsouthworth-hash"
     ref: "trixie"
   - name: "golang-jsouthworth-immutable"
@@ -279,6 +284,7 @@ packages:
   - name: "libnss-vrfdns"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/libnss-vrfdns"
     ref: "trixie"
   - name: "libpam-chvrf"
@@ -311,6 +317,7 @@ packages:
     milestone: "1.0"
     repo: "https://github.com/nudanos/libvci"
     ref: "trixie"
+    note: "build-depends on mgmterror and vci (waves B/C); built in wave C"
   - name: "libvirt"
     kind: "debian"
     milestone: "1.0"
@@ -347,6 +354,7 @@ packages:
   - name: "live-boot-vyatta"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/live-boot-vyatta"
     ref: "trixie"
   - name: "live-build-desc"
@@ -356,6 +364,7 @@ packages:
   - name: "lu"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/lu"
     ref: "trixie"
   - name: "makedumpfile"
@@ -522,6 +531,7 @@ packages:
     milestone: "1.0"
     repo: "https://github.com/nudanos/tacplusd"
     ref: "trixie"
+    note: "build-depends on libtac-dev from pam_tacplus (wave D); ported, built after wave D"
   - name: "tests"
     kind: "reference"
     milestone: "none"
@@ -537,6 +547,7 @@ packages:
   - name: "utils"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/utils"
     ref: "trixie"
   - name: "valgrind"
@@ -580,16 +591,19 @@ packages:
   - name: "vrf-manager"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vrf-manager"
     ref: "trixie"
   - name: "vyatta-base"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-base"
     ref: "trixie"
   - name: "vyatta-bash"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-bash"
     ref: "trixie"
   - name: "vyatta-cfg"
@@ -610,6 +624,7 @@ packages:
   - name: "vyatta-cfg-default"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-cfg-default"
     ref: "trixie"
   - name: "vyatta-cfg-journalbeat"
@@ -640,6 +655,7 @@ packages:
   - name: "vyatta-config-migrate"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-config-migrate"
     ref: "trixie"
   - name: "vyatta-controller"
@@ -655,6 +671,7 @@ packages:
   - name: "vyatta-curl-wrapper"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-curl-wrapper"
     ref: "trixie"
   - name: "vyatta-dataplane"
@@ -670,31 +687,37 @@ packages:
   - name: "vyatta-debian-lldpd-config"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-debian-lldpd-config"
     ref: "trixie"
   - name: "vyatta-debian-pam-configs-config"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-debian-pam-configs-config"
     ref: "trixie"
   - name: "vyatta-debian-passwd-config"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-debian-passwd-config"
     ref: "trixie"
   - name: "vyatta-debian-ssh-server-config"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-debian-ssh-server-config"
     ref: "trixie"
   - name: "vyatta-debian-system-config"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-debian-system-config"
     ref: "trixie"
   - name: "vyatta-debian-systemd-config"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-debian-systemd-config"
     ref: "trixie"
   - name: "vyatta-debug"
@@ -714,6 +737,7 @@ packages:
   - name: "vyatta-hotplug"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-hotplug"
     ref: "trixie"
   - name: "vyatta-hwdiag"
@@ -747,6 +771,7 @@ packages:
   - name: "vyatta-ipv6-rtradv"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-ipv6-rtradv"
     ref: "trixie"
   - name: "vyatta-kdump"
@@ -757,6 +782,7 @@ packages:
   - name: "vyatta-lldp"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-lldp"
     ref: "trixie"
   - name: "vyatta-log"
@@ -772,6 +798,7 @@ packages:
   - name: "vyatta-mibs-misc"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-mibs-misc"
     ref: "trixie"
   - name: "vyatta-op"
@@ -933,6 +960,7 @@ packages:
   - name: "vyatta-version"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-version"
     ref: "trixie"
   - name: "vyatta-vmware-tools"
