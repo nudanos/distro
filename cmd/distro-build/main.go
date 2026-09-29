@@ -48,6 +48,18 @@ func (l localFlags) Set(v string) error {
 	return nil
 }
 
+// builderLabel records the hash of builder/ an image was built from.
+const builderLabel = "org.nudanos.builder-hash"
+
+// checkBuilder fails when the image was not built from the current builder/.
+func checkBuilder(image, label, want string) error {
+	if label != want {
+		return fmt.Errorf("builder image %s is out of date with builder/ (image %q, directory %q); "+
+			"run 'distro-build builder' first", image, label, want)
+	}
+	return nil
+}
+
 type app struct {
 	manifest, work, image, builderDir, gnupg, key string
 	eng                                           engine.Engine
@@ -76,6 +88,11 @@ func (a *app) fetch(ctx context.Context, m *manifest.Manifest) (map[string]strin
 	}
 	if err := build.Prune(a.outRoot(), readyNames(m), os.Stderr); err != nil {
 		return nil, err
+	}
+	if len(m.Ready(manifest.Apt)) > 0 {
+		if _, err := a.builderSalt(ctx); err != nil {
+			return nil, err
+		}
 	}
 	if err := a.mirror(ctx, m); err != nil {
 		return nil, err
@@ -146,10 +163,27 @@ func (a *app) containerBuild() build.Func {
 	}
 }
 
+// builderSalt returns the builder hash after checking the image matches builder/.
+func (a *app) builderSalt(ctx context.Context) (string, error) {
+	want, err := build.TreeHash(a.builderDir)
+	if err != nil {
+		return "", fmt.Errorf("hashing builder dir: %w", err)
+	}
+	label, err := a.eng.ImageLabel(ctx, a.image, builderLabel)
+	if err != nil {
+		return "", err
+	}
+	return want, checkBuilder(a.image, label, want)
+}
+
 func (a *app) run(ctx context.Context, cmd string) error {
 	switch cmd {
 	case "builder":
-		return a.eng.BuildImage(ctx, a.builderDir, a.image, os.Stderr, os.Stderr)
+		hash, err := build.TreeHash(a.builderDir)
+		if err != nil {
+			return fmt.Errorf("hashing builder dir: %w", err)
+		}
+		return a.eng.BuildImage(ctx, a.builderDir, a.image, map[string]string{builderLabel: hash}, os.Stderr, os.Stderr)
 	case "fetch", "plan", "build":
 	case "repo":
 		return a.repo(ctx)
@@ -174,9 +208,9 @@ func (a *app) run(ctx context.Context, cmd string) error {
 		}
 		return nil
 	}
-	salt, err := build.TreeHash(a.builderDir)
+	salt, err := a.builderSalt(ctx)
 	if err != nil {
-		return fmt.Errorf("hashing builder dir: %w", err)
+		return err
 	}
 	b := &build.Builder{SrcDirs: dirs, OutRoot: a.outRoot(), StateFile: filepath.Join(a.work, "state.json"),
 		KeySalt: a.image + ":" + salt, Build: a.containerBuild(), Log: os.Stderr}
@@ -227,6 +261,9 @@ func (a *app) repo(ctx context.Context) error {
 		return err
 	}
 	if err := build.Prune(a.outRoot(), readyNames(m), os.Stderr); err != nil {
+		return err
+	}
+	if _, err := a.builderSalt(ctx); err != nil {
 		return err
 	}
 	dir := filepath.Join(a.work, "repo")

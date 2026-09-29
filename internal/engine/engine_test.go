@@ -34,3 +34,19 @@ func TestOwnerIDs(t *testing.T) {
 		t.Errorf("docker OwnerIDs = %d:%d, want 501:20", uid, gid)
 	}
 }
+
+func TestBuildArgsLabelsTheImage(t *testing.T) {
+	got := Engine{Bin: "docker"}.BuildArgs("builder", "nudanos/builder:trixie", map[string]string{"org.nudanos.builder-hash": "abc"})
+	want := []string{"build", "--pull", "--label", "org.nudanos.builder-hash=abc", "-t", "nudanos/builder:trixie", "builder"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("BuildArgs = %v, want %v", got, want)
+	}
+}
+
+func TestLabelArgs(t *testing.T) {
+	got := Engine{Bin: "podman"}.LabelArgs("img", "org.nudanos.builder-hash")
+	want := []string{"image", "inspect", "--format", `{{ index .Config.Labels "org.nudanos.builder-hash" }}`, "img"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("LabelArgs = %v, want %v", got, want)
+	}
+}
