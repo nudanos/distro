@@ -194,6 +194,7 @@ def port_rules(text: str) -> str:
 
     DANOS Go packages run `go vet` from custom targets with GOPATH set; Go 1.26
     defaults to module mode ("go: cannot find main module") unless GO111MODULE=off.
+    A rules file that exports GOPATH (libvci's Makefile build) is in the same position.
     """
     def fix(m: re.Match) -> str:
         addons = [a for a in m.group(2).split(",") if a and a not in ("systemd", "autotools_dev", "autotools-dev")]
@@ -201,7 +202,8 @@ def port_rules(text: str) -> str:
     text = port_systemd_overrides(text)
     text = re.sub(r" --with(=| )([A-Za-z0-9_,-]+)", fix, text)
     text = re.sub(r" --parallel\b", "", text)
-    if re.search(r"--buildsystem[= ]golang|--with[= ][^\n]*\bgolang\b", text) and "GO111MODULE" not in text:
+    gopath = r"--buildsystem[= ]golang|--with[= ][^\n]*\bgolang\b|^export GOPATH\b"
+    if re.search(gopath, text, re.M) and "GO111MODULE" not in text:
         lines = text.split("\n")
         at = 1 if lines and lines[0].startswith("#!") else 0
         lines.insert(at, "export GO111MODULE := off")

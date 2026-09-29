@@ -91,6 +91,13 @@ class RulesTest(unittest.TestCase):
         self.assertEqual(port.port_rules(out), out)
         self.assertNotIn("GO111MODULE", port.port_rules("%:\n\tdh $@\n"))
 
+    def test_gopath_export_gets_gopath_mode(self):
+        # libvci builds Go from a plain Makefile ("go: cannot find main module") and exports GOPATH.
+        rules = "#!/usr/bin/make -f\nexport GOPATH=/usr/share/gocode\n\n%:\n\tdh $@ --with python3\n"
+        out = port.port_rules(rules)
+        self.assertIn("export GO111MODULE := off\n", out)
+        self.assertEqual(port.port_rules(out), out)
+
     def test_drops_obsolete_addons(self):
         rules = "%:\n\tdh $@ --with systemd,python3,yang --parallel\n\noverride_x:\n\tdh $@ --with=autotools_dev\n"
         out = port.port_rules(rules)
