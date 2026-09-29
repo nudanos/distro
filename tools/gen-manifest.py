@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate manifest.yaml from the review data (docs/data) and spec §4.3.
+"""Generated the initial manifest.yaml (plan 1). manifest.yaml is now edited by hand; do not re-run.
 
 Hand edits to manifest.yaml are expected after generation (ready flags, audit
 notes); re-run only to rebuild from scratch, then review the diff.
