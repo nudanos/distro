@@ -20,5 +20,4 @@
    - lintian errors
 
    Commit each fix separately, with the reason in the message.
-5. **Push** `trixie` and add `.github/workflows/package.yml` (the caller: `uses: nudanos/distro/.github/workflows/package.yml@main`, `with: package: <repo>`).
-6. **Record.** Make sure `ready: true` is committed in `manifest.yaml`.
+5. **Record, then push.** Commit and push `ready: true` in `manifest.yaml` **first**: each push triggers the package CI, which rejects `-local` for an entry that isn't ready yet. Then push `trixie` and add `.github/workflows/package.yml` (the caller: `uses: nudanos/distro/.github/workflows/package.yml@main`, `with: package: <repo>`).
