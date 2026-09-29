@@ -22,6 +22,7 @@ import (
 	"github.com/nudanos/distro/internal/fetch"
 	"github.com/nudanos/distro/internal/manifest"
 	"github.com/nudanos/distro/internal/plan"
+	"github.com/nudanos/distro/internal/upstream"
 	"github.com/nudanos/distro/internal/workspace"
 )
 
@@ -112,6 +113,15 @@ func (a *app) fetch(ctx context.Context, m *manifest.Manifest) (map[string]strin
 		}
 		dirs[e.Name] = d
 	}
+	for _, e := range m.Ready(manifest.Upstream) {
+		fmt.Fprintf(os.Stderr, "==> prepare %s %s (%s)\n", e.Name, e.Version, e.Tag)
+		d, err := upstream.Prepare(ctx, e, filepath.Join(filepath.Dir(a.manifest), "patches"), a.work, os.Stderr)
+		if err != nil {
+			return nil, err
+		}
+		dirs[e.Name] = d
+	}
+
 	for name := range a.local {
 		if _, ok := dirs[name]; !ok {
 			return nil, fmt.Errorf("-local %s: no ready danos entry with that name", name)
@@ -123,7 +133,7 @@ func (a *app) fetch(ctx context.Context, m *manifest.Manifest) (map[string]strin
 // readyNames is every entry whose output belongs in the pool.
 func readyNames(m *manifest.Manifest) map[string]bool {
 	keep := map[string]bool{}
-	for _, k := range []manifest.Kind{manifest.Danos, manifest.Apt} {
+	for _, k := range []manifest.Kind{manifest.Danos, manifest.Apt, manifest.Upstream} {
 		for _, e := range m.Ready(k) {
 			keep[e.Name] = true
 		}

@@ -25,9 +25,17 @@ main() {
     local format="1.0"
     [ -f debian/source/format ] && format="$(cat debian/source/format)"
     if [ "$format" = "3.0 (quilt)" ]; then
-        echo "error: $PKG uses 3.0 (quilt); building from an upstream tarball arrives in plan 2" >&2
-        exit 2
+        local src upver
+        src=$(dpkg-parsechangelog -S Source)
+        upver=$(dpkg-parsechangelog -S Version | sed -E 's/^[0-9]+://; s/-[^-]*$//')
+        if ! compgen -G "/build/${src}_${upver}.orig.tar.*" >/dev/null; then
+            # No orig tarball: generate one from the tree minus debian/ (our
+            # upstream kind and DANOS quilt forks keep the full source in git).
+            tar -C /build --exclude=pkg/debian --exclude=pkg/.git --sort=name --mtime='@0' \
+                --owner=0 --group=0 --numeric-owner -cJf "/build/${src}_${upver}.orig.tar.xz" pkg
+        fi
     fi
+
     apt-get -y --no-install-recommends build-dep ./
     chown -R builder:builder /build
     runuser -u builder -- env DEB_BUILD_OPTIONS="parallel=${JOBS:-1}" dpkg-buildpackage -us -uc -I -i

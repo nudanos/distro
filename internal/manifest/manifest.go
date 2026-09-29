@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	yaml "go.yaml.in/yaml/v3"
@@ -24,22 +25,36 @@ const (
 
 var milestones = map[string]bool{"1.0": true, "1.1": true, "1.5": true, "2": true, "later": true, "none": true}
 
+// AuditEntry records the decision on one DANOS patch to an upstream package.
+type AuditEntry struct {
+	Patch   string `yaml:"patch"`
+	Verdict string `yaml:"verdict"` // kept | upstreamed | dropped
+	Note    string `yaml:"note,omitempty"`
+}
+
 // Entry is one package or repository in the manifest.
 type Entry struct {
-	Name      string            `yaml:"name"`
-	Kind      Kind              `yaml:"kind"`
-	Milestone string            `yaml:"milestone"`
-	Ready     bool              `yaml:"ready,omitempty"`
-	Repo      string            `yaml:"repo,omitempty"`
-	Ref       string            `yaml:"ref,omitempty"`
-	Upstream  string            `yaml:"upstream,omitempty"`
-	Track     string            `yaml:"track,omitempty"`
-	Packaging string            `yaml:"packaging,omitempty"`
-	Patches   string            `yaml:"patches,omitempty"`
-	Source    string            `yaml:"source,omitempty"`   // apt: "URL SUITE COMPONENT"
-	Key       string            `yaml:"key,omitempty"`      // apt: signing key URL
-	Packages  map[string]string `yaml:"packages,omitempty"` // apt: binary package -> exact version
-	Note      string            `yaml:"note,omitempty"`
+	Name         string       `yaml:"name"`
+	Kind         Kind         `yaml:"kind"`
+	Milestone    string       `yaml:"milestone"`
+	Ready        bool         `yaml:"ready,omitempty"`
+	Repo         string       `yaml:"repo,omitempty"`
+	Ref          string       `yaml:"ref,omitempty"`
+	Upstream     string       `yaml:"upstream,omitempty"`
+	Track        string       `yaml:"track,omitempty"`
+	Packaging    string       `yaml:"packaging,omitempty"`
+	Patches      string       `yaml:"patches,omitempty"`
+	Version      string       `yaml:"version,omitempty"`       // upstream: upstream version built
+	Tag          string       `yaml:"tag,omitempty"`           // upstream: git tag of Version
+	TagPattern   string       `yaml:"tag_pattern,omitempty"`   // upstream: regexp, group 1 = version
+	PackagingRef string       `yaml:"packaging_ref,omitempty"` // upstream: branch or tag of packaging
+	Audit        []AuditEntry `yaml:"audit,omitempty"`
+	Exclude      []string     `yaml:"exclude,omitempty"` // upstream: globs absent from the release tarball
+
+	Source   string            `yaml:"source,omitempty"`   // apt: "URL SUITE COMPONENT"
+	Key      string            `yaml:"key,omitempty"`      // apt: signing key URL
+	Packages map[string]string `yaml:"packages,omitempty"` // apt: binary package -> exact version
+	Note     string            `yaml:"note,omitempty"`
 }
 
 // Manifest is the whole package list.
@@ -102,9 +117,17 @@ func (m *Manifest) Validate() error {
 			if e.Track != "latest" && e.Track != "lts" && e.Track != "debian" {
 				bad("track must be latest, lts or debian")
 			}
-			if e.Ready {
-				bad("upstream builds are not implemented yet (plan 2); keep ready: false")
+			if e.TagPattern != "" {
+				if re, err := regexp.Compile(e.TagPattern); err != nil {
+					bad("tag_pattern: " + err.Error())
+				} else if re.NumSubexp() != 1 {
+					bad("tag_pattern needs exactly one capture group (the version)")
+				}
 			}
+			if e.Ready && (e.Version == "" || e.Tag == "" || e.PackagingRef == "" || e.TagPattern == "") {
+				bad("ready upstream entries need version, tag, tag_pattern and packaging_ref")
+			}
+
 		case Apt:
 			if len(strings.Fields(e.Source)) != 3 || e.Key == "" || len(e.Packages) == 0 {
 				bad(`apt entries need source "URL SUITE COMPONENT", key and packages`)
@@ -116,6 +139,12 @@ func (m *Manifest) Validate() error {
 		default:
 			bad(fmt.Sprintf("unknown kind %q", e.Kind))
 		}
+		for _, a := range e.Audit {
+			if a.Verdict != "kept" && a.Verdict != "upstreamed" && a.Verdict != "dropped" {
+				bad(fmt.Sprintf("audit %s: verdict must be kept, upstreamed or dropped", a.Patch))
+			}
+		}
+
 	}
 	if len(errs) > 0 {
 		return fmt.Errorf("manifest invalid:\n  %s", strings.Join(errs, "\n  "))

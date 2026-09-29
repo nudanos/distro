@@ -53,15 +53,14 @@ func TestParseGood(t *testing.T) {
 
 func TestParseRejects(t *testing.T) {
 	cases := map[string]struct{ yaml, want string }{
-		"unknown field":  {"packages:\n  - name: a\n    kind: danos\n    milestone: \"1.0\"\n    repo: r\n    ref: x\n    reff: typo\n", "reff"},
-		"duplicate":      {"packages:\n  - {name: a, kind: debian, milestone: \"1.0\"}\n  - {name: a, kind: debian, milestone: \"1.0\"}\n", "duplicate"},
-		"danos no ref":   {"packages:\n  - {name: a, kind: danos, milestone: \"1.0\", repo: r}\n", "repo and ref"},
-		"upstream ready": {"packages:\n  - {name: a, kind: upstream, milestone: \"1.1\", ready: true, upstream: u, packaging: p, track: latest}\n", "not implemented"},
-		"bad track":      {"packages:\n  - {name: a, kind: upstream, milestone: \"1.1\", upstream: u, packaging: p, track: newest}\n", "track"},
-		"apt source":     {"packages:\n  - {name: a, kind: apt, milestone: \"1.0\", source: \"https://x trixie\", key: k, packages: {p: \"1\"}}\n", "URL SUITE COMPONENT"},
-		"bad kind":       {"packages:\n  - {name: a, kind: rpm, milestone: \"1.0\"}\n", "unknown kind"},
-		"bad milestone":  {"packages:\n  - {name: a, kind: debian, milestone: \"3\"}\n", "milestone"},
-		"debian ready":   {"packages:\n  - {name: a, kind: debian, milestone: \"1.0\", ready: true}\n", "cannot be ready"},
+		"unknown field": {"packages:\n  - name: a\n    kind: danos\n    milestone: \"1.0\"\n    repo: r\n    ref: x\n    reff: typo\n", "reff"},
+		"duplicate":     {"packages:\n  - {name: a, kind: debian, milestone: \"1.0\"}\n  - {name: a, kind: debian, milestone: \"1.0\"}\n", "duplicate"},
+		"danos no ref":  {"packages:\n  - {name: a, kind: danos, milestone: \"1.0\", repo: r}\n", "repo and ref"},
+		"bad track":     {"packages:\n  - {name: a, kind: upstream, milestone: \"1.1\", upstream: u, packaging: p, track: newest}\n", "track"},
+		"apt source":    {"packages:\n  - {name: a, kind: apt, milestone: \"1.0\", source: \"https://x trixie\", key: k, packages: {p: \"1\"}}\n", "URL SUITE COMPONENT"},
+		"bad kind":      {"packages:\n  - {name: a, kind: rpm, milestone: \"1.0\"}\n", "unknown kind"},
+		"bad milestone": {"packages:\n  - {name: a, kind: debian, milestone: \"3\"}\n", "milestone"},
+		"debian ready":  {"packages:\n  - {name: a, kind: debian, milestone: \"1.0\", ready: true}\n", "cannot be ready"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -70,5 +69,35 @@ func TestParseRejects(t *testing.T) {
 				t.Errorf("err = %v, want mention of %q", err, c.want)
 			}
 		})
+	}
+}
+
+func TestUpstreamReadyNeedsPins(t *testing.T) {
+	base := "packages:\n  - {name: k, kind: upstream, milestone: \"1.0\", ready: true, upstream: u, packaging: p, track: latest"
+	cases := map[string]struct{ tail, want string }{
+		"no version": {", tag: v1, tag_pattern: '^v(.*)$', packaging_ref: master}\n", "version"},
+		"no tag":     {", version: \"1\", tag_pattern: '^v(.*)$', packaging_ref: master}\n", "tag"},
+		"no ref":     {", version: \"1\", tag: v1, tag_pattern: '^v(.*)$'}\n", "packaging_ref"},
+		"bad regexp": {", version: \"1\", tag: v1, tag_pattern: '^v(', packaging_ref: master}\n", "tag_pattern"},
+		"no group":   {", version: \"1\", tag: v1, tag_pattern: '^v.*$', packaging_ref: master}\n", "capture group"},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := Parse([]byte(base + c.tail))
+			if err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Errorf("err = %v, want mention of %q", err, c.want)
+			}
+		})
+	}
+	ok := base + ", version: \"2.4.3\", tag: v2.4.3, tag_pattern: '^v(\\d+\\.\\d+\\.\\d+)$', packaging_ref: master}\n"
+	if _, err := Parse([]byte(ok)); err != nil {
+		t.Errorf("complete upstream entry rejected: %v", err)
+	}
+}
+
+func TestAuditVerdicts(t *testing.T) {
+	y := "packages:\n  - name: k\n    kind: upstream\n    milestone: \"1.0\"\n    upstream: u\n    packaging: p\n    track: latest\n    audit:\n      - {patch: a.patch, verdict: maybe, note: x}\n"
+	if _, err := Parse([]byte(y)); err == nil || !strings.Contains(err.Error(), "verdict") {
+		t.Errorf("err = %v, want verdict error", err)
 	}
 }
