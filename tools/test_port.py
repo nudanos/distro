@@ -194,6 +194,8 @@ class TreeTest(unittest.TestCase):
             f.write("9\n")
         with open(os.path.join(self.d, "debian", "rules"), "w") as f:
             f.write("%:\n\tdh $@ --with systemd\n")
+        with open(os.path.join(self.d, "debian", "x.transform"), "w") as f:
+            f.write("/etc/a.vyatta perl -pe 's|(a)|${1}|'\n")
         with open(os.path.join(self.d, "debian", "changelog"), "w") as f:
             f.write("vyatta-cfg-system (2.35) unstable; urgency=medium\n\n  * Old.\n\n -- V <v@v>  Mon, 01 Jan 2021 00:00:00 +0000\n")
 
@@ -204,6 +206,8 @@ class TreeTest(unittest.TestCase):
         port.port_tree(self.d, "vyatta-cfg-system", date="Tue, 29 Sep 2026 12:00:00 +0000")
         self.assertFalse(os.path.exists(os.path.join(self.d, "debian", "compat")))
         self.assertEqual(open(os.path.join(self.d, "debian", "rules")).read(), "%:\n\tdh $@\n")
+        self.assertEqual(open(os.path.join(self.d, "debian", "x.transform")).read(),
+                         "/etc/a.vyatta perl -pe 's|(a)|${Dollar}{1}|'\n")
         cl = open(os.path.join(self.d, "debian", "changelog")).read()
         self.assertTrue(cl.startswith("vyatta-cfg-system (2.36) trixie; urgency=medium\n"))
         self.assertIn(" -- NuDanOS Maintainers <jon@fernandez.tech>  Tue, 29 Sep 2026 12:00:00 +0000", cl)

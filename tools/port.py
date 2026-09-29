@@ -287,7 +287,8 @@ def port_tree(d: str, repo: str, date: str | None = None) -> list[str]:
             notes += n
             open(path, "w").write(new)
         elif f.endswith(".transform"):
-            open(path, "w").write(port_transform(open(path).read()))
+            new = port_transform(open(path).read())  # read fully before truncating for write
+            open(path, "w").write(new)
         elif f == "links" or f.endswith(".links"):
             new = port_links(open(path).read())
             open(path, "w").write(new)
