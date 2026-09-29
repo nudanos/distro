@@ -93,6 +93,38 @@ class RulesTest(unittest.TestCase):
         self.assertEqual(port.port_rules(out), out)
 
 
+class SystemdOverrideTest(unittest.TestCase):
+    """compat 11 merged dh_systemd_enable/start into dh_installsystemd; dh aborts on the old overrides."""
+
+    def test_enable_lines_get_start_flags(self):
+        rules = ("%:\n\tdh $@\n\noverride_dh_systemd_enable:\n"
+                 "\tdh_systemd_enable -p a --name=x x.service\n\tdh_systemd_enable --name=snmptrapd --no-enable\n"
+                 "override_dh_systemd_start:\n\tdh_systemd_start --no-start\n")
+        out = port.port_rules(rules)
+        self.assertNotIn("dh_systemd_", out)
+        self.assertIn("override_dh_installsystemd:\n"
+                      "\tdh_installsystemd -p a --name=x --no-start x.service\n"
+                      "\tdh_installsystemd --name=snmptrapd --no-enable --no-start\n", out)
+        self.assertEqual(port.port_rules(out), out)
+
+    def test_start_only_becomes_global_no_start(self):
+        rules = ("override_dh_systemd_start:\n\tdh_systemd_start --no-start \\\n"
+                 "\t\tvyatta-autoinstall.service \\\n\t\tother.service\n\noverride_dh_auto_test:\n\ttrue\n")
+        out = port.port_rules(rules)
+        self.assertIn("override_dh_installsystemd:\n\tdh_installsystemd --no-start\n", out)
+        self.assertIn("override_dh_auto_test:\n\ttrue\n", out)
+        self.assertNotIn("autoinstall", out)
+
+    def test_dangling_continuation_keeps_flags(self):
+        # vyatta-image-tools' override ends with "\\" before a blank line.
+        out = port.port_rules("override_dh_systemd_start:\n\tdh_systemd_start --no-start \\\n\t\tvyatta-autoinstall.service \\\n\n")
+        self.assertIn("\tdh_installsystemd --no-start\n", out)
+
+    def test_enable_only_keeps_starting(self):
+        out = port.port_rules("override_dh_systemd_enable:\n\tdh_systemd_enable --package p --name=m\n")
+        self.assertEqual(out, "override_dh_installsystemd:\n\tdh_installsystemd --package p --name=m\n")
+
+
 class VersionTest(unittest.TestCase):
     def test_bump(self):
         self.assertEqual(port.bump_version("1.29"), "1.30")

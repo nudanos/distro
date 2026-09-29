@@ -115,6 +115,79 @@ def port_control(text: str, repo: str) -> tuple[str, list[str]]:
     return "\n\n".join(out) + "\n", notes
 
 
+START_FLAGS = {"--no-start", "--no-restart-on-upgrade", "--restart-after-upgrade", "--no-stop-on-upgrade",
+               "--no-restart-after-upgrade"}
+VALUE_OPTS = {"-p", "--package", "-N", "--no-package", "--name"}
+
+
+def _make_blocks(text: str) -> list[tuple[str, list[str], int, int]]:
+    """(target, joined recipe commands, start line, end line) for each rule in a makefile."""
+    lines = text.split("\n")
+    blocks = []
+    i = 0
+    while i < len(lines):
+        m = re.match(r"^([A-Za-z0-9_.%-]+):", lines[i])
+        if not m:
+            i += 1
+            continue
+        start, cmds, cur = i, [], ""
+        i += 1
+        while i < len(lines) and lines[i].startswith("\t"):
+            part = lines[i].strip()
+            cur += (" " if cur else "") + part.rstrip("\\").strip()
+            if not part.endswith("\\"):
+                cmds.append(cur)
+                cur = ""
+            i += 1
+        if cur:  # a recipe ending in a dangling "\" continuation
+            cmds.append(cur)
+        blocks.append((m.group(1), cmds, start, i))
+    return blocks
+
+
+def _with_flags(cmd: str, flags: list[str]) -> str:
+    toks = cmd.split()[1:]
+    out, pos, expect_value = [], None, False
+    for t in toks:
+        if expect_value:
+            expect_value = False
+        elif t.startswith("-"):
+            expect_value = t in VALUE_OPTS
+        elif pos is None:
+            pos = len(out)
+        out.append(t)
+    flags = [f for f in flags if f not in out]
+    out = out[:pos] + flags + out[pos:] if pos is not None else out + flags
+    return " ".join(["dh_installsystemd"] + out)
+
+
+def port_systemd_overrides(text: str) -> str:
+    """Rewrite override_dh_systemd_{enable,start} (removed in compat 11) as override_dh_installsystemd.
+
+    Each dh_systemd_enable line becomes a dh_installsystemd line carrying the start
+    override's flags. A start override alone (which then handled only the units it
+    listed) becomes a global `dh_installsystemd <flags>`: every unit is enabled, as
+    the default dh_systemd_enable did, and none is started, as before.
+    """
+    blocks = {t: (c, a, b) for t, c, a, b in _make_blocks(text) if t in ("override_dh_systemd_enable", "override_dh_systemd_start")}
+    if not blocks:
+        return text
+    flags = []
+    for c in blocks.get("override_dh_systemd_start", ([], 0, 0))[0]:
+        flags += [t for t in c.split() if t in START_FLAGS and t not in flags]
+    enable = blocks.get("override_dh_systemd_enable", ([], 0, 0))[0]
+    new = [_with_flags(c, flags) for c in enable if c.startswith("dh_systemd_enable")] if enable else \
+        [" ".join(["dh_installsystemd"] + flags)]
+    block = "override_dh_installsystemd:\n" + "".join(f"\t{c}\n" for c in new)
+    lines = text.split("\n")
+    spans = sorted((a, b) for _, a, b in blocks.values())
+    first = spans[0][0]
+    for a, b in reversed(spans):
+        del lines[a:b]
+    lines.insert(first, block.rstrip("\n"))
+    return "\n".join(lines)
+
+
 def port_rules(text: str) -> str:
     """Drop obsolete dh addons; put GOPATH-style Go builds in GOPATH mode.
 
@@ -124,6 +197,7 @@ def port_rules(text: str) -> str:
     def fix(m: re.Match) -> str:
         addons = [a for a in m.group(2).split(",") if a and a not in ("systemd", "autotools_dev", "autotools-dev")]
         return f" --with {','.join(addons)}" if addons else ""
+    text = port_systemd_overrides(text)
     text = re.sub(r" --with(=| )([A-Za-z0-9_,-]+)", fix, text)
     text = re.sub(r" --parallel\b", "", text)
     if re.search(r"--buildsystem[= ]golang|--with[= ][^\n]*\bgolang\b", text) and "GO111MODULE" not in text:
