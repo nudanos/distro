@@ -74,6 +74,9 @@ func (a *app) fetch(ctx context.Context, m *manifest.Manifest) (map[string]strin
 	if err := a.checkWork(); err != nil {
 		return nil, err
 	}
+	if err := build.Prune(a.outRoot(), readyNames(m), os.Stderr); err != nil {
+		return nil, err
+	}
 	if err := a.mirror(ctx, m); err != nil {
 		return nil, err
 	}
@@ -96,6 +99,17 @@ func (a *app) fetch(ctx context.Context, m *manifest.Manifest) (map[string]strin
 		}
 	}
 	return dirs, nil
+}
+
+// readyNames is every entry whose output belongs in the pool.
+func readyNames(m *manifest.Manifest) map[string]bool {
+	keep := map[string]bool{}
+	for _, k := range []manifest.Kind{manifest.Danos, manifest.Apt} {
+		for _, e := range m.Ready(k) {
+			keep[e.Name] = true
+		}
+	}
+	return keep
 }
 
 func graph(dirs map[string]string) (*plan.Graph, [][]string, error) {
@@ -205,6 +219,13 @@ func (a *app) repo(ctx context.Context) error {
 		return fmt.Errorf("repo: -key <fingerprint> is required")
 	}
 	if err := a.checkWork(); err != nil {
+		return err
+	}
+	m, err := manifest.Load(a.manifest)
+	if err != nil {
+		return err
+	}
+	if err := build.Prune(a.outRoot(), readyNames(m), os.Stderr); err != nil {
 		return err
 	}
 	dir := filepath.Join(a.work, "repo")
