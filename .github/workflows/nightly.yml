@@ -1,0 +1,27 @@
+name: nightly
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pilot:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Import archive signing key
+        env:
+          NUDANOS_ARCHIVE_KEY: ${{ secrets.NUDANOS_ARCHIVE_KEY }}
+        run: |
+          mkdir -p "$HOME/.nudanos/gnupg" && chmod 700 "$HOME/.nudanos/gnupg"
+          printf '%s\n' "$NUDANOS_ARCHIVE_KEY" | GNUPGHOME="$HOME/.nudanos/gnupg" gpg --batch --import
+      - name: Build, sign, install
+        run: WORK="$RUNNER_TEMP/work" KEY="$(cat keys/FINGERPRINT)" tests/integration/pilot.sh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: apt-repo
+          path: ${{ runner.temp }}/work/repo/

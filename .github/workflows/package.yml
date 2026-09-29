@@ -1,0 +1,36 @@
+name: package
+on:
+  workflow_call:
+    inputs:
+      package:
+        description: manifest name of the calling package repository
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: nudanos/distro
+          path: distro
+      - uses: actions/checkout@v7
+        with:
+          path: pkg
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: distro/go.mod
+      - name: Build against the manifest, using this checkout for the package
+        working-directory: distro
+        run: |
+          go build -o distro-build ./cmd/distro-build
+          ./distro-build -work "$RUNNER_TEMP/work" builder
+          ./distro-build -work "$RUNNER_TEMP/work" -local "${{ inputs.package }}=$GITHUB_WORKSPACE/pkg" build
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: debs-${{ inputs.package }}
+          path: ${{ runner.temp }}/work/out/${{ inputs.package }}/
+          if-no-files-found: ignore
