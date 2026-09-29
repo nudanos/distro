@@ -1,0 +1,98 @@
+// Package plan orders source packages by their build dependencies.
+package plan
+
+import (
+	"fmt"
+	"sort"
+	"strings"
+
+	"github.com/nudanos/distro/internal/control"
+)
+
+// Graph holds build-order edges: Deps[a] lists the nodes a build-depends on.
+type Graph struct {
+	Deps map[string][]string
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// Build derives edges from Build-Depends. A dependency counts only if another
+// source in the set produces it (as a binary, or failing that as a Provides).
+// For alternatives, the first alternative produced inside the set wins.
+func Build(sources map[string]*control.Source) *Graph {
+	names := sortedKeys(sources)
+	producer := map[string]string{}
+	for _, n := range names {
+		for _, b := range sources[n].Binaries {
+			producer[b] = n
+		}
+	}
+	for _, n := range names {
+		for _, p := range sources[n].Provides {
+			if _, taken := producer[p]; !taken {
+				producer[p] = n
+			}
+		}
+	}
+	g := &Graph{Deps: map[string][]string{}}
+	for _, n := range names {
+		set := map[string]bool{}
+		for _, alts := range sources[n].BuildDepends {
+			for _, a := range alts {
+				if p, ok := producer[a]; ok {
+					if p != n {
+						set[p] = true
+					}
+					break
+				}
+			}
+		}
+		var deps []string
+		if len(set) > 0 {
+			deps = sortedKeys(set)
+		}
+		g.Deps[n] = deps
+	}
+	return g
+}
+
+// Tiers groups nodes so each tier depends only on earlier tiers. On a cycle it
+// returns the tiers resolved so far and an error naming the unresolvable nodes.
+func (g *Graph) Tiers() ([][]string, error) {
+	done := map[string]bool{}
+	remaining := sortedKeys(g.Deps)
+	var tiers [][]string
+	for len(remaining) > 0 {
+		var tier, rest []string
+		for _, n := range remaining {
+			ready := true
+			for _, d := range g.Deps[n] {
+				if !done[d] {
+					ready = false
+					break
+				}
+			}
+			if ready {
+				tier = append(tier, n)
+			} else {
+				rest = append(rest, n)
+			}
+		}
+		if len(tier) == 0 {
+			return tiers, fmt.Errorf("dependency cycle (or blocked by one) among: %s", strings.Join(rest, ", "))
+		}
+		for _, n := range tier {
+			done[n] = true
+		}
+		tiers = append(tiers, tier)
+		remaining = rest
+	}
+	return tiers, nil
+}
