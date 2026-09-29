@@ -22,3 +22,15 @@ func TestRunArgs(t *testing.T) {
 		t.Errorf("RunArgs =\n %v\nwant\n %v", got, want)
 	}
 }
+
+// Files written into bind mounts are chowned to OwnerIDs. Under rootless
+// podman, container uid 0 already is the invoking user; chowning to the host
+// uid would map to a subordinate uid the user cannot delete.
+func TestOwnerIDs(t *testing.T) {
+	if uid, gid := (Engine{Bin: "podman"}).OwnerIDs(501, 20); uid != 0 || gid != 0 {
+		t.Errorf("podman OwnerIDs = %d:%d, want 0:0", uid, gid)
+	}
+	if uid, gid := (Engine{Bin: "docker"}).OwnerIDs(501, 20); uid != 501 || gid != 20 {
+		t.Errorf("docker OwnerIDs = %d:%d, want 501:20", uid, gid)
+	}
+}

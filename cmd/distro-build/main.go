@@ -130,7 +130,8 @@ func graph(dirs map[string]string) (*plan.Graph, [][]string, error) {
 }
 
 func (a *app) containerBuild() build.Func {
-	uid, gid := strconv.Itoa(os.Getuid()), strconv.Itoa(os.Getgid())
+	u, g := a.eng.OwnerIDs(os.Getuid(), os.Getgid())
+	uid, gid := strconv.Itoa(u), strconv.Itoa(g)
 	return func(ctx context.Context, name, src, out string) error {
 		return a.eng.Run(ctx, engine.RunSpec{
 			Image: a.image,
@@ -232,7 +233,8 @@ func (a *app) repo(ctx context.Context) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	return a.eng.Run(ctx, aptrepo.Spec(a.image, a.outRoot(), dir, a.gnupg, a.key, os.Getuid(), os.Getgid()),
+	uid, gid := a.eng.OwnerIDs(os.Getuid(), os.Getgid())
+	return a.eng.Run(ctx, aptrepo.Spec(a.image, a.outRoot(), dir, a.gnupg, a.key, uid, gid),
 		os.Stderr, os.Stderr)
 }
 

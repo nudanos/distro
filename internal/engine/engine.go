@@ -30,6 +30,16 @@ type Engine struct {
 	Bin string
 }
 
+// OwnerIDs returns the uid:gid that container scripts should chown bind-mounted
+// output to so the host user owns it. Rootless podman maps container uid 0 to
+// the invoking user, so there the answer is 0:0; docker needs the host ids.
+func (e Engine) OwnerIDs(hostUID, hostGID int) (int, int) {
+	if e.Bin == "podman" {
+		return 0, 0
+	}
+	return hostUID, hostGID
+}
+
 // RunArgs returns the CLI arguments for s, with env vars in sorted order.
 func (e Engine) RunArgs(s RunSpec) []string {
 	args := []string{"run", "--rm"}

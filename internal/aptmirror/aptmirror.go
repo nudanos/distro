@@ -77,7 +77,8 @@ func Mirror(ctx context.Context, eng engine.Engine, image string, e manifest.Ent
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return false, err
 	}
-	if err := eng.Run(ctx, Spec(image, e, out, os.Getuid(), os.Getgid()), log, log); err != nil {
+	uid, gid := eng.OwnerIDs(os.Getuid(), os.Getgid())
+	if err := eng.Run(ctx, Spec(image, e, out, uid, gid), log, log); err != nil {
 		return false, fmt.Errorf("mirror %s: %w", e.Name, err)
 	}
 	for pkg := range e.Packages {
