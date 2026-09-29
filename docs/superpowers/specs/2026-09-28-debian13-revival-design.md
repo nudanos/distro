@@ -370,7 +370,7 @@ formatting) or fixed.
 
 | Stage | Content |
 |---|---|
-| **0: Launch** | Create org, push mirrors, archive `debian`/`drop` repos, create `distro` |
+| **0: Launch** | Create org, push mirrors, archive `debian`/`drop` repos, create `distro` — done 2026-09-28 (plan 1; archiving moved to plan 2) |
 | **1.0: Boots** | Build tooling, port checklist on the M1 repos, dataplane untangling, Tier 1 packages, ISO, layers 1–4 (1.0 scenarios). `vyatta-service-dhcp`, `netconfd` and `vyatta-security-vpn` are left out of the 1.0 package set (and the ISO) until their 1.1 rewrites; 1.0 interfaces are statically addressed |
 | **1.1: Rewrites** | Kea/dhcpcd, libnetconf2, strongswan 6/VICI, Go modules (one at a time) |
 | **1.5: Script install** | `installer/install.sh`, CI test on stock Debian 13 |
