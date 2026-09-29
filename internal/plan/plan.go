@@ -26,13 +26,22 @@ func sortedKeys[V any](m map[string]V) []string {
 // Build derives edges from Build-Depends. A dependency counts only if another
 // source in the set produces it (as a binary, or failing that as a Provides).
 // For alternatives, the first alternative produced inside the set wins.
-func Build(sources map[string]*control.Source) *Graph {
+// Two sources producing the same binary package is an error.
+func Build(sources map[string]*control.Source) (*Graph, error) {
 	names := sortedKeys(sources)
 	producer := map[string]string{}
+	var dups []string
 	for _, n := range names {
 		for _, b := range sources[n].Binaries {
+			if prev, taken := producer[b]; taken {
+				dups = append(dups, fmt.Sprintf("%s (from %s and %s)", b, prev, n))
+				continue
+			}
 			producer[b] = n
 		}
+	}
+	if len(dups) > 0 {
+		return nil, fmt.Errorf("binary packages produced by more than one source: %s", strings.Join(dups, "; "))
 	}
 	for _, n := range names {
 		for _, p := range sources[n].Provides {
@@ -60,7 +69,7 @@ func Build(sources map[string]*control.Source) *Graph {
 		}
 		g.Deps[n] = deps
 	}
-	return g
+	return g, nil
 }
 
 // Tiers groups nodes so each tier depends only on earlier tiers. On a cycle it

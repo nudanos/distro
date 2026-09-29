@@ -107,7 +107,10 @@ func graph(dirs map[string]string) (*plan.Graph, [][]string, error) {
 		}
 		srcs[name] = s
 	}
-	g := plan.Build(srcs)
+	g, err := plan.Build(srcs)
+	if err != nil {
+		return nil, nil, err
+	}
 	tiers, err := g.Tiers()
 	return g, tiers, err
 }
