@@ -1,0 +1,4 @@
+work/
+*.tmp
+/distro-build
+__pycache__/

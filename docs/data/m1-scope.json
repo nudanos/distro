@@ -1,0 +1,326 @@
+{
+ "iso_packages": 443,
+ "m1_packages": 396,
+ "m1_repos": [
+  "base-files",
+  "cli-sandbox",
+  "cloud-init",
+  "config",
+  "configd",
+  "ephemerad",
+  "fluent-bit",
+  "frr",
+  "grub",
+  "grub2-signed",
+  "i2util",
+  "ifmgrd",
+  "iperf",
+  "iputils",
+  "isc-dhcp",
+  "jitterentropy",
+  "keepalived",
+  "libnss-vrfdns",
+  "libteam",
+  "libvci",
+  "libzmq-constants-perl",
+  "libzmq-libzmq3-perl",
+  "live-boot-vyatta",
+  "lu",
+  "mstpd",
+  "net-snmp",
+  "netconfd",
+  "netkit-telnet",
+  "netplug",
+  "notifyd",
+  "ntp",
+  "opd",
+  "openssh",
+  "owamp",
+  "ppp",
+  "provisiond",
+  "pygobject",
+  "radvd",
+  "repcpd",
+  "routing-instance",
+  "rsyslog",
+  "sssd",
+  "tacplusd",
+  "ufispace-bsp-utils",
+  "vci",
+  "vplane-config-npf",
+  "vplane-config-qos",
+  "vrf-manager",
+  "vyatta-base",
+  "vyatta-bash",
+  "vyatta-cfg",
+  "vyatta-cfg-bonding",
+  "vyatta-cfg-dataplane",
+  "vyatta-cfg-default",
+  "vyatta-cfg-journalbeat",
+  "vyatta-cfg-system",
+  "vyatta-client-ssh",
+  "vyatta-config-mgmt",
+  "vyatta-config-migrate",
+  "vyatta-curl-wrapper",
+  "vyatta-debian-lldpd-config",
+  "vyatta-debian-pam-configs-config",
+  "vyatta-debian-passwd-config",
+  "vyatta-debian-ssh-server-config",
+  "vyatta-debian-system-config",
+  "vyatta-debian-systemd-config",
+  "vyatta-hotplug",
+  "vyatta-image-tools",
+  "vyatta-interfaces",
+  "vyatta-interfaces-l2tpeth",
+  "vyatta-ipmi",
+  "vyatta-ipv6-rtradv",
+  "vyatta-kdump",
+  "vyatta-lldp",
+  "vyatta-log",
+  "vyatta-login",
+  "vyatta-mibs-misc",
+  "vyatta-op",
+  "vyatta-openvpn-yang",
+  "vyatta-platform",
+  "vyatta-protocols-common",
+  "vyatta-protocols-frr",
+  "vyatta-rest",
+  "vyatta-route-broker",
+  "vyatta-security-vpn",
+  "vyatta-service-bridge",
+  "vyatta-service-dhcp",
+  "vyatta-service-dns",
+  "vyatta-service-gnss",
+  "vyatta-service-ntp",
+  "vyatta-service-pcp",
+  "vyatta-service-portmonitor",
+  "vyatta-service-snmp",
+  "vyatta-service-ssh",
+  "vyatta-service-switch",
+  "vyatta-service-telnet",
+  "vyatta-service-twamp",
+  "vyatta-snmp-vrf-agent",
+  "vyatta-sssd",
+  "vyatta-syslog",
+  "vyatta-tacacs",
+  "vyatta-tech-support",
+  "vyatta-util",
+  "vyatta-version",
+  "vyatta-vrrp",
+  "xpath-plugins"
+ ],
+ "blocked_by_dataplane": {
+  "libvyatta-vplaned-perl": [
+   "libvyatta-controller-proto-support",
+   "libvyatta-dataplane-proto-support"
+  ],
+  "python3-vplaned": [
+   "libvyatta-controller-proto-support",
+   "libvyatta-dataplane-proto-support"
+  ],
+  "twamp-server": [
+   "libvyatta-dataplane-proto-c1"
+  ],
+  "vplane-config": [
+   "vplane-controller"
+  ],
+  "vplane-config-backend": [
+   "vyatta-dataplane"
+  ],
+  "vyatta-dataplane-stats-npf-v1-yang": [
+   "vplane-config-npf",
+   "vyatta-op-dataplane-stats-npf-v1-yang"
+  ],
+  "vyatta-hotplug": [
+   "vyatta-dataplane"
+  ],
+  "vyatta-interfaces-base": [
+   "libvyatta-dataplane-proto-support"
+  ],
+  "vyatta-interfaces-bonding": [
+   "libvyatta-dataplane-proto-support",
+   "vyatta-dataplane"
+  ],
+  "vyatta-interfaces-bonding-qos-v1-yang": [
+   "vplane-config-qos"
+  ],
+  "vyatta-interfaces-l2tpeth": [
+   "libvyatta-dataplane-proto-support"
+  ],
+  "vyatta-interfaces-switch-v1-yang": [
+   "vyatta-policy-qos-vci"
+  ],
+  "vyatta-interfaces-switch-vif-firewall-v1-yang": [
+   "vplane-config-npf"
+  ],
+  "vyatta-interfaces-tcp-mss-v1-yang": [
+   "libvyatta-dataplane-proto-support"
+  ],
+  "vyatta-ippf-v1-yang": [
+   "vplane-config-npf"
+  ],
+  "vyatta-op-dataplane-session-v1-yang": [
+   "vplane-config-npf"
+  ],
+  "vyatta-op-ippf-v1-yang": [
+   "vyatta-ippf-v1-yang"
+  ],
+  "vyatta-op-policy-pbr-v1-yang": [
+   "vplane-config-npf"
+  ],
+  "vyatta-op-policy-qos-v1-yang": [
+   "vplane-config-qos"
+  ],
+  "vyatta-op-resources-group-v1-yang": [
+   "vplane-config-npf"
+  ],
+  "vyatta-op-security-firewall-v1-yang": [
+   "vplane-config-npf"
+  ],
+  "vyatta-op-service-nat-cgnat-v1-yang": [
+   "vplane-config-npf"
+  ],
+  "vyatta-op-service-nat-nptv6-v1-yang": [
+   "vplane-config-npf"
+  ],
+  "vyatta-op-service-nat-pool-v1-yang": [
+   "vplane-config-npf"
+  ],
+  "vyatta-op-service-nat-v1-yang": [
+   "vplane-config-npf"
+  ],
+  "vyatta-op-service-nat64-v1-yang": [
+   "vplane-config-npf"
+  ],
+  "vyatta-op-show-interfaces-pppoe-v1-yang": [
+   "libvyatta-dataplane-proto-support"
+  ],
+  "vyatta-op-system-alg-v1-yang": [
+   "vplane-config-npf"
+  ],
+  "vyatta-op-system-session-v1-yang": [
+   "vplane-config-npf"
+  ],
+  "vyatta-policy-action-v1-yang": [
+   "vplane-config-qos"
+  ],
+  "vyatta-policy-pbr-routing-instance-v1-yang": [
+   "vyatta-policy-pbr-v1-yang"
+  ],
+  "vyatta-policy-pbr-v1-yang": [
+   "vplane-config-npf"
+  ],
+  "vyatta-policy-qos-v1-yang": [
+   "vplane-config-qos"
+  ],
+  "vyatta-resources-group-v1-yang": [
+   "python3-vplane-config-npf",
+   "vplane-config-npf"
+  ],
+  "vyatta-security-firewall-v1-yang": [
+   "vplane-config-npf"
+  ],
+  "vyatta-service-bridge": [
+   "vplane-config-npf"
+  ],
+  "vyatta-service-nat-cgnat-v1-yang": [
+   "vplane-config-npf"
+  ],
+  "vyatta-service-nat-nptv6-v1-yang": [
+   "vplane-config-npf",
+   "vyatta-service-nat-v1-yang"
+  ],
+  "vyatta-service-nat-pool-v1-yang": [
+   "vplane-config-npf"
+  ],
+  "vyatta-service-nat-v1-yang": [
+   "vplane-config-npf"
+  ],
+  "vyatta-service-nat64-v1-yang": [
+   "vplane-config-npf",
+   "vyatta-service-nat-v1-yang"
+  ],
+  "vyatta-system": [
+   "vyatta-dataplane"
+  ],
+  "vyatta-system-alg-routing-instance-v1-yang": [
+   "vyatta-system-alg-v1-yang"
+  ],
+  "vyatta-system-network-v1-yang": [
+   "vyatta-dataplane"
+  ],
+  "vyatta-system-session-routing-instance-v1-yang": [
+   "vplane-config-npf",
+   "vyatta-system-session-v1-yang"
+  ],
+  "vyatta-system-session-v1-yang": [
+   "vplane-config-npf"
+  ]
+ },
+ "unknown_packages": [
+  "acpi-support-base",
+  "acpid",
+  "apt-rdepends",
+  "arp-scan",
+  "binutils",
+  "danos-no-python2",
+  "dbus",
+  "dialog",
+  "dma",
+  "dnsutils",
+  "ed",
+  "efivar",
+  "eject",
+  "file",
+  "gdisk",
+  "htop",
+  "ifupdown",
+  "installation-report",
+  "iotop",
+  "iperf3",
+  "iptraf-ng",
+  "jnettop",
+  "lftp",
+  "libacl1",
+  "libattr1",
+  "libblkid1",
+  "libcap2-bin",
+  "libio-socket-ssl-perl",
+  "libjson-xs-perl",
+  "libuuid1",
+  "linux-image-vyatta",
+  "linux-vyatta-tools",
+  "live-boot",
+  "live-boot-initramfs-tools",
+  "live-config",
+  "live-config-systemd",
+  "locales",
+  "lshw",
+  "man-db",
+  "mg",
+  "mtr-tiny",
+  "netcat",
+  "open-vm-tools",
+  "powertop",
+  "psmisc",
+  "rng-tools5",
+  "screen",
+  "sipcalc",
+  "sudo",
+  "systemd-coredump",
+  "tcpdump",
+  "tftp",
+  "udev",
+  "usbutils",
+  "user-setup",
+  "vim",
+  "virt-what",
+  "vlan",
+  "vyatta-no-dpi",
+  "vyatta-system-storage-monitor-v1-yang",
+  "wajig",
+  "wakeonlan",
+  "wireshark-common",
+  "xz-utils"
+ ]
+}
