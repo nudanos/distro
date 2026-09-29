@@ -158,6 +158,15 @@ class MergedUsrTest(unittest.TestCase):
                          "usr/bin/bash usr/bin/vbash\nusr/lib/x usr/share/x\n")
 
 
+class TransformTest(unittest.TestCase):
+    def test_backreferences_escaped_for_compat13(self):
+        # debhelper compat 13 expands ${...} in config files; perl backreferences must be ${Dollar}{N}.
+        t = "/etc/x.vyatta perl -pe 's|(a)b(c)|${1}d${2}|'\n"
+        out = port.port_transform(t)
+        self.assertEqual(out, "/etc/x.vyatta perl -pe 's|(a)b(c)|${Dollar}{1}d${Dollar}{2}|'\n")
+        self.assertEqual(port.port_transform(out), out)
+
+
 class VersionTest(unittest.TestCase):
     def test_bump(self):
         self.assertEqual(port.bump_version("1.29"), "1.30")

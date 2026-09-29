@@ -244,6 +244,11 @@ def port_links(text: str) -> str:
                      else line for line in text.split("\n"))
 
 
+def port_transform(text: str) -> str:
+    """Escape ${N} backreferences in config-package-dev transforms (debhelper compat 13 expands ${...})."""
+    return re.sub(r"\$\{(\d+)\}", r"${Dollar}{\1}", text)
+
+
 def bump_version(v: str, native: bool = False) -> str:
     if "-" in v and native:
         # A native version may not carry a Debian revision.
@@ -281,6 +286,8 @@ def port_tree(d: str, repo: str, date: str | None = None) -> list[str]:
             new, n = port_install(open(path).read())
             notes += n
             open(path, "w").write(new)
+        elif f.endswith(".transform"):
+            open(path, "w").write(port_transform(open(path).read()))
         elif f == "links" or f.endswith(".links"):
             new = port_links(open(path).read())
             open(path, "w").write(new)
