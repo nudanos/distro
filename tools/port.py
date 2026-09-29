@@ -208,6 +208,41 @@ def port_rules(text: str) -> str:
     return text
 
 
+_ALIASED = re.compile(r"^/?(lib|bin|sbin)(/|$)")
+
+
+def _usr(path: str) -> str:
+    m = _ALIASED.match(path)
+    if not m:
+        return path
+    return ("/usr/" if path.startswith("/") else "usr/") + path.lstrip("/")
+
+
+def port_install(text: str) -> tuple[str, list[str]]:
+    """Move two-column .install destinations out of /lib, /bin, /sbin (merged-usr).
+
+    Single-column entries name files in debian/tmp; under /lib they need the
+    upstream install fixed, so they are only noted.
+    """
+    notes, out = [], []
+    for line in text.split("\n"):
+        toks = line.split()
+        if len(toks) >= 2 and not line.lstrip().startswith("#"):
+            dest = _usr(toks[-1])
+            if dest != toks[-1]:
+                line = line[: line.rstrip().rfind(toks[-1])] + dest
+        elif len(toks) == 1 and _ALIASED.match(toks[0]):
+            notes.append(f"NOTE: .install entry {toks[0]} comes from debian/tmp under /lib|/bin|/sbin; fix the upstream install path")
+        out.append(line)
+    return "\n".join(out), notes
+
+
+def port_links(text: str) -> str:
+    """Move .links paths out of /lib, /bin, /sbin (merged-usr)."""
+    return "\n".join(" ".join(_usr(t) for t in line.split()) if line.strip() and not line.lstrip().startswith("#")
+                     else line for line in text.split("\n"))
+
+
 def bump_version(v: str, native: bool = False) -> str:
     if "-" in v and native:
         # A native version may not carry a Debian revision.
@@ -239,6 +274,15 @@ def port_tree(d: str, repo: str, date: str | None = None) -> list[str]:
     if os.path.exists(rules):
         new = port_rules(open(rules).read())  # read fully before truncating for write
         open(rules, "w").write(new)
+    for f in sorted(os.listdir(deb)):
+        path = os.path.join(deb, f)
+        if f == "install" or f.endswith(".install"):
+            new, n = port_install(open(path).read())
+            notes += n
+            open(path, "w").write(new)
+        elif f == "links" or f.endswith(".links"):
+            new = port_links(open(path).read())
+            open(path, "w").write(new)
     cl = os.path.join(deb, "changelog")
     old = open(cl).read()
     fmt = os.path.join(deb, "source", "format")

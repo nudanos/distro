@@ -125,6 +125,33 @@ class SystemdOverrideTest(unittest.TestCase):
         self.assertEqual(out, "override_dh_installsystemd:\n\tdh_installsystemd --package p --name=m\n")
 
 
+class MergedUsrTest(unittest.TestCase):
+    """Debian 13 is merged-usr: lintian rejects files shipped under /lib, /bin, /sbin (aliased-location)."""
+
+    def test_install_destinations(self):
+        text = ("debian/x.service /lib/systemd/system\n"
+                "platform/a.platform lib/vyatta-platform/platforms\n"
+                "lib/vci-rollback-ephemeral/vci-rollback lib/vci-rollback-ephemeral/\n"
+                "scripts/* opt/vyatta/sbin/\n"
+                "usr/lib/foo\n")
+        out, notes = port.port_install(text)
+        self.assertEqual(out, ("debian/x.service /usr/lib/systemd/system\n"
+                               "platform/a.platform usr/lib/vyatta-platform/platforms\n"
+                               "lib/vci-rollback-ephemeral/vci-rollback usr/lib/vci-rollback-ephemeral/\n"
+                               "scripts/* opt/vyatta/sbin/\n"
+                               "usr/lib/foo\n"))
+        self.assertEqual(port.port_install(out)[0], out)
+
+    def test_single_column_under_lib_is_noted(self):
+        out, notes = port.port_install("lib/systemd\n")
+        self.assertEqual(out, "lib/systemd\n")
+        self.assertTrue(notes)
+
+    def test_links(self):
+        self.assertEqual(port.port_links("bin/bash bin/vbash\nlib/x usr/share/x\n"),
+                         "usr/bin/bash usr/bin/vbash\nusr/lib/x usr/share/x\n")
+
+
 class VersionTest(unittest.TestCase):
     def test_bump(self):
         self.assertEqual(port.bump_version("1.29"), "1.30")
