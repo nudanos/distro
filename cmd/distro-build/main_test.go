@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -16,5 +17,20 @@ func TestCheckBuilder(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "distro-build builder") {
 			t.Errorf("label %q: err = %v, want advice to run distro-build builder", label, err)
 		}
+	}
+}
+
+// Parallel builds interleave on stderr, so each build also gets its own log.
+func TestPackageLogWritesPerPackageFile(t *testing.T) {
+	dir := t.TempDir()
+	w, err := packageLog(dir, "vyatta-cfg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.Write([]byte("hello\n"))
+	w.Close()
+	b, err := os.ReadFile(dir + "/logs/vyatta-cfg.log")
+	if err != nil || string(b) != "hello\n" {
+		t.Errorf("log = %q, %v", b, err)
 	}
 }

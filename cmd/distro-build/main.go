@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -162,21 +163,36 @@ func graph(dirs map[string]string) (*plan.Graph, [][]string, error) {
 	return g, tiers, err
 }
 
+// packageLog opens work/logs/<name>.log (truncated) for one package's build.
+func packageLog(work, name string) (io.WriteCloser, error) {
+	dir := filepath.Join(work, "logs")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+	return os.Create(filepath.Join(dir, name+".log"))
+}
+
 func (a *app) containerBuild() build.Func {
 	u, g := a.eng.OwnerIDs(os.Getuid(), os.Getgid())
 	uid, gid := strconv.Itoa(u), strconv.Itoa(g)
-	return func(ctx context.Context, name, src, out string) error {
+	return func(ctx context.Context, name, src, outDir string) error {
+		lf, err := packageLog(a.work, name)
+		if err != nil {
+			return err
+		}
+		defer lf.Close()
+		out := io.MultiWriter(os.Stderr, lf)
 		return a.eng.Run(ctx, engine.RunSpec{
 			Image: a.image,
 			Mounts: []engine.Mount{
 				{Host: src, Container: "/src", ReadOnly: true},
 				{Host: a.outRoot(), Container: "/pool", ReadOnly: true},
-				{Host: out, Container: "/out"},
+				{Host: outDir, Container: "/out"},
 			},
 			Env: map[string]string{"PKG": name, "HOST_UID": uid, "HOST_GID": gid,
 				"JOBS": strconv.Itoa(max(1, runtime.NumCPU()/max(1, a.jobs)))},
 			Cmd: []string{"/usr/local/bin/build-package"},
-		}, os.Stderr, os.Stderr)
+		}, out, out)
 	}
 }
 
