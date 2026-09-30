@@ -49,15 +49,19 @@ func DebianVersion(prevTop, upstreamVersion string) string {
 	return epoch + up + "-0nudanos1"
 }
 
+// rfc2822 parses RFC 2822 dates with or without a zero-padded day (git's %cD
+// writes "Tue, 5 Sep 2023").
+const rfc2822 = "Mon, 2 Jan 2006 15:04:05 -0700"
+
 // changelogDate dates the new entry: the tag's commit date, unless the
 // packaging's latest entry is newer (Debian packaged the release after it was
 // tagged), then one second after that entry. Both are RFC 2822 dates.
 func changelogDate(tagDate, prevDate string) (string, error) {
-	tag, err := time.Parse(time.RFC1123Z, tagDate)
+	tag, err := time.Parse(rfc2822, tagDate)
 	if err != nil {
 		return "", fmt.Errorf("tag date %q: %w", tagDate, err)
 	}
-	prev, err := time.Parse(time.RFC1123Z, prevDate)
+	prev, err := time.Parse(rfc2822, prevDate)
 	if err != nil {
 		return "", fmt.Errorf("changelog date %q: %w", prevDate, err)
 	}

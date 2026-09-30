@@ -180,6 +180,11 @@ func TestChangelogDate(t *testing.T) {
 	if got, err := changelogDate(tag, "Sat, 01 Aug 2026 12:00:00 +0000"); err != nil || got != want {
 		t.Errorf("changelogDate = %q, %v; want %q", got, err, want)
 	}
+	// git's %cD does not zero-pad the day (libteam v1.32).
+	const short = "Tue, 5 Sep 2023 16:29:17 +0200"
+	if got, err := changelogDate(short, "Mon, 01 Jan 2024 00:00:00 +0000"); err != nil || got != "Mon, 01 Jan 2024 00:00:01 +0000" {
+		t.Errorf("changelogDate(%q) = %q, %v", short, got, err)
+	}
 }
 
 // perfSONAR releases keep the source two levels down (owamp/owamp/) and ship
