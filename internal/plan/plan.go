@@ -72,6 +72,25 @@ func Build(sources map[string]*control.Source) (*Graph, error) {
 	return g, nil
 }
 
+// AddImplicitDep makes every other node depend on dep, when dep is in the
+// graph. It is for a package every build uses without build-depending on it
+// (the lintian profile): it joins every closure and builds first.
+func (g *Graph) AddImplicitDep(dep string) {
+	if _, ok := g.Deps[dep]; !ok {
+		return
+	}
+	for n, deps := range g.Deps {
+		if n == dep {
+			continue
+		}
+		set := map[string]bool{dep: true}
+		for _, d := range deps {
+			set[d] = true
+		}
+		g.Deps[n] = sortedKeys(set)
+	}
+}
+
 // Tiers groups nodes so each tier depends only on earlier tiers. On a cycle it
 // returns the tiers resolved so far and an error naming the unresolvable nodes.
 func (g *Graph) Tiers() ([][]string, error) {

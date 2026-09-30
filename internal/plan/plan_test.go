@@ -91,3 +91,32 @@ func TestFilterKeepsOrderAndDropsEmptyTiers(t *testing.T) {
 		t.Errorf("Filter = %v, want %v", got, want)
 	}
 }
+
+// Every package is linted with lintian-profile-vyatta, but nothing
+// build-depends on it: without an implicit edge a package's closure left it
+// out, and CI linted every package with the bootstrap rules instead.
+func TestAddImplicitDep(t *testing.T) {
+	g := &Graph{Deps: map[string][]string{"a": nil, "b": {"a"}, "p": nil}}
+	g.AddImplicitDep("p")
+	want := map[string][]string{"a": {"p"}, "b": {"a", "p"}, "p": nil}
+	if !reflect.DeepEqual(g.Deps, want) {
+		t.Errorf("Deps = %v, want %v", g.Deps, want)
+	}
+	keep, err := g.Closure([]string{"a"})
+	if err != nil || !keep["p"] {
+		t.Errorf("Closure(a) = %v, %v; want it to include p", keep, err)
+	}
+	tiers, err := g.Tiers()
+	if err != nil || !reflect.DeepEqual(tiers[0], []string{"p"}) {
+		t.Errorf("Tiers = %v, %v; want p alone in tier 0", tiers, err)
+	}
+}
+
+func TestAddImplicitDepAbsentIsNoop(t *testing.T) {
+	g := &Graph{Deps: map[string][]string{"a": nil, "b": {"a"}}}
+	g.AddImplicitDep("p")
+	want := map[string][]string{"a": nil, "b": {"a"}}
+	if !reflect.DeepEqual(g.Deps, want) {
+		t.Errorf("Deps = %v, want %v", g.Deps, want)
+	}
+}

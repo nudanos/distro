@@ -159,9 +159,14 @@ func graph(dirs map[string]string) (*plan.Graph, [][]string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	// build-package lints with the profile once it is in the pool.
+	g.AddImplicitDep(lintProfile)
 	tiers, err := g.Tiers()
 	return g, tiers, err
 }
+
+// lintProfile is the lintian profile build-package lints every package with.
+const lintProfile = "lintian-profile-vyatta"
 
 // packageLog opens work/logs/<name>.log (truncated) for one package's build.
 func packageLog(work, name string) (io.WriteCloser, error) {
