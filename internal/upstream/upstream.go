@@ -68,8 +68,9 @@ func changelogDate(tagDate, prevDate string) (string, error) {
 }
 
 // Prepare checks out e.Upstream at e.Tag and e.Packaging at e.PackagingRef, and
-// assembles work/src/<name>: the upstream tree (minus .git and any debian/),
-// the packaging's debian/, our patches from patchesDir/<name> appended to the
+// assembles work/src/<name>: the upstream tree (from e.Subdir, minus .git and
+// any debian/), the packaging's debian/ (or e.PackagingDir of the upstream
+// tree, for upstreams that ship their own), our patches from patchesDir/<name> appended to the
 // quilt series, and a changelog entry dated with the tag's commit date so the
 // result is reproducible.
 func Prepare(ctx context.Context, e manifest.Entry, patchesDir, work string, log io.Writer) (string, error) {
@@ -78,20 +79,24 @@ func Prepare(ctx context.Context, e manifest.Entry, patchesDir, work string, log
 	if err := fetch.Git(ctx, e.Upstream, e.Tag, upDir, log); err != nil {
 		return "", err
 	}
-	if err := fetch.Git(ctx, e.Packaging, e.PackagingRef, pkDir, log); err != nil {
-		return "", err
+	debSrc := filepath.Join(upDir, filepath.FromSlash(e.PackagingDir))
+	if e.PackagingDir == "" {
+		if err := fetch.Git(ctx, e.Packaging, e.PackagingRef, pkDir, log); err != nil {
+			return "", err
+		}
+		debSrc = filepath.Join(pkDir, "debian")
 	}
 	dir := filepath.Join(work, "src", e.Name)
 	if err := os.RemoveAll(dir); err != nil {
 		return "", err
 	}
-	if err := copyTree(upDir, dir, func(rel string) bool {
+	if err := copyTree(filepath.Join(upDir, filepath.FromSlash(e.Subdir)), dir, func(rel string) bool {
 		return rel == ".git" || rel == "debian" || strings.HasPrefix(rel, ".git/") || strings.HasPrefix(rel, "debian/")
 	}); err != nil {
 		return "", err
 	}
-	if err := copyTree(filepath.Join(pkDir, "debian"), filepath.Join(dir, "debian"), func(string) bool { return false }); err != nil {
-		return "", fmt.Errorf("%s: packaging has no debian/: %w", e.Name, err)
+	if err := copyTree(debSrc, filepath.Join(dir, "debian"), func(string) bool { return false }); err != nil {
+		return "", fmt.Errorf("%s: no packaging at %s: %w", e.Name, debSrc, err)
 	}
 	if err := dropExcluded(dir, append(filesExcluded(filepath.Join(dir, "debian", "copyright")), e.Exclude...)); err != nil {
 		return "", err

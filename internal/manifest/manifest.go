@@ -49,7 +49,9 @@ type Entry struct {
 	TagPattern   string       `yaml:"tag_pattern,omitempty"`   // upstream: regexp, group 1 = version
 	PackagingRef string       `yaml:"packaging_ref,omitempty"` // upstream: branch or tag of packaging
 	Audit        []AuditEntry `yaml:"audit,omitempty"`
-	Exclude      []string     `yaml:"exclude,omitempty"` // upstream: globs absent from the release tarball
+	Exclude      []string     `yaml:"exclude,omitempty"`       // upstream: globs absent from the release tarball
+	Subdir       string       `yaml:"subdir,omitempty"`        // upstream: source root inside the upstream repo
+	PackagingDir string       `yaml:"packaging_dir,omitempty"` // upstream: debian/ taken from this upstream path instead of packaging
 
 	Source   string            `yaml:"source,omitempty"`   // apt: "URL SUITE COMPONENT"
 	Key      string            `yaml:"key,omitempty"`      // apt: signing key URL
@@ -111,8 +113,8 @@ func (m *Manifest) Validate() error {
 				bad("danos entries need repo and ref")
 			}
 		case Upstream:
-			if e.Upstream == "" || e.Packaging == "" {
-				bad("upstream entries need upstream and packaging")
+			if e.Upstream == "" || (e.Packaging == "") == (e.PackagingDir == "") {
+				bad("upstream entries need upstream and exactly one of packaging or packaging_dir")
 			}
 			if e.Track != "latest" && e.Track != "lts" && e.Track != "debian" {
 				bad("track must be latest, lts or debian")
@@ -124,8 +126,8 @@ func (m *Manifest) Validate() error {
 					bad("tag_pattern needs exactly one capture group (the version)")
 				}
 			}
-			if e.Ready && (e.Version == "" || e.Tag == "" || e.PackagingRef == "" || e.TagPattern == "") {
-				bad("ready upstream entries need version, tag, tag_pattern and packaging_ref")
+			if e.Ready && (e.Version == "" || e.Tag == "" || e.TagPattern == "" || (e.Packaging != "" && e.PackagingRef == "")) {
+				bad("ready upstream entries need version, tag, tag_pattern and (with packaging) packaging_ref")
 			}
 
 		case Apt:

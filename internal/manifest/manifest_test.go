@@ -101,3 +101,16 @@ func TestAuditVerdicts(t *testing.T) {
 		t.Errorf("err = %v, want verdict error", err)
 	}
 }
+
+// Upstreams that ship their own Debian packaging (perfSONAR) need no separate
+// packaging repository or ref.
+func TestUpstreamInTreePackaging(t *testing.T) {
+	y := "packages:\n  - name: owamp\n    kind: upstream\n    milestone: \"1.0\"\n    ready: true\n    upstream: u\n    track: latest\n    version: 5.2.6\n    tag: v5.2.6\n    tag_pattern: '^v(.+)$'\n    subdir: owamp/owamp\n    packaging_dir: owamp/owamp/unibuild-packaging/deb\n"
+	if _, err := Parse([]byte(y)); err != nil {
+		t.Fatalf("in-tree packaging rejected: %v", err)
+	}
+	both := strings.Replace(y, "    subdir:", "    packaging: p\n    subdir:", 1)
+	if _, err := Parse([]byte(both)); err == nil {
+		t.Error("packaging and packaging_dir together accepted")
+	}
+}

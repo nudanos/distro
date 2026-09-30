@@ -181,3 +181,42 @@ func TestChangelogDate(t *testing.T) {
 		t.Errorf("changelogDate = %q, %v; want %q", got, err, want)
 	}
 }
+
+// perfSONAR releases keep the source two levels down (owamp/owamp/) and ship
+// their own Debian packaging inside it (unibuild-packaging/deb).
+func TestPrepareSubdirAndInTreePackaging(t *testing.T) {
+	root := t.TempDir()
+	up := filepath.Join(root, "up")
+	os.MkdirAll(up, 0o755)
+	git(t, up, "init", "-q", "-b", "master")
+	write(t, filepath.Join(up, "Makefile"), "# unibuild top level\n")
+	write(t, filepath.Join(up, "owamp", "owamp", "configure.ac"), "AC_INIT([owamp], [5.2.6])\n")
+	deb := filepath.Join(up, "owamp", "owamp", "unibuild-packaging", "deb")
+	write(t, filepath.Join(deb, "changelog"), "owamp (5.2.6-1) perfsonar-5.2; urgency=low\n\n  * New upstream version.\n\n -- perfSONAR <d@p>  Mon, 01 Jan 2024 00:00:00 +0000\n")
+	write(t, filepath.Join(deb, "control"), "Source: owamp\n")
+	write(t, filepath.Join(deb, "source", "format"), "3.0 (quilt)\n")
+	git(t, up, "add", ".")
+	git(t, up, "commit", "-qm", "release")
+	git(t, up, "tag", "v5.2.6")
+
+	e := manifest.Entry{Name: "owamp", Kind: manifest.Upstream, Upstream: up, Tag: "v5.2.6", Version: "5.2.6",
+		TagPattern: `^v(\d+\.\d+\.\d+)$`, Track: "latest",
+		Subdir: "owamp/owamp", PackagingDir: "owamp/owamp/unibuild-packaging/deb"}
+	dir, err := Prepare(context.Background(), e, filepath.Join(root, "patches"), filepath.Join(root, "work"), io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "configure.ac")); err != nil {
+		t.Error("subdir is not the source root")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "Makefile")); !os.IsNotExist(err) {
+		t.Error("files above subdir were copied")
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "debian", "control")); string(b) != "Source: owamp\n" {
+		t.Errorf("debian/control = %q, want the in-tree packaging's", b)
+	}
+	cl, _ := os.ReadFile(filepath.Join(dir, "debian", "changelog"))
+	if first := strings.SplitN(string(cl), "\n", 2)[0]; first != "owamp (5.2.6-1nudanos1) trixie; urgency=medium" {
+		t.Errorf("changelog top = %q", first)
+	}
+}
