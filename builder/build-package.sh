@@ -39,9 +39,11 @@ main() {
         fi
     fi
 
-    apt-get -y --no-install-recommends build-dep ./
+    local prof=()
+    [ -n "${DEB_BUILD_PROFILES:-}" ] && prof=(-P"${DEB_BUILD_PROFILES// /,}")
+    apt-get -y --no-install-recommends "${prof[@]}" build-dep ./
     chown -R builder:builder /build
-    runuser -u builder -- env DEB_BUILD_OPTIONS="parallel=${JOBS:-1}" dpkg-buildpackage -us -uc -I -i
+    runuser -u builder -- env DEB_BUILD_OPTIONS="parallel=${JOBS:-1}" DEB_BUILD_PROFILES="${DEB_BUILD_PROFILES:-}" dpkg-buildpackage -us -uc -I -i "${prof[@]}"
     if apt-cache show lintian-profile-vyatta >/dev/null 2>&1; then
         apt-get install -y --no-install-recommends lintian-profile-vyatta >/dev/null
         lintian --profile vyatta --fail-on error ../*.changes

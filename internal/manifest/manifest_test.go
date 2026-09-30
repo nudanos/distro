@@ -114,3 +114,13 @@ func TestUpstreamInTreePackaging(t *testing.T) {
 		t.Error("packaging and packaging_dir together accepted")
 	}
 }
+
+func TestProfiles(t *testing.T) {
+	m, err := Parse([]byte("packages:\n  - {name: d, kind: danos, milestone: \"1.0\", repo: r, ref: trixie, profiles: [pkg.vyatta-dataplane.protobuf-only]}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := m.Packages[0].Profiles; len(got) != 1 || got[0] != "pkg.vyatta-dataplane.protobuf-only" {
+		t.Errorf("Profiles = %v", got)
+	}
+}

@@ -177,10 +177,25 @@ func packageLog(work, name string) (io.WriteCloser, error) {
 	return os.Create(filepath.Join(dir, name+".log"))
 }
 
-func (a *app) containerBuild() build.Func {
-	u, g := a.eng.OwnerIDs(os.Getuid(), os.Getgid())
-	uid, gid := strconv.Itoa(u), strconv.Itoa(g)
+// buildEnv is the environment for one package build.
+func buildEnv(name string, uid, gid, jobs int, profiles []string) map[string]string {
+	env := map[string]string{"PKG": name, "HOST_UID": strconv.Itoa(uid), "HOST_GID": strconv.Itoa(gid),
+		"JOBS": strconv.Itoa(jobs)}
+	if len(profiles) > 0 {
+		env["DEB_BUILD_PROFILES"] = strings.Join(profiles, " ")
+	}
+	return env
+}
+
+func (a *app) containerBuild(m *manifest.Manifest) build.Func {
+	profiles := map[string][]string{}
+	for _, e := range m.Packages {
+		if len(e.Profiles) > 0 {
+			profiles[e.Name] = e.Profiles
+		}
+	}
 	return func(ctx context.Context, name, src, outDir string) error {
+		u, g := a.eng.OwnerIDs(os.Getuid(), os.Getgid())
 		lf, err := packageLog(a.work, name)
 		if err != nil {
 			return err
@@ -194,8 +209,7 @@ func (a *app) containerBuild() build.Func {
 				{Host: a.outRoot(), Container: "/pool", ReadOnly: true},
 				{Host: outDir, Container: "/out"},
 			},
-			Env: map[string]string{"PKG": name, "HOST_UID": uid, "HOST_GID": gid,
-				"JOBS": strconv.Itoa(max(1, runtime.NumCPU()/max(1, a.jobs)))},
+			Env: buildEnv(name, u, g, max(1, runtime.NumCPU()/max(1, a.jobs)), profiles[name]),
 			Cmd: []string{"/usr/local/bin/build-package"},
 		}, out, out)
 	}
@@ -260,7 +274,7 @@ func (a *app) run(ctx context.Context, cmd string, names []string) error {
 		return err
 	}
 	b := &build.Builder{SrcDirs: dirs, OutRoot: a.outRoot(), StateFile: filepath.Join(a.work, "state.json"),
-		KeySalt: a.image + ":" + salt, Build: a.containerBuild(), Log: os.Stderr, Workers: a.jobs, BeforeTier: a.indexPool}
+		KeySalt: a.image + ":" + salt, Build: a.containerBuild(m), Log: os.Stderr, Workers: a.jobs, BeforeTier: a.indexPool}
 	results, err := b.Run(ctx, tiers, g.Deps)
 	if err != nil {
 		return err

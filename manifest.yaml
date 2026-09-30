@@ -813,8 +813,10 @@ packages:
   - name: "vyatta-dataplane"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-dataplane"
     ref: "trixie"
+    profiles: ["pkg.vyatta-dataplane.protobuf-only"]
     note: "1.0 builds the pkg.vyatta-dataplane.protobuf-only profile; full dataplane is M2"
   - name: "vyatta-dataplane-flow"
     kind: "reference"
