@@ -1,0 +1,19 @@
+Description: DANOS fix-ipaddress-prefix-update.patch, rebased onto net-snmp 5.9.5.2
+Origin: vendor, https://github.com/danos/net-snmp debian/patches
+
+diff --git a/agent/mibgroup/ip-mib/data_access/ipaddress_common.c b/agent/mibgroup/ip-mib/data_access/ipaddress_common.c
+index 675d4ea249..3337bafeb8 100644
+--- a/agent/mibgroup/ip-mib/data_access/ipaddress_common.c
++++ b/agent/mibgroup/ip-mib/data_access/ipaddress_common.c
+@@ -339,6 +339,11 @@ netsnmp_access_ipaddress_entry_update(netsnmp_ipaddress_entry *lhs,
+         memcpy(lhs->ia_address, rhs->ia_address, rhs->ia_address_len);
+     }
+ 
++    if (lhs->ia_prefix_len != rhs->ia_prefix_len) {
++        ++changed;
++        lhs->ia_prefix_len = rhs->ia_prefix_len;
++    }
++
+     if (lhs->ia_type != rhs->ia_type) {
+         ++changed;
+         lhs->ia_type = rhs->ia_type;

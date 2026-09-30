@@ -1,0 +1,263 @@
+Description: DANOS use-netlink-for-ipRouteTable.patch, rebased onto net-snmp 5.9.5.2
+Origin: vendor, https://github.com/danos/net-snmp debian/patches
+
+diff --git a/agent/mibgroup/mibII/var_route.c b/agent/mibgroup/mibII/var_route.c
+index 54e60755da..da8a69ba6e 100644
+--- a/agent/mibgroup/mibII/var_route.c
++++ b/agent/mibgroup/mibII/var_route.c
+@@ -1305,20 +1305,63 @@ Route_Scan_Reload(void)
+ }
+ #else
+ #ifdef linux
++#include <sys/socket.h>
++#include <arpa/inet.h>
++#include <errno.h>
++#include <unistd.h>
++#include <linux/netlink.h>
++#include <linux/rtnetlink.h>
++
+ static void
+-Route_Scan_Reload(void)
++populate_entry_from_rtmsg(struct rtentry *rt, struct rtmsg *r, int rtmsg_len)
+ {
+-    FILE           *in;
+-    char            line[256];
+-    struct rtentry *rt;
+-    char            name[16];
+-    static time_t   Time_Of_Last_Reload;
+-    struct timeval  now;
++    struct rtattr  *rta;
++    unsigned int mask = ~0;
+ 
+-    netsnmp_get_monotonic_clock(&now);
+-    if (Time_Of_Last_Reload + CACHE_TIME > now.tv_sec)
+-        return;
+-    Time_Of_Last_Reload = now.tv_sec;
++    rta = RTM_RTA(r);
++    while (RTA_OK(rta, rtmsg_len)) {
++        size_t    len = RTA_PAYLOAD(rta);
++
++        switch (rta->rta_type) {
++        case RTA_OIF:
++            rt->rt_unit = *(int *) (RTA_DATA(rta));
++            break;
++        case RTA_DST:
++            memcpy(&(((struct sockaddr_in *) &(rt->rt_dst))->sin_addr.s_addr),
++		   RTA_DATA(rta), len);
++            break;
++        case RTA_GATEWAY:
++            memcpy(&(((struct sockaddr_in *) &(rt->rt_gateway))->sin_addr.s_addr),
++		   RTA_DATA(rta), len);
++            break;
++        case RTA_PRIORITY:
++            rt->rt_metric = *(int *) RTA_DATA(rta);
++            break;
++        }
++        rta = RTA_NEXT(rta, rtmsg_len);
++    }
++
++    mask = htonl(mask << (32 - r->rtm_dst_len));
++    memcpy(&(((struct sockaddr_in *) &(rt->rt_genmask))->sin_addr.s_addr),
++           &mask, sizeof(mask));
++}
++
++static int nlseq = 0x10000000;
++
++#define RCVBUF_SIZE 32768
++#define SNDBUF_SIZE 512
++
++static void
++Route_Scan_Reload(void)
++{
++    struct rtentry  *rt;
++    struct nlmsghdr *hdr;
++    struct rtmsg    *rthdr;
++    unsigned char    sndbuf[SNDBUF_SIZE];
++    unsigned char    rcvbuf[RCVBUF_SIZE];
++    int              nlsk;
++    int              end_of_messages = 0;
++    int              count;
+ 
+     /*
+      *  Makes sure we have SOME space allocated for new routing entries
+@@ -1333,72 +1376,131 @@ Route_Scan_Reload(void)
+     }
+ 
+     /*
+-     * fetch routes from the proc file-system:
++     * Fetch routes via netlink
+      */
+ 
+     rtsize = 0;
+ 
+-    if (!(in = fopen("/proc/net/route", "r"))) {
+-        NETSNMP_LOGONCE((LOG_ERR, "cannot open /proc/net/route - burps\n"));
++    /*
++     * Open a netlink socket
++     */
++    nlsk = socket(AF_NETLINK, SOCK_DGRAM, NETLINK_ROUTE);
++    if (nlsk < 0) {
++        snmp_log_perror("socket netlink");
+         return;
+     }
+ 
+-    while (fgets(line, sizeof(line), in)) {
+-        struct rtentry  rtent;
+-        char            rtent_name[32];
+-        int             refcnt, metric;
+-        unsigned        flags, use;
++    memset(sndbuf, 0, SNDBUF_SIZE);
++    hdr = (struct nlmsghdr *) sndbuf;
++    hdr->nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg));
++    hdr->nlmsg_type = RTM_GETROUTE;
++    hdr->nlmsg_flags = NLM_F_ROOT | NLM_F_MATCH | NLM_F_REQUEST;
++    hdr->nlmsg_seq = ++nlseq;
+ 
+-        rt = &rtent;
+-        memset((char *) rt, (0), sizeof(*rt));
+-        rt->rt_dev = rtent_name;
++    rthdr = (struct rtmsg *) NLMSG_DATA(hdr);
++    rthdr->rtm_table = RT_TABLE_MAIN;
++    rthdr->rtm_family = AF_INET;
+ 
+-        /*
+-         * as with 1.99.14:
+-         * Iface Dest GW Flags RefCnt Use Metric Mask MTU Win IRTT
+-         * eth0 0A0A0A0A 00000000 05 0 0 0 FFFFFFFF 1500 0 0 
+-         */
+-        if (8 != sscanf(line, "%s %x %x %x %d %u %d %x %*d %*d %*d\n",
+-                        rt->rt_dev,
+-                        &(((struct sockaddr_in *) &(rtent.rt_dst))->sin_addr.s_addr),
+-                        &(((struct sockaddr_in *) &(rtent.rt_gateway))->sin_addr.s_addr),
+-                        /*
+-                         * XXX: fix type of the args 
+-                         */
+-                        &flags, &refcnt, &use, &metric,
+-                        &(((struct sockaddr_in *) &(rtent.rt_genmask))->sin_addr.s_addr)))
+-            continue;
+-
+-        strlcpy(name, rt->rt_dev, sizeof(name));
+-
+-        rt->rt_flags = flags, rt->rt_refcnt = refcnt;
+-        rt->rt_use = use, rt->rt_metric = metric;
++    if (send(nlsk, sndbuf, hdr->nlmsg_len, 0) < 0) {
++        snmp_log_perror("send netlink");
++        close(nlsk);
++        return;
++    }
+ 
+-        rt->rt_unit = netsnmp_access_interface_index_find(name);
++    /*
++     * Now listen for response
++     */
++    do {
++        struct nlmsghdr *n;
+ 
+         /*
+-         *  Allocate a block to hold it and add it to the database
++         * Get the message
+          */
+-        if (rtsize >= rtallocate) {
+-            rthead = (struct rtentry **) realloc((char *) rthead,
+-                                                 2 * rtallocate *
+-                                                 sizeof(struct rtentry *));
+-            memset(&rthead[rtallocate], 0,
+-                   rtallocate * sizeof(struct rtentry *));
+-            rtallocate *= 2;
++        count = recv(nlsk, rcvbuf, sizeof(rcvbuf), MSG_DONTWAIT);
++        if (count < 0) {
++            if (errno == EINTR)
++                continue;
++            if (errno == EAGAIN)
++                break;
++            snmp_log_perror("recv netlink");
++            break;
+         }
+-        if (!rthead[rtsize])
+-            rthead[rtsize] =
+-                (struct rtentry *) malloc(sizeof(struct rtentry));
++
+         /*
+-         *  Add this to the database
++         * Walk all of the returned messages
+          */
+-        memcpy((char *) rthead[rtsize], (char *) rt,
+-               sizeof(struct rtentry));
+-        rtsize++;
+-    }
++        for (n = (struct nlmsghdr *)rcvbuf;
++             NLMSG_OK(n, count); n = NLMSG_NEXT(n, count)) {
++            struct rtmsg  *rtm;
++            struct rtentry rtent;
++
++            /*
++             * Make sure the message is ok
++             */
++            if (n->nlmsg_type == NLMSG_ERROR) {
++                struct nlmsgerr *err = (struct nlmsgerr*) NLMSG_DATA(n);
++                if (n->nlmsg_len < NLMSG_LENGTH(sizeof(struct nlmsgerr)))
++                    snmp_log(LOG_ERR, "kernel netlink error truncated\n");
++                else
++                    snmp_log(LOG_ERR, "kernel netlink error %s\n",
++                             strerror(-err->error));
++                break;
++            }
++
++            /*
++             * End of message, we're done
++             */
++            if (n->nlmsg_type & NLMSG_DONE) {
++                end_of_messages = 1;
++                break;
++            }
++
++            if (n->nlmsg_type != RTM_NEWROUTE) {
++                snmp_log(LOG_ERR, "unexpected message of type %d in nlmsg\n",
++                         n->nlmsg_type);
++                continue;
++            }
++
++            rtm = NLMSG_DATA(n);
++            if (rtm->rtm_family != AF_INET) {
++                snmp_log(LOG_ERR, "Wrong family in netlink response %d\n",
++                         rtm->rtm_family);
++                break;
++            }
++
++            if (rtm->rtm_table != RT_TABLE_MAIN)
++                    continue;
++
++            rt = &rtent;
++            memset((char *) rt, (0), sizeof(*rt));
++
++            populate_entry_from_rtmsg(rt, rtm, RTM_PAYLOAD(n));
++
++            /*
++             *  Allocate a block to hold it and add it to the database
++             */
++            if (rtsize >= rtallocate) {
++                rthead = (struct rtentry **) realloc((char *) rthead,
++                                                     2 * rtallocate *
++                                                     sizeof(struct rtentry *));
++                memset(&rthead[rtallocate], 0,
++                       rtallocate * sizeof(struct rtentry *));
++                rtallocate *= 2;
++            }
++
++            if (!rthead[rtsize])
++                rthead[rtsize] =
++                    (struct rtentry *) malloc(sizeof(struct rtentry));
++            /*
++             *  Add this to the database
++             */
++            memcpy((char *) rthead[rtsize], (char *) rt,
++                   sizeof(struct rtentry));
++            rtsize++;
++        }
++    } while(!end_of_messages);
+ 
+-    fclose(in);
++    close(nlsk);
+ 
+     /*
+      *  Sort it!

@@ -1,0 +1,18 @@
+Description: DANOS ignore-spathintf-interface.patch, rebased onto net-snmp 5.9.5.2
+Origin: vendor, https://github.com/danos/net-snmp debian/patches
+
+diff --git a/agent/mibgroup/if-mib/data_access/interface_linux.c b/agent/mibgroup/if-mib/data_access/interface_linux.c
+index d8ce6a9b9c..7da3fd1fdc 100644
+--- a/agent/mibgroup/if-mib/data_access/interface_linux.c
++++ b/agent/mibgroup/if-mib/data_access/interface_linux.c
+@@ -838,6 +838,10 @@ netsnmp_arch_interface_container_load(netsnmp_container* container,
+             continue;
+         }
+ 
++        /* Ignore interface with name beginning in a period */
++        if (ifstart[0] == '.')
++            continue;
++
+         entry = netsnmp_access_interface_entry_create(ifstart, if_index);
+         if(NULL == entry) {
+ #ifdef NETSNMP_ENABLE_IPV6

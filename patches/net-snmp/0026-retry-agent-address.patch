@@ -1,18 +1,13 @@
-SIAD fails to start SNMP service once it reboots
+Description: DANOS retry-agent-address.patch, rebased onto net-snmp 5.9.5.2
+ Ported to 5.9: DS ids 18/19 (15-17 are upstream's); the listen loop opens
+ and registers inline; register_agent_nsap signals failure with < 0.
+Origin: vendor, https://github.com/danos/net-snmp debian/patches
 
-Retry agent addresses that fail to bind on the
-first attempt. This can happen when snmp daemon
-starts up before the address has been configured
-on an interface. Register an alarm with timeout
-set to a configurable value, and an handler that
-retries all the failed agent addresses. Unregister
-the alarm after attempting configurable maximum
-number of retries.
-
-VRVDR-55962
+diff --git a/agent/agent_read_config.c b/agent/agent_read_config.c
+index 63bb8c14ba..0587c1c965 100644
 --- a/agent/agent_read_config.c
 +++ b/agent/agent_read_config.c
-@@ -300,6 +300,12 @@
+@@ -303,6 +303,12 @@ init_agent_read_config(const char *app)
      netsnmp_ds_register_config(ASN_INTEGER, app, "maxGetbulkResponses",
                                 NETSNMP_DS_APPLICATION_ID,
                                 NETSNMP_DS_AGENT_MAX_GETBULKRESPONSES);
@@ -25,9 +20,11 @@ VRVDR-55962
      netsnmp_ds_register_config(ASN_INTEGER, app, "avgBulkVarbindSize",
                                 NETSNMP_DS_APPLICATION_ID,
                                 NETSNMP_DS_AGENT_AVG_BULKVARBINDSIZE);
+diff --git a/agent/snmp_agent.c b/agent/snmp_agent.c
+index 113ebda4de..308d6e477d 100644
 --- a/agent/snmp_agent.c
 +++ b/agent/snmp_agent.c
-@@ -1244,7 +1244,133 @@
+@@ -1244,7 +1244,133 @@ netsnmp_agent_check_parse(netsnmp_session * session, netsnmp_pdu *pdu,
  
  netsnmp_session *main_session = NULL;
  
@@ -43,7 +40,7 @@ VRVDR-55962
 +        SNMP_FREE(addr);
 +    }
 +}
-+
+ 
 +static void
 +free_addrlist(netsnmp_retry_address_info *addrlist)
 +{
@@ -126,7 +123,7 @@ VRVDR-55962
 +    SNMP_FREE(retry_addr);
 +#endif /* NETSNMP_NO_LISTEN_SUPPORT */
 +}
- 
++
 +static int
 +create_retry_address(netsnmp_retry_address_info **addr_list,
 +                  const char *cptr,
@@ -161,7 +158,7 @@ VRVDR-55962
  
  /*
   * Set up an agent session on the given transport.  Return a handle
-@@ -1455,9 +1581,17 @@
+@@ -1455,9 +1581,17 @@ netsnmp_agent_listen_on(const char *port)
  int
  init_master_agent(void)
  {
@@ -179,7 +176,7 @@ VRVDR-55962
  
      /* default to a default cache size */
      netsnmp_set_lookup_cache_size(-1);
-@@ -1522,12 +1656,53 @@
+@@ -1522,12 +1656,53 @@ init_master_agent(void)
  			"requested\n"));
              break;
          }
@@ -196,7 +193,7 @@ VRVDR-55962
 +            if (retry && create_retry_address(&addr_list, cptr, transport) == 0)
 +                retry_address = 1;
 +            continue;
-+        }
+         }
 +
 +        if (netsnmp_register_agent_nsap(transport) < 0) {
 +            snmp_log(LOG_ERR,
@@ -205,7 +202,7 @@ VRVDR-55962
 +            if (retry && create_retry_address(&addr_list, cptr, transport) == 0)
 +                retry_address = 1;
 +            continue;
-         }
++        }
 +        DEBUGMSGTL(("snmp_agent",
 +                    "init_master_agent; \"%s\" registered as an agent "
 +                    "NSAP\n", cptr));
@@ -236,18 +233,35 @@ VRVDR-55962
  #endif /* NETSNMP_NO_LISTEN_SUPPORT */
  
  #ifdef USING_AGENTX_MASTER_MODULE
+diff --git a/agent/snmpd.c b/agent/snmpd.c
+index b319f61648..7540291957 100644
+--- a/agent/snmpd.c
++++ b/agent/snmpd.c
+@@ -1094,7 +1094,7 @@ main(int argc, char *argv[])
+         {
+             cap_t caps;
+ 
+-            caps = cap_from_text("cap_net_raw=pe");
++            caps = cap_from_text("cap_net_raw=pe cap_net_bind_service=pe");
+             if (!caps)
+                 snmp_log_perror("cap_from_text failed");
+             else {
+diff --git a/include/net-snmp/agent/ds_agent.h b/include/net-snmp/agent/ds_agent.h
+index 98bcbcb4a3..2aca8811de 100644
 --- a/include/net-snmp/agent/ds_agent.h
 +++ b/include/net-snmp/agent/ds_agent.h
-@@ -77,4 +77,6 @@
+@@ -78,4 +78,6 @@
  #define NETSNMP_DS_AGENT_AVG_BULKVARBINDSIZE 15 /* avg varbind size estimate */
  #define NETSNMP_DS_AGENT_PDU_STATS_MAX       16 /* size of top N array*/
  #define NETSNMP_DS_AGENT_PDU_STATS_THRESHOLD 17 /* minimum threshold time */
 +#define NETSNMP_DS_AGENT_ADDRESS_RETRIES 18 /* retries on agent address (was 15 in DANOS, now taken) */
 +#define NETSNMP_DS_AGENT_ADDRESS_TIMEOUT 19 /* timeout in seconds on agent address retry */
  #endif
+diff --git a/include/net-snmp/agent/snmp_agent.h b/include/net-snmp/agent/snmp_agent.h
+index 4a67e36412..c4890acd9a 100644
 --- a/include/net-snmp/agent/snmp_agent.h
 +++ b/include/net-snmp/agent/snmp_agent.h
-@@ -126,6 +126,21 @@
+@@ -126,6 +126,21 @@ extern          "C" {
          netsnmp_request_info *requests_end;
      } netsnmp_tree_cache;
  

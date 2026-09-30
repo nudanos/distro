@@ -1,0 +1,75 @@
+Description: DANOS disable-snmpv3-support.patch, rebased onto net-snmp 5.9.5.2
+ Ported to 5.9: the v3 check returns NULL from
+ _sess_process_packet_parse_pdu like upstream's other rejects.
+Origin: vendor, https://github.com/danos/net-snmp debian/patches
+
+diff --git a/agent/agent_read_config.c b/agent/agent_read_config.c
+index 1e5bec6b63..a6b185e24d 100644
+--- a/agent/agent_read_config.c
++++ b/agent/agent_read_config.c
+@@ -291,6 +291,9 @@ init_agent_read_config(const char *app)
+     netsnmp_ds_register_config(ASN_BOOLEAN, app, "leave_pidfile", 
+ 			       NETSNMP_DS_APPLICATION_ID,
+ 			       NETSNMP_DS_AGENT_LEAVE_PIDFILE);
++    netsnmp_ds_register_config(ASN_BOOLEAN, app, "disablesnmpv3", 
++			       NETSNMP_DS_APPLICATION_ID,
++			       NETSNMP_DS_AGENT_DISABLE_SNMPV3);
+     netsnmp_ds_register_config(ASN_BOOLEAN, app, "dontLogTCPWrappersConnects",
+                                NETSNMP_DS_APPLICATION_ID,
+                                NETSNMP_DS_AGENT_DONT_LOG_TCPWRAPPERS_CONNECTS);
+diff --git a/agent/snmpd.c b/agent/snmpd.c
+index 4155637286..1c53644751 100644
+--- a/agent/snmpd.c
++++ b/agent/snmpd.c
+@@ -468,6 +468,11 @@ main(int argc, char *argv[])
+ 
+     netsnmp_ds_set_int(NETSNMP_DS_APPLICATION_ID,
+                        NETSNMP_DS_AGENT_CACHE_TIMEOUT, 5);
++    /*
++     * Default to SNMPV3 enabled.  
++     */
++    netsnmp_ds_set_boolean(NETSNMP_DS_APPLICATION_ID, 
++			   NETSNMP_DS_AGENT_DISABLE_SNMPV3, 0);
+ 
+     /*
+      * This is incredibly ugly, but it's probably the simplest way
+diff --git a/include/net-snmp/agent/ds_agent.h b/include/net-snmp/agent/ds_agent.h
+index 105eeb44d5..98bcbcb4a3 100644
+--- a/include/net-snmp/agent/ds_agent.h
++++ b/include/net-snmp/agent/ds_agent.h
+@@ -40,6 +40,7 @@
+ #define NETSNMP_DS_AGENT_DISKIO_NO_FD   18      /* 1 = don't report /dev/fd*   entries in diskIOTable */
+ #define NETSNMP_DS_AGENT_DISKIO_NO_LOOP 19      /* 1 = don't report /dev/loop* entries in diskIOTable */
+ #define NETSNMP_DS_AGENT_DISKIO_NO_RAM  20      /* 1 = don't report /dev/ram*  entries in diskIOTable */
++#define NETSNMP_DS_AGENT_DISABLE_SNMPV3 21      /* 1 = disable snmpv3 - block all v3 client requests */
+ 
+ /* WARNING: The trap receiver also uses DS flags and must not conflict with these!
+  * If you define additional boolean entries, check in "apps/snmptrapd_ds.h" first */
+diff --git a/snmplib/snmp_api.c b/snmplib/snmp_api.c
+index 7cb9ceb242..3c9502125b 100644
+--- a/snmplib/snmp_api.c
++++ b/snmplib/snmp_api.c
+@@ -44,6 +44,7 @@ SOFTWARE.
+  */
+ #include <net-snmp/net-snmp-config.h>
+ #include <net-snmp/net-snmp-features.h>
++#include <net-snmp/agent/ds_agent.h> 
+ 
+ #include <stdio.h>
+ #include <ctype.h>
+@@ -5652,6 +5653,15 @@ _sess_process_packet_parse_pdu(void *sessp, netsnmp_session * sp,
+ 	      "session %p fd %d pkt %p length %d\n", sessp,
+ 	      transport->sock, packetptr, length));
+ 
++  /* Check if SNMPV3 is disabled */
++  if (snmp_parse_version(packetptr,length) == SNMP_VERSION_3 && 
++      netsnmp_ds_get_boolean(NETSNMP_DS_APPLICATION_ID,
++                              NETSNMP_DS_AGENT_DISABLE_SNMPV3)) {
++      DEBUGMSGTL(("sess_process_packet", "SNMPV3 disabled - v3 request blocked\n"));
++      SNMP_FREE(opaque);
++      return NULL;
++  }    
++
+   dump = netsnmp_ds_get_boolean(NETSNMP_DS_LIBRARY_ID,
+                                 NETSNMP_DS_LIB_DUMP_PACKET);
+ #ifndef NETSNMP_FEATURE_REMOVE_FILTER_SOURCE

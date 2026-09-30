@@ -1,0 +1,1313 @@
+Description: DANOS netlink-support-for-routes.patch, rebased onto net-snmp 5.9.5.2
+ Ported to 5.9's route access code (keeps upstream's error paths).
+Origin: vendor, https://github.com/danos/net-snmp debian/patches
+
+diff --git a/agent/mibgroup/ip-forward-mib/data_access/route.h b/agent/mibgroup/ip-forward-mib/data_access/route.h
+index 2ff65d7880..16a82dc329 100644
+--- a/agent/mibgroup/ip-forward-mib/data_access/route.h
++++ b/agent/mibgroup/ip-forward-mib/data_access/route.h
+@@ -19,7 +19,10 @@
+  */
+ config_require(ip-forward-mib/data_access/route_common);
+ 
+-#if defined( linux )
++#if defined( HAVE_LINUX_RTNETLINK_H )
++config_require(ip-forward-mib/data_access/route_netlink);
++config_require(ip-forward-mib/data_access/route_ioctl);
++#elif defined( linux )
+ config_require(ip-forward-mib/data_access/route_linux);
+ config_require(ip-forward-mib/data_access/route_ioctl);
+ #elif defined( freebsd7 ) || defined( netbsd5 ) || defined( openbsd4 ) || defined( dragonfly ) || defined( darwin )
+diff --git a/agent/mibgroup/ip-forward-mib/data_access/route_common.c b/agent/mibgroup/ip-forward-mib/data_access/route_common.c
+index 67d7c7d660..f00d870547 100644
+--- a/agent/mibgroup/ip-forward-mib/data_access/route_common.c
++++ b/agent/mibgroup/ip-forward-mib/data_access/route_common.c
+@@ -14,75 +14,93 @@
+ 
+ /**---------------------------------------------------------------------*/
+ /*
+- * local static prototypes
++ * external per-architecture functions prototypes
++ *
++ * These shouldn't be called by the general public, so they aren't in
++ * the header file.
+  */
+-static void _access_route_entry_release(void *entry, void *unused);
++extern int
++netsnmp_arch_route_create(netsnmp_route_entry *entry);
++extern int
++netsnmp_arch_route_delete(netsnmp_route_entry *entry);
++
+ 
+ /**---------------------------------------------------------------------*/
+ /*
+- * container functions
++ * access functions
+  */
+ 
+ /**
+- * @retval NULL  error
+- * @retval !NULL pointer to container
++ * Create and initialize route access structure
++ *
++ * @param init_flags Initialization flags
++ * @param update_hook Callback to update cache
++ * @param gc_hook Callback to clean out old cache data
++ * @param cache_flags Initialize cache flags (optional)
++ * @param cache_expired Initial cache expired flag
++ *
++ * @remark
++ * Called from inetCidrRouteTable_container_init()
++ *
++ * @retval !NULL  : pointer to created route access structure.
++ * @retval NULL   : error.
+  */
+-netsnmp_container*
+-netsnmp_access_route_container_load(netsnmp_container* container, u_int load_flags)
++netsnmp_route_access *
++netsnmp_access_route_create(u_int init_flags,
++                            NetsnmpAccessRouteUpdate *update_hook,
++                            int *cache_flags,
++                            char *cache_expired)
+ {
+-    int rc;
++    netsnmp_route_access *access;
+ 
+-    DEBUGMSGTL(("access:route:container", "load\n"));
++    DEBUGMSGTL(("access:route:create", "create route access\n"));
+ 
+-    if (NULL == container) {
+-        container = netsnmp_container_find("access:_route:fifo");
+-        if (NULL == container) {
+-            snmp_log(LOG_ERR, "no container specified/found for access_route\n");
+-            return NULL;
+-        }
++    access = SNMP_MALLOC_TYPEDEF(netsnmp_route_access);
++    if (NULL == access) {
++        snmp_log(LOG_ERR,"malloc error in %s\n", __func__);
++        return NULL;
+     }
+ 
+-    container->container_name = strdup("_route");
++    access->magic = NULL;
++    access->arch_magic = NULL;
++    access->update_hook = update_hook;
++    access->synchronized = 0;
+ 
+-    rc =  netsnmp_access_route_container_arch_load(container, load_flags);
+-    if (0 != rc) {
+-        netsnmp_access_route_container_free(container, NETSNMP_ACCESS_ROUTE_FREE_NOFLAGS);
+-        container = NULL;
+-    }
++    if (init_flags & NETSNMP_ACCESS_ROUTE_CREATE_IPV4_ONLY)
++	    access->load_flags |= NETSNMP_ACCESS_ROUTE_LOAD_IPV4_ONLY;
+ 
+-    return container;
++    if (cache_flags != NULL)
++        *cache_flags |= NETSNMP_CACHE_RESET_TIMER_ON_USE;
++    access->cache_expired = cache_expired;
++
++    return access;
+ }
+ 
+-void
+-netsnmp_access_route_container_free(netsnmp_container *container, u_int free_flags)
++
++/**
++ * Delete route access structure and accociated memory
++ *
++ * @param access Pointer to data access structure to delete
++ *
++ * @retval 0 : Always
++ */
++int netsnmp_access_route_delete(netsnmp_route_access *access)
+ {
+-    DEBUGMSGTL(("access:route:container", "free\n"));
++    DEBUGMSGTL(("access:netlink:route:delete", "delete route access\n"));
+ 
+-    if (NULL == container) {
+-        snmp_log(LOG_ERR, "invalid container for netsnmp_access_route_free\n");
+-        return;
+-    }
++    if (NULL == access)
++        return 0;
+ 
+-    if(! (free_flags & NETSNMP_ACCESS_ROUTE_FREE_DONT_CLEAR)) {
+-        /*
+-         * free all items.
+-         */
+-        CONTAINER_CLEAR(container, _access_route_entry_release, NULL);
+-    }
+-    else {
+-        /*
+-         * free the CONTAINER's sl_nodes, but not their data
+-         */
+-        CONTAINER_CLEAR(container, NULL, NULL);
+-    }
++    netsnmp_access_route_unload(access);
++    free(access);
+ 
+-    if(! (free_flags & NETSNMP_ACCESS_ROUTE_FREE_KEEP_CONTAINER))
+-        CONTAINER_FREE(container);
++    return 0;
+ }
+ 
++
+ /**---------------------------------------------------------------------*/
+ /*
+- * ifentry functions
++ * route entry functions
+  */
+ /** create route entry
+  *
+@@ -93,7 +111,11 @@ netsnmp_access_route_container_free(netsnmp_container *container, u_int free_fla
+ netsnmp_route_entry *
+ netsnmp_access_route_entry_create(void)
+ {
+-    netsnmp_route_entry *entry = SNMP_MALLOC_TYPEDEF(netsnmp_route_entry);
++    netsnmp_route_entry *entry;
++
++    DEBUGMSGTL(("entry:route:create", "create route entry\n"));
++
++    entry = SNMP_MALLOC_TYPEDEF(netsnmp_route_entry);
+     if(NULL == entry) {
+         snmp_log(LOG_ERR, "could not allocate route entry\n");
+         return NULL;
+@@ -118,6 +140,8 @@ netsnmp_access_route_entry_create(void)
+ void
+ netsnmp_access_route_entry_free(netsnmp_route_entry * entry)
+ {
++    DEBUGMSGTL(("entry:route:free", "free route entry\n"));
++
+     if (NULL == entry)
+         return;
+ 
+@@ -256,17 +280,3 @@ netsnmp_access_route_entry_copy(netsnmp_route_entry *lhs,
+    
+     return 0;
+ }
+-
+-
+-/**---------------------------------------------------------------------*/
+-/*
+- * Utility routines
+- */
+-
+-/**
+- */
+-void
+-_access_route_entry_release(void *entry, void *context)
+-{
+-    netsnmp_access_route_entry_free(entry);
+-}
+diff --git a/agent/mibgroup/ip-forward-mib/data_access/route_linux.c b/agent/mibgroup/ip-forward-mib/data_access/route_linux.c
+index c6d5bfcacc..d6bfbb226f 100644
+--- a/agent/mibgroup/ip-forward-mib/data_access/route_linux.c
++++ b/agent/mibgroup/ip-forward-mib/data_access/route_linux.c
+@@ -38,7 +38,7 @@ _type_from_flags(unsigned int flags)
+ 
+ }
+ static int
+-_load_ipv4(netsnmp_container* container, u_long *index )
++_load_ipv4(netsnmp_route_access* access, u_long *index)
+ {
+     FILE           *in;
+     char            line[256];
+@@ -49,7 +49,8 @@ _load_ipv4(netsnmp_container* container, u_long *index )
+     DEBUGMSGTL(("access:route:container",
+                 "route_container_arch_load ipv4\n"));
+ 
+-    netsnmp_assert(NULL != container);
++    netsnmp_assert(NULL != access);
++    netsnmp_assert(NULL != index);
+ 
+     /*
+      * fetch routes from the proc file-system:
+@@ -182,14 +183,16 @@ _load_ipv4(netsnmp_container* container, u_long *index )
+             ? IANAIPROUTEPROTOCOL_ICMP : IANAIPROUTEPROTOCOL_LOCAL;
+ 
+         /*
+-         * insert into container
++         * insert into cache
+          */
+-        if (CONTAINER_INSERT(container, entry) < 0)
+-        {
+-            DEBUGMSGTL(("access:route:container", "error with route_entry: insert into container failed.\n"));
+-free_entry:
+-            netsnmp_access_route_entry_free(entry);
+-        }
++	 if (access->update_hook)
++		 access->update_hook(access, entry);
++	 else {
++		 DEBUGMSGTL(("access:netlink:route",
++			     "no update hook: insert into cache failed.\n"));
++free_entry:	/* also the error paths above (upstream 5.9) */
++		 netsnmp_access_route_entry_free(entry);
++	 }
+     }
+ 
+     fclose(in);
+@@ -199,7 +202,7 @@ free_entry:
+ 
+ #ifdef NETSNMP_ENABLE_IPV6
+ static int
+-_load_ipv6(netsnmp_container* container, u_long *index )
++_load_ipv6(netsnmp_route_access* access, u_long *index)
+ {
+     FILE           *in;
+     char            line[256];
+@@ -208,7 +211,8 @@ _load_ipv6(netsnmp_container* container, u_long *index )
+     DEBUGMSGTL(("access:route:container",
+                 "route_container_arch_load ipv6\n"));
+ 
+-    netsnmp_assert(NULL != container);
++    netsnmp_assert(NULL != access);
++    netsnmp_assert(NULL != index);
+ 
+     /*
+      * fetch routes from the proc file-system:
+@@ -330,9 +334,15 @@ _load_ipv6(netsnmp_container* container, u_long *index )
+             ? IANAIPROUTEPROTOCOL_ICMP : IANAIPROUTEPROTOCOL_LOCAL;
+ 
+         /*
+-         * insert into container
++         * insert into cache
+          */
+-        CONTAINER_INSERT(container, entry);
++	 if (access->update_hook)
++		 access->update_hook(access, entry);
++	 else {
++		 DEBUGMSGTL(("access:netlink:route",
++			     "no update hook: insert into cache failed.\n"));
++		 netsnmp_access_route_entry_free(entry);
++	 }
+     }
+ 
+     fclose(in);
+@@ -347,39 +357,58 @@ _load_ipv6(netsnmp_container* container, u_long *index )
+  * @retval -1 no container specified
+  * @retval -2 could not open data file
+  */
+-int
+-netsnmp_access_route_container_arch_load(netsnmp_container* container,
+-                                         u_int load_flags)
++int netsnmp_access_route_load(netsnmp_route_access *access)
+ {
+     u_long          count = 0;
+     int             rc;
+ 
+-    DEBUGMSGTL(("access:route:container",
+-                "route_container_arch_load (flags %x)\n", load_flags));
++    DEBUGMSGTL(("access:route:load",
++                "load route cache (flags 0x%x)\n", access->load_flags));
+ 
+-    if (NULL == container) {
+-        snmp_log(LOG_ERR, "no container specified/found for access_route\n");
++    if (NULL == access) {
++        snmp_log(LOG_ERR, "invalid data access to load route cache\n");
+         return -1;
+     }
+ 
+-    rc = _load_ipv4(container, &count);
++    if (access->synchronized) {
++        DEBUGMSGTL(("access:netlink:route", "already synchronized\n"));
++        return 0;
++    }
++
++    access->synchronized = 0;
++    rc = _load_ipv4(access, &count);
+     
+ #ifdef NETSNMP_ENABLE_IPV6
+-    if((0 != rc) || (load_flags & NETSNMP_ACCESS_ROUTE_LOAD_IPV4_ONLY))
++    if((0 != rc) || (access->load_flags & NETSNMP_ACCESS_ROUTE_LOAD_IPV4_ONLY))
+         return rc;
+ 
+     /*
+      * load ipv6. ipv6 module might not be loaded,
+      * so ignore -2 err (file not found)
+      */
+-    rc = _load_ipv6(container, &count);
++    rc = _load_ipv6(access, &count);
+     if (-2 == rc)
+         rc = 0;
+ #endif
++    access->synchronized = 1;
+ 
+     return rc;
+ }
+ 
++/**
++ * Unload route cache
++ *
++ * @param access Pointer to data access structure
++ *
++ * @retval 0  : Always
++ */
++int netsnmp_access_route_unload(netsnmp_route_access *access)
++{
++    DEBUGMSGTL(("access:netlink:route", "unload route cache\n"));
++    access->synchronized = 0;
++    return 0;
++}
++
+ /*
+  * create a new entry
+  */
+diff --git a/agent/mibgroup/ip-forward-mib/data_access/route_netlink.c b/agent/mibgroup/ip-forward-mib/data_access/route_netlink.c
+new file mode 100644
+index 0000000000..e684cc9598
+--- /dev/null
++++ b/agent/mibgroup/ip-forward-mib/data_access/route_netlink.c
+@@ -0,0 +1,415 @@
++/*
++ *  Interface MIB architecture support
++ */
++#include <net-snmp/net-snmp-config.h>
++#include <net-snmp/net-snmp-includes.h>
++#include "mibII/mibII_common.h"
++
++#include <net-snmp/agent/net-snmp-agent-includes.h>
++#include <net-snmp/data_access/interface.h>
++#include <net-snmp/data_access/route.h>
++#include <net-snmp/data_access/ipaddress.h>
++
++#include "ip-forward-mib/data_access/route_ioctl.h"
++#include "ip-forward-mib/inetCidrRouteTable/inetCidrRouteTable_constants.h"
++#include "ip-forward-mib/inetCidrRouteTable/inetCidrRouteTable_data_access.h"
++#include "if-mib/data_access/interface_ioctl.h"
++
++#include <sys/socket.h>
++#include <arpa/inet.h>
++#include <errno.h>
++#include <unistd.h>
++#include <linux/netlink.h>
++#include <linux/rtnetlink.h>
++
++#define RCVBUF_SIZE (32768)
++#define SNDBUF_SIZE (512)
++
++static int nlseq;
++
++static int
++_type_from_rtm(const struct rtmsg *r)
++{
++    switch (r->rtm_type) {
++    case RTN_UNREACHABLE:
++        return INETCIDRROUTETYPE_REJECT;
++    case RTN_BLACKHOLE:
++        return INETCIDRROUTETYPE_BLACKHOLE;
++    case RTN_LOCAL:
++        return INETCIDRROUTETYPE_LOCAL;
++    default:
++        return 0;
++    }
++}
++
++static void
++fillup_entry_info(netsnmp_route_entry *entry, struct rtmsg *r, int rtcount)
++{
++    struct rtattr  *rta;
++
++    entry->rt_type = _type_from_rtm(r);
++    entry->rt_proto = (r->rtm_protocol == RTPROT_REDIRECT)
++        ? IANAIPROUTEPROTOCOL_ICMP : IANAIPROUTEPROTOCOL_LOCAL;
++
++    DEBUGMSGTL(("access:route", "    ns_rt_index %u\n", entry->ns_rt_index));
++    DEBUGMSGTL(("access:route", "    proto %u\n", entry->rt_proto));
++
++#ifdef NETSNMP_ENABLE_IPV6
++    if (r->rtm_family == AF_INET6) {
++        entry->rt_dest_type = INETADDRESSTYPE_IPV6;
++        entry->rt_dest_len = NETSNMP_ACCESS_ROUTE_ADDR_IPV6_BUF_SIZE;
++
++        entry->rt_nexthop_type = INETADDRESSTYPE_IPV6;
++        entry->rt_nexthop_len = NETSNMP_ACCESS_ROUTE_ADDR_IPV6_BUF_SIZE;
++    } else
++#endif
++    {
++        entry->rt_dest_type = INETADDRESSTYPE_IPV4;
++        entry->rt_dest_len = NETSNMP_ACCESS_ROUTE_ADDR_IPV4_BUF_SIZE;
++
++        entry->rt_nexthop_type = INETADDRESSTYPE_IPV4;
++        entry->rt_nexthop_len = NETSNMP_ACCESS_ROUTE_ADDR_IPV4_BUF_SIZE;
++    }
++    entry->rt_pfx_len = r->rtm_dst_len;
++    DEBUGMSGTL(("access:route", "    pfxlen %u\n", entry->rt_pfx_len));
++
++    rta = RTM_RTA(r);
++    while (RTA_OK(rta, rtcount)) {
++        size_t          len = RTA_PAYLOAD(rta);
++        char            b[INET6_ADDRSTRLEN];
++
++        switch (rta->rta_type) {
++        case RTA_OIF:
++            entry->if_index = *(int *) (RTA_DATA(rta));
++
++            DEBUGMSGTL(("access:route", "    dev %s\n",
++                        if_indextoname(entry->if_index, b)));
++            break;
++
++        case RTA_DST:
++            memcpy(entry->rt_dest, RTA_DATA(rta), len);
++            DEBUGMSGTL(("access:route", "    to %s/%u\n",
++                        inet_ntop(r->rtm_family, entry->rt_dest,
++                                  b, sizeof(b)), r->rtm_dst_len));
++            break;
++
++        case RTA_GATEWAY:
++            entry->rt_type = INETCIDRROUTETYPE_REMOTE;
++            memcpy(entry->rt_nexthop, RTA_DATA(rta), len);
++            DEBUGMSGTL(("access:route", "    via %s\n",
++                        inet_ntop(r->rtm_family, entry->rt_nexthop,
++                                  b, sizeof(b))));
++            break;
++
++        case RTA_PRIORITY:
++            entry->rt_metric1 = *(uint32_t *) RTA_DATA(rta);
++            DEBUGMSGTL(("access:route", "    metric %d\n",
++                        entry->rt_metric1));
++            break;
++
++        default:
++            DEBUGMSGTL(("access:route", "unhandled rta_type %u\n", rta->rta_type));
++            break;
++        }
++
++        rta = RTA_NEXT(rta, len);
++    }
++    DEBUGMSGTL(("access:route", "    if_index %u\n", entry->if_index));
++    DEBUGMSGTL(("access:route", "    type %u (rtm_type %u)\n", entry->rt_type, r->rtm_type));
++
++#ifdef USING_IP_FORWARD_MIB_IPCIDRROUTETABLE_IPCIDRROUTETABLE_MODULE
++    entry->rt_tos = r->rtm_tos;
++    if (r->rtm_family == AF_INET)
++        entry->rt_mask = ~0 << (32 - r->rtm_dst_len);
++    DEBUGMSGTL(("access:route", "    mask 0x%x\n", entry->rt_mask));
++    DEBUGMSGTL(("access:route", "    tos %u\n", entry->rt_tos));
++#endif
++
++#ifdef USING_IP_FORWARD_MIB_INETCIDRROUTETABLE_INETCIDRROUTETABLE_MODULE
++    /*
++     * inetCidrRoutePolicy OBJECT-TYPE
++     * SYNTAX     OBJECT IDENTIFIER
++     * MAX-ACCESS not-accessible
++     * STATUS     current
++     * DESCRIPTION
++     * "This object is an opaque object without any defined
++     * semantics.  Its purpose is to serve as an additional
++     * index which may delineate between multiple entries to
++     * the same destination.  The value { 0 0 } shall be used
++     * as the default value for this object."
++     */
++    /*
++     * on linux, many routes all look alike, and would have the same
++     * indexed based on dest and next hop. So we use the if index,
++     * routing protocol, and scope as the policy
++     * to distinguise between them. Hopefully this is unique.
++     */
++    entry->rt_policy = calloc(3, sizeof(oid));
++    entry->rt_policy[0] = entry->if_index;
++    entry->rt_policy[1] = r->rtm_protocol;
++    entry->rt_policy[2] = r->rtm_scope;
++    entry->rt_policy_len = sizeof(oid) * 3;
++    DEBUGMSGTL(("access:route", "    policy0 %u\n", entry->rt_policy[0]));
++    DEBUGMSGTL(("access:route", "    policy1 %u\n", entry->rt_policy[1]));
++    DEBUGMSGTL(("access:route", "    policy2 %u\n", entry->rt_policy[2]));
++#endif
++}
++
++
++/**
++ * @internal
++ * Read all route information from netlink socket
++ *
++ * Used during initialization to read entire route table for the
++ * specifed family.
++ *
++ * @param access Access structure
++ * @param family Read route of the specifid address family
++ *
++ * @retval 0    : Success.
++ * @retval -1   : Error.
++ */
++static int
++_load_netlink(netsnmp_route_access* access, int family)
++{
++    int             nlsk;
++    unsigned char rcvbuf[RCVBUF_SIZE];
++    int rcvbuf_size = RCVBUF_SIZE;
++    unsigned char sndbuf[SNDBUF_SIZE];
++    struct nlmsghdr *hdr;
++    struct rtmsg *rthdr;
++    int count;
++    int end_of_message = 0;
++    int rc = 0;
++    netsnmp_container *container = access->magic;
++
++    DEBUGMSGTL(("access:netlink:route", "%s %s called\n", __func__,
++                (family == AF_INET) ? "ipv4" : "ipv6"));
++
++    netsnmp_assert(NULL != container);
++
++    /*
++     * Open a netlink socket
++     */
++    nlsk = socket(AF_NETLINK, SOCK_DGRAM, NETLINK_ROUTE);
++    if (nlsk < 0) {
++        snmp_log_perror("socket netlink");
++        return -1;
++    }
++
++    if (setsockopt(nlsk, SOL_SOCKET, SO_RCVBUF,
++                   &rcvbuf_size, sizeof(rcvbuf_size)) < 0) {
++        snmp_log_perror("setsockopt netlink rcvbuf");
++        close(nlsk);
++        return -1;
++    }
++
++    memset(sndbuf, 0, SNDBUF_SIZE);
++    hdr = (struct nlmsghdr *)sndbuf;
++    hdr->nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg));
++    hdr->nlmsg_type = RTM_GETROUTE;
++    hdr->nlmsg_flags = NLM_F_ROOT|NLM_F_MATCH|NLM_F_REQUEST;
++    hdr->nlmsg_seq = ++nlseq;
++
++    rthdr = (struct rtmsg *)NLMSG_DATA(hdr);
++    rthdr->rtm_table = RT_TABLE_MAIN;
++    rthdr->rtm_family = family;
++    /*
++     * Send a request to the kernel to dump the routing table to us
++     */
++    count = send(nlsk, sndbuf, hdr->nlmsg_len, 0);
++    if (count < 0) {
++        snmp_log_perror("send netlink");
++        close(nlsk);
++        return -1;
++    }
++
++    /*
++     * Now listen for response
++     */
++    do {
++        struct nlmsghdr *n;
++
++        /*
++         * Get the message
++         */
++        count = recv(nlsk, rcvbuf, sizeof(rcvbuf), MSG_DONTWAIT);
++        if (count < 0) {
++            if (errno == EINTR)
++                continue;
++            if (errno == EAGAIN)
++                break;
++            snmp_log_perror("recv netlink");
++            rc = -1;
++            access->synchronized = 0;
++            if (access->cache_expired != NULL)
++                *access->cache_expired = 1;
++            break;
++        }
++
++        /*
++         * Walk all of the returned messages
++         */
++        for (n = (struct nlmsghdr *)rcvbuf; NLMSG_OK(n, count);
++             n = NLMSG_NEXT(n, count)) {
++            struct rtmsg *rtm;
++            netsnmp_route_entry *entry;
++
++            /*
++             * Make sure the message is ok
++             */
++            if (n->nlmsg_type == NLMSG_ERROR) {
++                struct nlmsgerr *err = (struct nlmsgerr*) NLMSG_DATA(n);
++                if (n->nlmsg_len < NLMSG_LENGTH(sizeof(struct nlmsgerr)))
++                    snmp_log(LOG_ERR, "kernel netlink error truncated\n");
++                else
++                    snmp_log(LOG_ERR, "kernel netlink error %s\n",
++                             strerror(-err->error));
++                rc = -1;
++                break;
++            }
++            /*
++             * End of message, we're done
++             */
++            if (n->nlmsg_type & NLMSG_DONE) {
++                end_of_message = 1;
++                break;
++            }
++
++            if (n->nlmsg_type != RTM_NEWROUTE) {
++                snmp_log(LOG_ERR, "unexpected message of type %d in nlmsg\n",
++                         n->nlmsg_type);
++                continue;
++            }
++
++            rtm = NLMSG_DATA(n);
++            if (rtm->rtm_family != family) {
++                snmp_log(LOG_ERR, "Wrong family in netlink response %d\n",
++                         rtm->rtm_family);
++                break;
++            }
++
++            if (rtm->rtm_table != RT_TABLE_MAIN)
++                    continue;
++            /*
++             * insert into container
++             */
++	    entry = netsnmp_access_route_entry_create();
++	    if (NULL == entry) {
++		    DEBUGMSGTL(("access:netlink:route", "unable to allocate entry\n"));
++		    break;
++	    }
++
++	    entry->ns_rt_index = ++(access->index);
++	    fillup_entry_info(entry, rtm, RTM_PAYLOAD(n));
++	    if (access->update_hook)
++		    access->update_hook(access, entry);
++	    else {
++		    DEBUGMSGTL(("access:netlink:route",
++				"no update hook: insert into container failed.\n"));
++		    netsnmp_access_route_entry_free(entry);
++		    rc = -1;
++		    break;
++	    }
++
++	    DEBUGMSGTL(("access:netlink:route", "route inserted\n"));
++        }
++
++        if (rc < 0)
++            break;
++
++    } while (!end_of_message);
++
++    close(nlsk);
++    return rc;
++}
++
++
++/**
++ * Load route cache from system
++ *
++ * @param access Pointer to data access structure
++ *
++ * @retval 0  : Success
++ * @retval -1 : Error
++ */
++int netsnmp_access_route_load(netsnmp_route_access *access)
++{
++    int r;
++
++    DEBUGMSGTL(("access:netlink:route:load", "load route cache\n"));
++
++    if (NULL == access) {
++        snmp_log(LOG_ERR, "invalid data access to load route cache\n");
++        return -1;
++    }
++
++    if (access->synchronized) {
++        DEBUGMSGTL(("access:netlink:route", "already synchronized\n"));
++        return 0;
++    }
++
++    DEBUGMSGTL(("access:netlink:route", "synchronizing route table\n"));
++
++    access->index = 0;
++    access->synchronized = 0;
++    r = _load_netlink(access, AF_INET);
++
++#ifdef NETSNMP_ENABLE_IPV6
++    if((0 != r) || (access->load_flags & NETSNMP_ACCESS_ROUTE_LOAD_IPV4_ONLY))
++        return r;
++
++    r = _load_netlink(access, AF_INET6);
++#endif
++
++    access->synchronized = 1;
++    return r;
++}
++
++/**
++ * Unload route cache
++ *
++ * @param access Pointer to data access structure
++ *
++ * @retval 0  : Always
++ */
++int netsnmp_access_route_unload(netsnmp_route_access *access)
++{
++    DEBUGMSGTL(("access:netlink:route:unload", "unload route cache\n"));
++    access->synchronized = 0;
++    return 0;
++}
++
++/**
++ * create a new entry
++ */
++int
++netsnmp_arch_route_create(netsnmp_route_entry *entry)
++{
++    if (NULL == entry)
++        return -1;
++
++    if (4 != entry->rt_dest_len) {
++        DEBUGMSGT(("access:route:create", "only ipv4 supported\n"));
++        return -2;
++    }
++
++    return _netsnmp_ioctl_route_set_v4(entry);
++}
++
++/**
++ * delete an entry
++ */
++int
++netsnmp_arch_route_delete(netsnmp_route_entry *entry)
++{
++    if (NULL == entry)
++        return -1;
++
++    if (4 != entry->rt_dest_len) {
++        DEBUGMSGT(("access:route:create", "only ipv4 supported\n"));
++        return -2;
++    }
++
++    return _netsnmp_ioctl_route_delete_v4(entry);
++}
+diff --git a/agent/mibgroup/ip-forward-mib/inetCidrRouteTable/inetCidrRouteTable.c b/agent/mibgroup/ip-forward-mib/inetCidrRouteTable/inetCidrRouteTable.c
+index 787e463f0b..d28560c533 100644
+--- a/agent/mibgroup/ip-forward-mib/inetCidrRouteTable/inetCidrRouteTable.c
++++ b/agent/mibgroup/ip-forward-mib/inetCidrRouteTable/inetCidrRouteTable.c
+@@ -177,6 +177,7 @@ inetCidrRouteTable_rowreq_ctx_init(inetCidrRouteTable_rowreq_ctx *
+     DEBUGMSGTL(("verbose:inetCidrRouteTable:inetCidrRouteTable_rowreq_ctx_init", "called\n"));
+ 
+     netsnmp_assert(NULL != rowreq_ctx);
++    netsnmp_assert(NULL != rowreq_ctx->data);
+ 
+     /*
+      * TODO:210:o: |-> Perform extra inetCidrRouteTable rowreq initialization. (eg DEFVALS)
+@@ -566,15 +567,14 @@ int
+ inetCidrRouteIfIndex_get(inetCidrRouteTable_rowreq_ctx * rowreq_ctx,
+                          long *inetCidrRouteIfIndex_val_ptr)
+ {
+-   /** we should have a non-NULL pointer */
++    /** we should have non-NULL pointers */
++    netsnmp_assert(NULL != rowreq_ctx);
++    netsnmp_assert(NULL != rowreq_ctx->data);
+     netsnmp_assert(NULL != inetCidrRouteIfIndex_val_ptr);
+ 
+-
+     DEBUGMSGTL(("verbose:inetCidrRouteTable:inetCidrRouteIfIndex_get",
+                 "called\n"));
+ 
+-    netsnmp_assert(NULL != rowreq_ctx);
+-
+     /*
+      * TODO:231:o: |-> Extract the current value of the inetCidrRouteIfIndex data->
+      * copy (* inetCidrRouteIfIndex_val_ptr ) from rowreq_ctx->data
+diff --git a/agent/mibgroup/ip-forward-mib/inetCidrRouteTable/inetCidrRouteTable_data_access.c b/agent/mibgroup/ip-forward-mib/inetCidrRouteTable/inetCidrRouteTable_data_access.c
+index 0646c29b63..e0dd625ffa 100644
+--- a/agent/mibgroup/ip-forward-mib/inetCidrRouteTable/inetCidrRouteTable_data_access.c
++++ b/agent/mibgroup/ip-forward-mib/inetCidrRouteTable/inetCidrRouteTable_data_access.c
+@@ -5,9 +5,10 @@
+  * $Id$
+  */
+ /*
+- * standard Net-SNMP includes 
++ * standard Net-SNMP includes
+  */
+ #include <net-snmp/net-snmp-config.h>
++#include <net-snmp/net-snmp-features.h>
+ #include <net-snmp/net-snmp-includes.h>
+ #include <net-snmp/agent/net-snmp-agent-includes.h>
+ 
+@@ -19,7 +20,9 @@
+ 
+ #include "inetCidrRouteTable_data_access.h"
+ 
+-/** @ingroup interface 
++static netsnmp_route_access *route_access;
++
++/** @ingroup interface
+  * @addtogroup data_access data_access: Routines to access data
+  *
+  * These routines are used to locate the data used to satisfy
+@@ -71,6 +74,62 @@ inetCidrRouteTable_init_data(inetCidrRouteTable_registration *
+  *
+  */
+ 
++/**
++ * Cache update callback
++ *
++ * @param access Pointer to access structure
++ * @param entry Route entry to update
++ *
++ * @remark
++ * Callback registered in inetCidrRouteTable_container_init()
++ */
++static void
++_snarf_route_entry(netsnmp_route_access *access,
++                   netsnmp_route_entry *route_entry)
++{
++    inetCidrRouteTable_rowreq_ctx *rowreq_ctx;
++
++    netsnmp_assert(NULL != route_entry);
++    netsnmp_assert(NULL != access);
++
++    /*
++     * per  inetCidrRouteType:
++     *
++     * Routes which do not result in traffic forwarding or 
++     * rejection should not be displayed even if the  
++     * implementation keeps them stored internally.
++     */
++    if (route_entry->rt_type == 0) {    /* set when route not up */
++        DEBUGMSGT(("verbose:inetCidrRouteTable:inetCidrRouteTable_cache_load", "skipping route\n"));
++        netsnmp_access_route_entry_free(route_entry);
++        return;
++    }
++
++    /*
++     * allocate an row context and set the index(es), then add it to
++     * the container
++     */
++    rowreq_ctx = inetCidrRouteTable_allocate_rowreq_ctx(route_entry, NULL);
++    if ((NULL != rowreq_ctx) &&
++        (MFD_SUCCESS == inetCidrRouteTable_indexes_set
++         (rowreq_ctx, route_entry->rt_dest_type,
++          (char *) route_entry->rt_dest, route_entry->rt_dest_len,
++          route_entry->rt_pfx_len,
++          route_entry->rt_policy, route_entry->rt_policy_len,
++          route_entry->rt_nexthop_type,
++          (char *) route_entry->rt_nexthop, route_entry->rt_nexthop_len))) {
++        CONTAINER_INSERT(access->magic, rowreq_ctx);
++        rowreq_ctx->row_status = ROWSTATUS_ACTIVE;
++    } else {
++        if (rowreq_ctx) {
++            snmp_log(LOG_ERR, "error setting index while loading "
++                     "inetCidrRoute cache.\n");
++            inetCidrRouteTable_release_rowreq_ctx(rowreq_ctx);
++        } else
++            netsnmp_access_route_entry_free(route_entry);
++    }
++}
++
+ /**
+  * container initialization
+  *
+@@ -98,7 +157,7 @@ inetCidrRouteTable_init_data(inetCidrRouteTable_registration *
+  *  process that will supply the data, opening a database, etc.
+  */
+ void
+-inetCidrRouteTable_container_init(netsnmp_container **container_ptr_ptr,
++inetCidrRouteTable_container_init(netsnmp_container ** container_ptr_ptr,
+                                   netsnmp_cache * cache)
+ {
+     DEBUGMSGTL(("verbose:inetCidrRouteTable:inetCidrRouteTable_container_init", "called\n"));
+@@ -129,59 +188,17 @@ inetCidrRouteTable_container_init(netsnmp_container **container_ptr_ptr,
+      * by the MFD helper. To completely disable caching, set
+      * cache->enabled to 0.
+      */
+-    cache->timeout = INETCIDRROUTETABLE_CACHE_TIMEOUT;  /* seconds */
+-}                               /* inetCidrRouteTable_container_init */
+-
+-/**
+- * check entry for update
+- */
+-static void
+-_snarf_route_entry(void *p, void *q)
+-{
+-    netsnmp_route_entry *route_entry = p;
+-    netsnmp_container *container = q;
+-    inetCidrRouteTable_rowreq_ctx *rowreq_ctx;
+-
+-    netsnmp_assert(NULL != route_entry);
+-    netsnmp_assert(NULL != container);
+-
+-    /*
+-     * per  inetCidrRouteType:
+-     *
+-     * Routes which do not result in traffic forwarding or 
+-     * rejection should not be displayed even if the  
+-     * implementation keeps them stored internally.
+-     */
+-    if (route_entry->rt_type == 0) {    /* set when route not up */
+-        DEBUGMSGT(("verbose:inetCidrRouteTable:inetCidrRouteTable_cache_load", "skipping route\n"));
+-        netsnmp_access_route_entry_free(route_entry);
++    cache->timeout = INETCIDRROUTETABLE_CACHE_TIMEOUT;    /* seconds */
++    route_access = netsnmp_access_route_create(
++                           NETSNMP_ACCESS_ROUTE_CREATE_NOFLAGS,
++                           _snarf_route_entry,
++                           &cache->flags,
++                           &cache->expired);
++    if (route_access == NULL) {
++        snmp_log(LOG_ERR, "unable to create route access in %s\n", __func__);
+         return;
+     }
+-
+-    /*
+-     * allocate an row context and set the index(es), then add it to
+-     * the container
+-     */
+-    rowreq_ctx = inetCidrRouteTable_allocate_rowreq_ctx(route_entry, NULL);
+-    if ((NULL != rowreq_ctx) &&
+-        (MFD_SUCCESS == inetCidrRouteTable_indexes_set
+-         (rowreq_ctx, route_entry->rt_dest_type,
+-          (char *) route_entry->rt_dest, route_entry->rt_dest_len,
+-          route_entry->rt_pfx_len,
+-          route_entry->rt_policy, route_entry->rt_policy_len,
+-          route_entry->rt_nexthop_type,
+-          (char *) route_entry->rt_nexthop, route_entry->rt_nexthop_len))) {
+-        CONTAINER_INSERT(container, rowreq_ctx);
+-        rowreq_ctx->row_status = ROWSTATUS_ACTIVE;
+-    } else {
+-        if (rowreq_ctx) {
+-            snmp_log(LOG_ERR, "error setting index while loading "
+-                     "inetCidrRoute cache.\n");
+-            inetCidrRouteTable_release_rowreq_ctx(rowreq_ctx);
+-        } else
+-            netsnmp_access_route_entry_free(route_entry);
+-    }
+-}
++}                               /* inetCidrRouteTable_container_init */
+ 
+ /**
+  * container shutdown
+@@ -204,6 +221,10 @@ inetCidrRouteTable_container_shutdown(netsnmp_container *container_ptr)
+ {
+     DEBUGMSGTL(("verbose:inetCidrRouteTable:inetCidrRouteTable_container_shutdown", "called\n"));
+ 
++    if (NULL != route_access) {
++        netsnmp_access_route_delete(route_access);
++        route_access = NULL;
++    }
+     if (NULL == container_ptr) {
+         snmp_log(LOG_ERR,
+                  "bad params to inetCidrRouteTable_container_shutdown\n");
+@@ -248,41 +269,13 @@ inetCidrRouteTable_container_shutdown(netsnmp_container *container_ptr)
+ int
+ inetCidrRouteTable_container_load(netsnmp_container *container)
+ {
+-    netsnmp_container *route_container;
+-
+     DEBUGMSGTL(("verbose:inetCidrRouteTable:inetCidrRouteTable_container_load", "called\n"));
+ 
+-    /*
+-     * TODO:351:M: |-> Load/update data in the inetCidrRouteTable container.
+-     * loop over your inetCidrRouteTable data, allocate a rowreq context,
+-     * set the index(es) [and data, optionally] and insert into
+-     * the container.
+-     *
+-     * we use the netsnmp data access api to get the data
+-     */
+-    route_container =
+-        netsnmp_access_route_container_load(NULL,
+-                                            NETSNMP_ACCESS_ROUTE_LOAD_NOFLAGS);
+-
+-    if (NULL == route_container)
+-        return MFD_RESOURCE_UNAVAILABLE;        /* msg already logged */
+-
+-    DEBUGMSGT(("verbose:inetCidrRouteTable:inetCidrRouteTable_cache_load",
+-               "%d records\n", (int)CONTAINER_SIZE(route_container)));
+-
+-    /*
+-     * we just got a fresh copy of route data. snarf data
+-     */
+-    CONTAINER_FOR_EACH(route_container, _snarf_route_entry, container);
+-
+-    /*
+-     * free the container. we've either claimed each ifentry, or released it,
+-     * so the dal function doesn't need to clear the container.
+-     */
+-    netsnmp_access_route_container_free(route_container,
+-                                        NETSNMP_ACCESS_ROUTE_FREE_DONT_CLEAR);
++    route_access->magic = container;
++    if (netsnmp_access_route_load(route_access) < 0)
++        return MFD_ERROR;
+ 
+-    DEBUGMSGT(("verbose:inetCidrRouteTable:inetCidrRouteTable_cache_load",
++    DEBUGMSGT(("verbose:inetCidrRouteTable:inetCidrRouteTable_container_load",
+                "%d records\n", (int)CONTAINER_SIZE(container)));
+ 
+     return MFD_SUCCESS;
+@@ -302,10 +295,15 @@ inetCidrRouteTable_container_load(netsnmp_container *container)
+  *
+  */
+ void
+-inetCidrRouteTable_container_free(netsnmp_container *container)
++inetCidrRouteTable_container_free(netsnmp_container * container)
+ {
+     DEBUGMSGTL(("verbose:inetCidrRouteTable:inetCidrRouteTable_container_free", "called\n"));
+ 
++    if (NULL != route_access) {
++        netsnmp_access_route_unload(route_access);
++        route_access->magic = NULL;
++    }
++
+     /*
+      * TODO:380:M: Free inetCidrRouteTable container data.
+      */
+diff --git a/agent/mibgroup/ip-forward-mib/inetCidrRouteTable/inetCidrRouteTable_data_access.h b/agent/mibgroup/ip-forward-mib/inetCidrRouteTable/inetCidrRouteTable_data_access.h
+index 9ad9067606..b244de00fb 100644
+--- a/agent/mibgroup/ip-forward-mib/inetCidrRouteTable/inetCidrRouteTable_data_access.h
++++ b/agent/mibgroup/ip-forward-mib/inetCidrRouteTable/inetCidrRouteTable_data_access.h
+@@ -7,6 +7,8 @@
+ #ifndef INETCIDRROUTETABLE_DATA_ACCESS_H
+ #define INETCIDRROUTETABLE_DATA_ACCESS_H
+ 
++#include "ip-forward-mib/inetCidrRouteTable/inetCidrRouteTable.h"
++
+ #ifdef __cplusplus
+ extern          "C" {
+ #endif
+diff --git a/agent/mibgroup/ip-forward-mib/ipCidrRouteTable/ipCidrRouteTable_data_access.c b/agent/mibgroup/ip-forward-mib/ipCidrRouteTable/ipCidrRouteTable_data_access.c
+index 78c7ea63f4..51e90f62ff 100644
+--- a/agent/mibgroup/ip-forward-mib/ipCidrRouteTable/ipCidrRouteTable_data_access.c
++++ b/agent/mibgroup/ip-forward-mib/ipCidrRouteTable/ipCidrRouteTable_data_access.c
+@@ -19,6 +19,7 @@
+ 
+ #include "ipCidrRouteTable_data_access.h"
+ 
++static netsnmp_route_access *route_access;
+ 
+ /** @ingroup interface 
+  * @addtogroup data_access data_access: Routines to access data
+@@ -72,6 +73,42 @@ ipCidrRouteTable_init_data(ipCidrRouteTable_registration *
+  *
+  */
+ 
++/**
++ * check entry for update
++ *
++ */
++static void
++_snarf_route_entry(netsnmp_route_access *access, netsnmp_route_entry *route_entry)
++{
++    ipCidrRouteTable_rowreq_ctx *rowreq_ctx;
++
++    DEBUGTRACE;
++
++    netsnmp_assert(NULL != access);
++    netsnmp_assert(NULL != route_entry);
++
++    /*
++     * allocate an row context and set the index(es), then add it to
++     * the container
++     */
++    rowreq_ctx = ipCidrRouteTable_allocate_rowreq_ctx(route_entry, NULL);
++    if ((NULL != rowreq_ctx) &&
++        (MFD_SUCCESS == ipCidrRouteTable_indexes_set
++         (rowreq_ctx, *((in_addr_t *) route_entry->rt_dest),
++          route_entry->rt_mask, route_entry->rt_tos,
++          *((in_addr_t *) route_entry->rt_nexthop)))) {
++        CONTAINER_INSERT(access->magic, rowreq_ctx);
++        rowreq_ctx->ipCidrRouteStatus = ROWSTATUS_ACTIVE;
++    } else {
++        if (rowreq_ctx) {
++            snmp_log(LOG_ERR, "error setting index while loading "
++                     "ipCidrRoute cache.\n");
++            ipCidrRouteTable_release_rowreq_ctx(rowreq_ctx);
++        } else
++            netsnmp_access_route_entry_free(route_entry);
++    }
++}
++
+ /**
+  * container initialization
+  *
+@@ -132,46 +169,16 @@ ipCidrRouteTable_container_init(netsnmp_container **container_ptr_ptr,
+      * cache->enabled to 0.
+      */
+     cache->timeout = IPCIDRROUTETABLE_CACHE_TIMEOUT;    /* seconds */
+-}                               /* ipCidrRouteTable_container_init */
+-
+-/**
+- * check entry for update
+- *
+- */
+-static void
+-_snarf_route_entry(void *p, void *q)
+-{
+-    netsnmp_route_entry *route_entry = p;
+-    netsnmp_container *container = q;
+-    ipCidrRouteTable_rowreq_ctx *rowreq_ctx;
+-
+-    DEBUGTRACE;
+-
+-    netsnmp_assert(NULL != route_entry);
+-    netsnmp_assert(NULL != container);
+-
+-    /*
+-     * allocate an row context and set the index(es), then add it to
+-     * the container
+-     */
+-    rowreq_ctx = ipCidrRouteTable_allocate_rowreq_ctx(route_entry, NULL);
+-    if ((NULL != rowreq_ctx) &&
+-        (MFD_SUCCESS == ipCidrRouteTable_indexes_set
+-         (rowreq_ctx, *((in_addr_t *) route_entry->rt_dest),
+-          route_entry->rt_mask, route_entry->rt_tos,
+-          *((in_addr_t *) route_entry->rt_nexthop)))) {
+-        
+-        CONTAINER_INSERT(container, rowreq_ctx);
+-        rowreq_ctx->ipCidrRouteStatus = ROWSTATUS_ACTIVE;
+-    } else {
+-        if (rowreq_ctx) {
+-            snmp_log(LOG_ERR, "error setting index while loading "
+-                     "ipCidrRoute cache.\n");
+-            ipCidrRouteTable_release_rowreq_ctx(rowreq_ctx);
+-        } else
+-            netsnmp_access_route_entry_free(route_entry);
++    route_access = netsnmp_access_route_create(
++                           NETSNMP_ACCESS_ROUTE_CREATE_IPV4_ONLY,
++                           _snarf_route_entry,
++                           &cache->flags,
++                           &cache->expired);
++    if (route_access == NULL) {
++        snmp_log(LOG_ERR, "unable to create route access in %s\n", __func__);
++        return;
+     }
+-}
++}                               /* ipCidrRouteTable_container_init */
+ 
+ /**
+  * container shutdown
+@@ -194,6 +201,10 @@ ipCidrRouteTable_container_shutdown(netsnmp_container *container_ptr)
+ {
+     DEBUGMSGTL(("verbose:ipCidrRouteTable:ipCidrRouteTable_container_shutdown", "called\n"));
+ 
++    if (NULL != route_access) {
++        netsnmp_access_route_delete(route_access);
++        route_access = NULL;
++    }
+     if (NULL == container_ptr) {
+         snmp_log(LOG_ERR,
+                  "bad params to ipCidrRouteTable_container_shutdown\n");
+@@ -243,30 +254,9 @@ ipCidrRouteTable_container_load(netsnmp_container *container)
+     DEBUGMSGTL(("verbose:ipCidrRouteTable:ipCidrRouteTable_cache_load",
+                 "called\n"));
+ 
+-    /*
+-     * TODO:351:M: |-> Load/update data in the ipCidrRouteTable container.
+-     * loop over your ipCidrRouteTable data, allocate a rowreq context,
+-     * set the index(es) [and data, optionally] and insert into
+-     * the container.
+-     */
+-    route_container =
+-        netsnmp_access_route_container_load(NULL,
+-                                            NETSNMP_ACCESS_ROUTE_LOAD_IPV4_ONLY);
+-
+-    if (NULL == route_container)
+-        return MFD_RESOURCE_UNAVAILABLE;        /* msg already logged */
+-
+-    /*
+-     * we just got a fresh copy of route data. snarf data
+-     */
+-    CONTAINER_FOR_EACH(route_container, _snarf_route_entry, container);
+-
+-    /*
+-     * free the container. we've either claimed each ifentry, or released it,
+-     * so the dal function doesn't need to clear the container.
+-     */
+-    netsnmp_access_route_container_free(route_container,
+-                                        NETSNMP_ACCESS_ROUTE_FREE_DONT_CLEAR);
++    route_access->magic = container;
++    if (netsnmp_access_route_load(route_access) < 0)
++        return MFD_ERROR;
+ 
+     DEBUGMSGT(("verbose:ipCidrRouteTable:ipCidrRouteTable_cache_load",
+                "%d records\n", (int)CONTAINER_SIZE(container)));
+diff --git a/include/net-snmp/data_access/route.h b/include/net-snmp/data_access/route.h
+index d944d10e42..ea44d9e6e0 100644
+--- a/include/net-snmp/data_access/route.h
++++ b/include/net-snmp/data_access/route.h
+@@ -11,16 +11,19 @@ extern          "C" {
+ #endif
+ 
+ /**---------------------------------------------------------------------*/
+-/*
+- * structure definitions
+- */
++#define NETSNMP_ACCESS_ROUTE_ADDR_IPV6_BUF_SIZE (16)
++#define NETSNMP_ACCESS_ROUTE_ADDR_IPV4_BUF_SIZE (4)
+ #if defined( NETSNMP_ENABLE_IPV6 )
+-#   define NETSNMP_ACCESS_ROUTE_ADDR_BUF_SIZE 16
++#   define NETSNMP_ACCESS_ROUTE_ADDR_BUF_SIZE NETSNMP_ACCESS_ROUTE_ADDR_IPV6_BUF_SIZE
+ #else
+-#   define NETSNMP_ACCESS_ROUTE_ADDR_BUF_SIZE 4
++#   define NETSNMP_ACCESS_ROUTE_ADDR_BUF_SIZE NETSNMP_ACCESS_ROUTE_ADDR_IPV4_BUF_SIZE
+ #endif
+ 
+ 
++/**---------------------------------------------------------------------*/
++/*
++ * structure definitions
++ */
+ /*
+  * netsnmp_route_entry
+  *   - primary route structure for both ipv4 & ipv6
+@@ -78,34 +81,49 @@ typedef struct netsnmp_route_s {
+ 
+ } netsnmp_route_entry;
+ 
++#define NETSNMP_ACCESS_ROUTE_ENTRY_FLAG_DELETE      (0x00000001)
+ 
+ 
+ /**---------------------------------------------------------------------*/
+ /*
+  * ACCESS function prototypes
+  */
+-/*
+- * ifcontainer init
+- */
+-netsnmp_container * netsnmp_access_route_container_init(u_int init_flags);
+-#define NETSNMP_ACCESS_ROUTE_INIT_NOFLAGS               0x0000
+-#define NETSNMP_ACCESS_ROUTE_INIT_ADDL_IDX_BY_NAME      0x0001
++struct netsnmp_route_access_s;
++typedef struct netsnmp_route_access_s netsnmp_route_access;
++
++typedef void (NetsnmpAccessRouteUpdate)(netsnmp_route_access *, netsnmp_route_entry*);
++
++struct netsnmp_route_access_s {
++    void *magic;      /* pointer to container */
++    void *arch_magic; /* netlink socket fd */
++    int synchronized;
++    unsigned int generation;
++    unsigned int load_flags;
++    oid index;     /* arbitrary index number of the route */
++    NetsnmpAccessRouteUpdate *update_hook;
++    char *cache_expired;
++};
++
++
++
++netsnmp_route_access *
++netsnmp_access_route_create(u_int init_flags,
++                            NetsnmpAccessRouteUpdate *update_hook,
++                            int *cache_flags,
++                            char *cache_expired);
++#define NETSNMP_ACCESS_ROUTE_CREATE_NOFLAGS               0x0000
++#define NETSNMP_ACCESS_ROUTE_CREATE_IPV4_ONLY             0x0001
++
++int netsnmp_access_route_delete(netsnmp_route_access *access);
++int netsnmp_access_route_load(netsnmp_route_access *access);
++int netsnmp_access_route_unload(netsnmp_route_access *access);
+ 
+ /*
+- * ifcontainer load and free
++ * route container load and free
+  */
+-netsnmp_container*
+-netsnmp_access_route_container_load(netsnmp_container* container,
+-                                    u_int load_flags);
+ #define NETSNMP_ACCESS_ROUTE_LOAD_NOFLAGS               0x0000
+ #define NETSNMP_ACCESS_ROUTE_LOAD_IPV4_ONLY             0x0001
+ 
+-void netsnmp_access_route_container_free(netsnmp_container *container,
+-                                         u_int free_flags);
+-#define NETSNMP_ACCESS_ROUTE_FREE_NOFLAGS               0x0000
+-#define NETSNMP_ACCESS_ROUTE_FREE_DONT_CLEAR            0x0001
+-#define NETSNMP_ACCESS_ROUTE_FREE_KEEP_CONTAINER        0x0002
+-
+ 
+ /*
+  * create/copy/free a route entry

@@ -1,0 +1,25 @@
+Description: DANOS commit-50085bc, rebased onto net-snmp 5.9.5.2
+Origin: vendor, https://github.com/danos/net-snmp debian/patches
+
+diff --git a/agent/mibgroup/ip-mib/data_access/ipaddress_linux.c b/agent/mibgroup/ip-mib/data_access/ipaddress_linux.c
+index 232202d0f9..7cd78bcb5f 100644
+--- a/agent/mibgroup/ip-mib/data_access/ipaddress_linux.c
++++ b/agent/mibgroup/ip-mib/data_access/ipaddress_linux.c
+@@ -44,7 +44,7 @@ netsnmp_feature_require(ipaddress_ioctl_entry_copy);
+ #include "ipaddress_ioctl.h"
+ #include "ipaddress_private.h"
+ 
+-int _load_v6(netsnmp_container *container, int idx_offset);
++static int _load_v6(netsnmp_container *container, int idx_offset);
+ 
+ #ifdef HAVE_LINUX_RTNETLINK_H
+ int
+@@ -210,7 +210,7 @@ netsnmp_arch_ipaddress_container_load(netsnmp_container *container,
+ #if defined (NETSNMP_ENABLE_IPV6)
+ /**
+  */
+-int
++static int
+ _load_v6(netsnmp_container *container, int idx_offset)
+ {
+ #ifndef HAVE_LINUX_RTNETLINK_H

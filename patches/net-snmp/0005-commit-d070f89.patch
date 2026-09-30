@@ -1,0 +1,28 @@
+Description: DANOS commit-d070f89, rebased onto net-snmp 5.9.5.2
+Origin: vendor, https://github.com/danos/net-snmp debian/patches
+
+diff --git a/configure.d/config_project_with_enable b/configure.d/config_project_with_enable
+index e923191056..118bd7429f 100644
+--- a/configure.d/config_project_with_enable
++++ b/configure.d/config_project_with_enable
+@@ -807,6 +807,20 @@ NETSNMP_ARG_WITH(agentx-socket,
+ AC_DEFINE_UNQUOTED(NETSNMP_AGENTX_SOCKET,"$withval",
+         [Unix domain socket for AgentX master-subagent communication])
+ 
++default_smux_max_peers="10"
++NETSNMP_ARG_WITH(smux-max-peers,
++[  --with-smux-max-peers=NUM         Max number of SMUX peers (Default: 10)],[
++  if test "$withval" = yes; then
++    AC_MSG_ERROR([ Please provide a max number of SMUX peers ]);
++  fi
++  AC_MSG_RESULT(using max SMUX peers $withval)
++],[
++  withval=$default_smux_max_peers
++  AC_MSG_RESULT(using default SMUX max number of peers $withval)
++])
++AC_DEFINE_UNQUOTED(NETSNMP_SMUX_MAX_PEERS,$withval,
++        [SMUX maximum number of peers])
++
+ #
+ # feature addition/removal and minimialist support
+ #

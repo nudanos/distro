@@ -16,9 +16,22 @@ import (
 	"github.com/nudanos/distro/internal/versions"
 )
 
-// Drift is one pinned version that is no longer the newest.
+// Drift is one pinned version that is no longer the newest. Held is the
+// manifest's reason when the newer release is deliberately not taken.
 type Drift struct {
-	Name, Current, Latest, Detail string
+	Name, Current, Latest, Detail, Held string
+}
+
+// SplitHeld separates drift that needs attention from deliberate holds.
+func SplitHeld(drift []Drift) (open, held []Drift) {
+	for _, d := range drift {
+		if d.Held != "" {
+			held = append(held, d)
+		} else {
+			open = append(open, d)
+		}
+	}
+	return open, held
 }
 
 // CheckUpstream compares e.Version with the newest tag matching e.TagPattern.
@@ -34,7 +47,7 @@ func CheckUpstream(e manifest.Entry, tags []string) (*Drift, error) {
 	if versions.Compare(v, e.Version) <= 0 {
 		return nil, nil
 	}
-	return &Drift{Name: e.Name, Current: e.Version, Latest: v, Detail: "tag " + tag}, nil
+	return &Drift{Name: e.Name, Current: e.Version, Latest: v, Detail: "tag " + tag, Held: e.Hold}, nil
 }
 
 // CheckApt compares each pinned package with the version the repository

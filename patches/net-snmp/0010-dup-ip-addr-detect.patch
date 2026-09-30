@@ -1,0 +1,26 @@
+Description: DANOS dup-ip-addr-detect.patch, rebased onto net-snmp 5.9.5.2
+Origin: vendor, https://github.com/danos/net-snmp debian/patches
+
+diff --git a/agent/mibgroup/ip-mib/data_access/ipaddress_ioctl.c b/agent/mibgroup/ip-mib/data_access/ipaddress_ioctl.c
+index 485ce389d4..1dc769446e 100644
+--- a/agent/mibgroup/ip-mib/data_access/ipaddress_ioctl.c
++++ b/agent/mibgroup/ip-mib/data_access/ipaddress_ioctl.c
+@@ -18,6 +18,7 @@
+ #include <errno.h>
+ #include <net/if.h>
+ #include <sys/ioctl.h>
++#include <arpa/inet.h>
+ 
+ #include "ipaddress_ioctl.h"
+ 
+@@ -353,8 +354,9 @@ _netsnmp_ioctl_ipaddress_container_load_v4(netsnmp_container *container,
+         }
+ 
+         if (CONTAINER_INSERT(container, entry) < 0) {
++            char buf[INET_ADDRSTRLEN];
+             DEBUGMSGTL(("access:ipaddress:container","error with ipaddress_entry: insert into container failed.\n"));
+-            NETSNMP_LOGONCE((LOG_ERR, "Duplicate IPv4 address detected, some interfaces may not be visible in IP-MIB\n"));
++            NETSNMP_LOGONCE((LOG_ERR, "Duplicate IPv4 address %s at ifindex %d detected, some interfaces may not be visible in IP-MIB\n", inet_ntop(AF_INET, entry->ia_address, buf, sizeof(buf)), entry->if_index));
+             netsnmp_access_ipaddress_entry_free(entry);
+             continue;
+         }

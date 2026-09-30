@@ -52,3 +52,21 @@ func TestCheckApt(t *testing.T) {
 		t.Errorf("drift = %+v", ds)
 	}
 }
+
+// A deliberate hold (pam_tacplus: 1.6.2+ install a libtac.h that includes
+// gnulib headers they do not ship) still reports the newer release, marked
+// held, so check-updates can list it without failing.
+func TestCheckUpstreamHeld(t *testing.T) {
+	e := manifest.Entry{Name: "pam_tacplus", Version: "1.6.1", TagPattern: `^v(\d+\.\d+\.\d+)$`,
+		Hold: "libtac.h needs unshipped gnulib headers"}
+	d, err := CheckUpstream(e, []string{"v1.6.1", "v1.7.0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d == nil || d.Latest != "1.7.0" || d.Held != e.Hold {
+		t.Errorf("drift = %+v, want a held drift to 1.7.0", d)
+	}
+	if open, held := SplitHeld([]Drift{*d, {Name: "x", Current: "1", Latest: "2"}}); len(open) != 1 || len(held) != 1 {
+		t.Errorf("SplitHeld = %v, %v", open, held)
+	}
+}

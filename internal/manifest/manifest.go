@@ -54,6 +54,7 @@ type Entry struct {
 	PackagingDir string       `yaml:"packaging_dir,omitempty"` // upstream: debian/ taken from this upstream path instead of packaging
 	UnpackWaf    bool         `yaml:"unpack_waf,omitempty"`    // upstream: replace the self-extracting waf blob with its source
 	Profiles     []string     `yaml:"profiles,omitempty"`      // Debian build profiles to build with (DEB_BUILD_PROFILES)
+	Hold         string       `yaml:"hold,omitempty"`          // upstream: why a newer release is deliberately not taken
 
 	Source   string            `yaml:"source,omitempty"`   // apt: "URL SUITE COMPONENT"
 	Key      string            `yaml:"key,omitempty"`      // apt: signing key URL

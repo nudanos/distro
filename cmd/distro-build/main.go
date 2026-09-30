@@ -435,6 +435,10 @@ func (a *app) checkUpdates(ctx context.Context) error {
 		}
 		drift = append(drift, ds...)
 	}
+	drift, held := updates.SplitHeld(drift)
+	for _, d := range held {
+		fmt.Printf("held: %s %s (newest %s): %s\n", d.Name, d.Current, d.Latest, d.Held)
+	}
 	if len(drift) == 0 {
 		fmt.Println("all pinned versions are current")
 		return nil

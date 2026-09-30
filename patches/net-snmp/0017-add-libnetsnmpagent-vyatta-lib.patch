@@ -1,6 +1,11 @@
+Description: DANOS add-libnetsnmpagent-vyatta-lib.patch, rebased onto net-snmp 5.9.5.2
+Origin: vendor, https://github.com/danos/net-snmp debian/patches
+
+diff --git a/Makefile.in b/Makefile.in
+index 6dbe010019..5fb97b8d3e 100644
 --- a/Makefile.in
 +++ b/Makefile.in
-@@ -35,7 +35,7 @@
+@@ -35,7 +35,7 @@ INSTALLBUILTHEADERS=include/net-snmp/net-snmp-config.h
  INSTALLBUILTINCLUDEHEADERS=@FEATUREHEADERS@
  INSTALLBINSCRIPTS=net-snmp-config net-snmp-create-v3-user
  INSTALLUCDHEADERS=ucd-snmp-config.h version.h mib_module_config.h
@@ -9,9 +14,11 @@
  
  #
  # other install rules.
+diff --git a/Makefile.top b/Makefile.top
+index e9b5c5275b..e7c1c70bb7 100644
 --- a/Makefile.top
 +++ b/Makefile.top
-@@ -87,6 +87,7 @@
+@@ -87,6 +87,7 @@ LIBCURRENT  = 45
  LIBAGE      = 0
  LIBREVISION = 0
  
@@ -19,7 +26,7 @@
  LIB_LD_CMD      = $(LIBTOOL) --mode=link $(LINKCC) $(CFLAGS) -rpath $(libdir) -version-info $(LIBCURRENT):$(LIBREVISION):$(LIBAGE) @LD_NO_UNDEFINED@ -o
  LIB_EXTENSION   = la
  LIB_VERSION     =
-@@ -98,7 +99,7 @@
+@@ -98,7 +99,7 @@ RANLIB		= :
  # libtool definitions
  .SUFFIXES: .c .o .lo .rc
  .c.lo:
@@ -28,9 +35,11 @@
  .rc.lo:
  	$(LIBTOOL) --mode=compile --tag=RC @RC@ -o $@ -i $<
  
+diff --git a/agent/Makefile.in b/agent/Makefile.in
+index 44f8818d29..0f15fd796f 100644
 --- a/agent/Makefile.in
 +++ b/agent/Makefile.in
-@@ -18,8 +18,10 @@
+@@ -18,8 +18,10 @@ mysubdir=agent
  SUBDIRS=helpers
  FTSUBDIRS=mibgroup helpers
  
@@ -42,7 +51,7 @@
  INSTALLPOSTLIBS	= libnetsnmpmibs.$(LIB_EXTENSION)$(LIB_VERSION)
  
  INCLUDESUBDIR=agent
-@@ -153,6 +155,7 @@
+@@ -153,6 +155,7 @@ LIBAGENTOBJS= \
  	helpers/multiplexer.o \
  	helpers/null.o \
  	helpers/old_api.o \
@@ -50,7 +59,7 @@
  	helpers/read_only.o \
  	helpers/row_merge.o \
  	helpers/scalar.o \
-@@ -193,7 +196,6 @@
+@@ -193,7 +196,6 @@ LLIBAGENTOBJS= \
  	helpers/mode_end_call.lo \
  	helpers/multiplexer.lo \
  	helpers/null.lo \
@@ -58,7 +67,7 @@
  	helpers/read_only.lo \
  	helpers/row_merge.lo \
  	helpers/scalar.lo \
-@@ -224,6 +226,12 @@
+@@ -224,6 +226,12 @@ LLIBAGENTOBJS= \
  	$(agentgroup_list_lo) \
  	@OTHERAGENTLIBLOBJS@
  
@@ -71,7 +80,7 @@
  LLIBAGENTFTS= \
  	helpers/all_helpers.ft \
  	helpers/baby_steps.ft \
-@@ -276,7 +284,8 @@
+@@ -276,7 +284,8 @@ FTAGENTOBJS=snmpd.ft @other_ftagentobjs@
  OBJS		= $(LIBAGENTOBJS)  $(MIBOBJS)   $(AGENTOBJS)   \
  		  mib_modules.o  auto_nlist.o
  LOBJS		= $(LLIBAGENTOBJS) $(LMIBOBJS)  $(LAGENTOBJS)  \
@@ -81,7 +90,7 @@
  FTOBJS		= $(LLIBAGENTFTS)  $(FTMIBOBJS) $(FTAGENTOBJS) \
  		  mib_modules.ft auto_nlist.ft
  
-@@ -302,10 +311,17 @@
+@@ -302,10 +311,17 @@ getmibstat.o: mibgroup/kernel_sunos5.c
  snmpd$(EXEEXT):	${LAGENTOBJS} $(USELIBS) $(AGENTLIB) $(HELPERLIB) $(MIBLIB) $(LIBTARG) 
  	$(LINK) $(CFLAGS) -o $@ ${LAGENTOBJS} ${LDFLAGS} ${OUR_AGENT_LIBS}
  
@@ -101,9 +110,11 @@
  libnetsnmpmibs.$(LIB_EXTENSION)$(LIB_VERSION): ${LMIBOBJS} $(AGENTLIB) $(USELIBS) subdirs
  	$(LIB_LD_CMD) $(MIBLIB) ${LMIBOBJS} $(AGENTLIB) $(USELIBS) $(LDFLAGS) ${LMIBLIBS} $(PERLLDOPTS_FOR_LIBS) @AGENTLIBS@
  	$(RANLIB) $(MIBLIB)
+diff --git a/configure.ac b/configure.ac
+index 9b6ba75461..60dc1c8947 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -126,7 +126,7 @@
+@@ -126,7 +126,7 @@ AC_CONFIG_FILES([net-snmp-config:net-snmp-config.in],
  		[chmod +x net-snmp-config])
  AC_CONFIG_FILES([net-snmp-create-v3-user:net-snmp-create-v3-user.in],
  		[chmod +x net-snmp-create-v3-user])
@@ -112,7 +123,10 @@
  AC_CONFIG_FILES([dist/generation-scripts/gen-variables:dist/generation-scripts/gen-variables.in])
  AC_CONFIG_FILES([local/snmpconf])
  
---- a/netsnmp-agent-vyatta.pc.in
+diff --git a/netsnmp-agent-vyatta.pc.in b/netsnmp-agent-vyatta.pc.in
+new file mode 100644
+index 0000000000..d52274d20e
+--- /dev/null
 +++ b/netsnmp-agent-vyatta.pc.in
 @@ -0,0 +1,11 @@
 +prefix=@prefix@

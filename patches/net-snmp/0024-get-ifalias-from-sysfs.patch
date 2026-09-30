@@ -1,0 +1,64 @@
+Description: DANOS get-ifalias-from-sysfs.patch, rebased onto net-snmp 5.9.5.2
+Origin: vendor, https://github.com/danos/net-snmp debian/patches
+
+diff --git a/agent/mibgroup/if-mib/ifXTable/ifXTable.c b/agent/mibgroup/if-mib/ifXTable/ifXTable.c
+index eb48aa556e..df3c3a145d 100644
+--- a/agent/mibgroup/if-mib/ifXTable/ifXTable.c
++++ b/agent/mibgroup/if-mib/ifXTable/ifXTable.c
+@@ -1472,6 +1472,13 @@ int
+ ifAlias_get(ifXTable_rowreq_ctx * rowreq_ctx, char **ifAlias_val_ptr_ptr,
+             size_t * ifAlias_val_ptr_len_ptr)
+ {
++    char *path;
++    char alias[65];
++    int len;
++    FILE *fp;
++    const char *ifname;
++    char *ifalias;
++
+    /** we should have a non-NULL pointer and enough storage */
+     netsnmp_assert((NULL != ifAlias_val_ptr_ptr)
+                    && (NULL != *ifAlias_val_ptr_ptr));
+@@ -1482,6 +1489,34 @@ ifAlias_get(ifXTable_rowreq_ctx * rowreq_ctx, char **ifAlias_val_ptr_ptr,
+ 
+     netsnmp_assert(NULL != rowreq_ctx);
+ 
++
++    ifname = rowreq_ctx->data.ifName;
++    if ((asprintf(&path, "/sys/class/net/%s/ifalias", ifname) > 0) &&
++        (fp = fopen(path, "r"))) {
++        if (fgets(alias, sizeof(alias), fp)) {
++            len = strlen(alias);
++            if (alias[len-1] == '\n')
++                len--;
++            ifalias = alias;
++        } else {
++            len = strlen(ifname);
++            ifalias = ifname;
++        }
++        fclose(fp);
++        free(path);
++        if ((NULL == (*ifAlias_val_ptr_ptr)) ||
++            ((*ifAlias_val_ptr_len_ptr) < len)) {
++            (*ifAlias_val_ptr_ptr) = (char*) malloc(len);
++        }
++        if (NULL == (*ifAlias_val_ptr_ptr)) {
++            snmp_log(LOG_ERR, "could not allocate memory for ifAlias\n");
++            return MFD_ERROR;
++        }
++        (*ifAlias_val_ptr_len_ptr) = len;
++        memcpy((*ifAlias_val_ptr_ptr), ifalias, len);
++        return MFD_SUCCESS;
++     }
++
+     /*
+      * TODO:231:o: |-> Extract the current value of the ifAlias data.
+      * copy (* ifAlias_val_ptr_ptr ) data and (* ifAlias_val_ptr_len_ptr ) from rowreq_ctx->data
+@@ -1513,6 +1548,7 @@ ifAlias_get(ifXTable_rowreq_ctx * rowreq_ctx, char **ifAlias_val_ptr_ptr,
+     return MFD_SUCCESS;
+ }                               /* ifAlias_get */
+ 
++
+ /*---------------------------------------------------------------------
+  * IF-MIB::ifXEntry.ifCounterDiscontinuityTime
+  * ifCounterDiscontinuityTime is subid 19 of ifXEntry.

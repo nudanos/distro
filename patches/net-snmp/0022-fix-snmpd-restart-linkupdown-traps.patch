@@ -1,0 +1,168 @@
+Description: DANOS fix-snmpd-restart-linkupdown-traps.patch, rebased onto net-snmp 5.9.5.2
+Origin: vendor, https://github.com/danos/net-snmp debian/patches
+
+diff --git a/agent/mibgroup/disman/event/mteTrigger.c b/agent/mibgroup/disman/event/mteTrigger.c
+index 5a1d8e7cfc..eb25837ea9 100644
+--- a/agent/mibgroup/disman/event/mteTrigger.c
++++ b/agent/mibgroup/disman/event/mteTrigger.c
+@@ -11,6 +11,15 @@
+ #include "disman/event/mteTrigger.h"
+ #include "disman/event/mteEvent.h"
+ 
++#if HAVE_UNISTD_H
++#include <unistd.h>
++#endif
++#ifdef HAVE_FCNTL_H
++#include <fcntl.h>
++#endif
++#include <sys/types.h>
++#include <sys/stat.h>
++
+ netsnmp_feature_child_of(disman_debugging, libnetsnmpmibs);
+ netsnmp_feature_child_of(mtetrigger, libnetsnmpmibs);
+ netsnmp_feature_child_of(mtetrigger_removeentry, mtetrigger);
+@@ -19,6 +28,8 @@ netsnmp_tdata *trigger_table_data;
+ 
+ oid    _sysUpTime_instance[] = { 1, 3, 6, 1, 2, 1, 1, 3, 0 };
+ size_t _sysUpTime_inst_len   = OID_LENGTH(_sysUpTime_instance);
++oid    _ifOperStatus_oid[] = { 1, 3, 6, 1, 2, 1, 2, 2, 1, 8 };
++size_t _ifOperStatus_oid_len   = OID_LENGTH(_ifOperStatus_oid);
+ 
+ long mteTriggerFailures;
+ 
+@@ -195,6 +206,36 @@ _mteTrigger_failure( /* int error, */ const char *msg )
+     return;
+ }
+ 
++static char *
++get_ifname(netsnmp_variable_list *var, int ifindex)
++{
++    netsnmp_session *sess;
++
++    oid _ifName_instance[] = { 1, 3, 6, 1, 2, 1, 31, 1, 1, 1, 1, ifindex };
++    size_t _ifName_inst_len = OID_LENGTH(_ifName_instance);
++
++    memset( var, 0, sizeof( netsnmp_variable_list ));
++    snmp_set_var_objid( var, _ifName_instance, _ifName_inst_len );
++    sess = netsnmp_query_get_default_session();
++    netsnmp_query_get(  var, sess );
++    return var->val.string;
++}
++
++static int
++is_link_admin_down(struct mteTrigger *entry, int ifindex)
++{
++    oid _ifAdminStatus_instance[] = { 1, 3, 6, 1, 2, 1, 2, 2, 1, 7, ifindex };
++    size_t _ifAdminStatus_inst_len = OID_LENGTH(_ifAdminStatus_instance);
++    netsnmp_variable_list ifAS_var;
++
++    memset( &ifAS_var, 0, sizeof( netsnmp_variable_list ));
++    snmp_set_var_objid( &ifAS_var, _ifAdminStatus_instance, _ifAdminStatus_inst_len );
++    netsnmp_query_get(  &ifAS_var, entry->session );
++    if (*ifAS_var.val.integer == 2)
++        return 1;
++    return 0;
++}
++
+ void
+ mteTrigger_run( unsigned int reg, void *clientarg)
+ {
+@@ -863,6 +904,36 @@ mteTrigger_run( unsigned int reg, void *clientarg)
+                  *   Otherwise initially true (but suppressed)
+                  *   triggers will fire on the *second* probe.
+                  */
++                if (!entry->old_results &&
++                    (entry->flags & MTE_TRIGGER_FLAG_BSTART) &&
++                    !snmp_oid_compare(vp1->name,
++                                        entry->mteTriggerValueID_len,
++                                        _ifOperStatus_oid,
++                                        _ifOperStatus_oid_len)) {
++                    netsnmp_variable_list var;
++                    struct stat buf;
++                    char if_file[128];
++                    char *ifname;
++                    int was_link_up;
++                    int ifindex = vp1->name[10];
++                    if (is_link_admin_down(entry, ifindex)) {
++                        DEBUGMSGTL(( "disman:event:trigger:fire",
++                        "Skip snmpd startup linkDown trap for ifindex %d\n", ifindex));
++                        continue;
++                    }
++                    ifname = get_ifname(&var, ifindex);
++                    if (ifname) {
++                        snprintf(if_file, sizeof(if_file), "/var/run/snmpd/%s", ifname);
++                        was_link_up = ((stat(if_file, &buf) == 0) ? 1 : 0);
++                        unlink(if_file);
++                        if (*vp1->val.integer == 1 && was_link_up) {
++                            DEBUGMSGTL(( "disman:event:trigger:fire",
++                                "Skip snmpd startup linkUp trap for ifname %s\n", ifname));
++                            continue;
++                        }
++                    }
++                }
++
+                 if ( entry->old_results ||
+                     (entry->flags & MTE_TRIGGER_FLAG_BSTART)) {
+                     DEBUGMSGTL(( "disman:event:trigger:fire",
+diff --git a/agent/snmpd.c b/agent/snmpd.c
+index d2a9ba187d..b319f61648 100644
+--- a/agent/snmpd.c
++++ b/agent/snmpd.c
+@@ -118,6 +118,9 @@
+ #ifdef HAVE_CAPABILITY
+ #include <sys/capability.h>
+ #endif
++#if HAVE_DIRENT_H
++#include <dirent.h>
++#endif
+ 
+ #ifndef PATH_MAX
+ # ifdef _POSIX_PATH_MAX
+@@ -352,6 +355,39 @@ SnmpdCatchRandomSignal(int a)
+     exit(1);
+ }
+ 
++static void
++save_link_up_state(void)
++{
++    DIR *dir;
++    struct dirent *dent;
++    struct ifreq ifrq;
++    int sock, fd, rc;
++    char ofile[128];
++
++    dir = opendir("/sys/class/net");
++    if (dir == NULL)
++        return;
++    sock = socket(AF_INET, SOCK_DGRAM, 0);
++    if (sock < 0)
++        return;
++    while ((dent = readdir(dir))) {
++        strlcpy(ifrq.ifr_name, dent->d_name, sizeof(ifrq.ifr_name));
++        rc = ioctl(sock, SIOCGIFFLAGS, &ifrq);
++        if (rc < 0)
++            continue;
++        if ((ifrq.ifr_flags & IFF_UP) && (ifrq.ifr_flags & IFF_RUNNING)) {
++            snprintf(ofile, sizeof(ofile), "/var/run/snmpd/%s", dent->d_name);
++            fd = open(ofile, O_CREAT | O_EXCL | O_WRONLY, 0600);
++            if (fd != -1) {
++                DEBUGMSGTL(("snmpd/main", "%s link state saved\n", dent->d_name));
++                close(fd);
++            }
++        }
++    }
++    close(sock);
++    closedir(dir);
++}
++
+ static void
+ SnmpTrapNodeDown(void)
+ {
+@@ -1118,6 +1154,7 @@ main(int argc, char *argv[])
+ 				NETSNMP_DS_AGENT_QUIT_IMMEDIATELY))
+         receive();
+     DEBUGMSGTL(("snmpd/main", "sending shutdown trap\n"));
++    save_link_up_state();
+     SnmpTrapNodeDown();
+     DEBUGMSGTL(("snmpd/main", "Bye...\n"));
+     snmp_shutdown(app_name);

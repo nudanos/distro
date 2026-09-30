@@ -124,3 +124,13 @@ func TestProfiles(t *testing.T) {
 		t.Errorf("Profiles = %v", got)
 	}
 }
+
+func TestHold(t *testing.T) {
+	m, err := Parse([]byte("packages:\n  - {name: p, kind: upstream, milestone: \"1.0\", upstream: u, packaging: p, track: latest, hold: \"reason\"}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Packages[0].Hold != "reason" {
+		t.Errorf("Hold = %q", m.Packages[0].Hold)
+	}
+}

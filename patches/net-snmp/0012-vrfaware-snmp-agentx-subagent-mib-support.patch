@@ -1,0 +1,402 @@
+Description: DANOS vrfaware-snmp-agentx-subagent-mib-support.patch, rebased onto net-snmp 5.9.5.2
+Origin: vendor, https://github.com/danos/net-snmp debian/patches
+
+diff --git a/agent/agent_registry.c b/agent/agent_registry.c
+index c4523d0979..2ef5a41aa0 100644
+--- a/agent/agent_registry.c
++++ b/agent/agent_registry.c
+@@ -454,6 +454,138 @@ clear_context(void) {
+ /**  @} */
+ /* End of Context cache code */
+ 
++/** @defgroup context_mapping Context Mapping, list of contexts know to
++ *   agent and mapped to VRFs. Used by agent to register mibs
++ *   with context to get/set context specific object values in the MIB.
++ *
++ * @{
++ */
++context_mapping *ctx_mapping = NULL;
++
++/** Returns the list of ctx_mapping known to the agent.
++ *
++ *  @return pointer to agent context list.
++ */
++context_mapping *
++get_context_mapping(void)
++{
++    return ctx_mapping;
++}
++
++/** Finds the vrf for given context.
++ *
++ *  @param context Text name of the context we're searching for.
++ *
++ *  @return vrf for this context element,
++ *  or NULL if not found.
++ */
++const char *
++netsnmp_context_find_vrf(const char *context)
++{
++#if defined(SO_BINDTODEVICE)
++    context_mapping *ptr;
++
++    if (!context || strcmp(context, "") == 0)
++        return NULL;
++
++    for (ptr = ctx_mapping; ptr != NULL; ptr = ptr->next) {
++        if (ptr->context != NULL &&
++            strcmp(ptr->context, context) == 0) {
++            DEBUGMSGTL(("subtree", "found vrf %s for: %s\n", ptr->vrf, context));
++            return ptr->vrf;
++        }
++    }
++    DEBUGMSGTL(("subtree", "didn't find vrf for: %s\n", context));
++    return NULL;
++#else
++    return NULL;
++#endif
++}
++
++/** Finds the context for given vrf.
++ *
++ *  @param vrf Name of the VRF of the context we're searching for.
++ *
++ *  @return context for this vrf or NULL if not found
++ *
++ *  @note NULL will also be returned for the default routing context.
++ */
++const char *
++netsnmp_context_get_context_vrf(const char *vrf)
++{
++    context_mapping *ptr = ctx_mapping;
++
++    while (ptr) {
++        if (strcmp(ptr->vrf, vrf) == 0)
++            return ptr->context;
++        ptr = ptr->next;
++    }
++    DEBUGMSGTL(("subtree", "didn't find context for: %s\n", vrf));
++    return NULL;
++}
++
++/** Adds the context and vrf to Context Mapping.
++ *
++ *  @param context Text name of the context we're adding.
++ *
++ *  @param vrf VRF name of the context we're adding.
++ *
++ *  @return copy of the context pointer, or NULL if cannot add.
++ */
++const char *
++netsnmp_add_context_vrf(char *context, char *vrf)
++{
++    context_mapping *ptr;
++
++    if (!context || !vrf) {
++        return NULL;
++    }
++
++    ptr = SNMP_MALLOC_TYPEDEF(context_mapping);
++    if (!ptr) {
++        return NULL;
++    }
++
++    DEBUGMSGTL(("subtree", "adding context: %s, vrf: %s\n", context, vrf));
++
++    ptr->next = ctx_mapping;
++    if ((ptr->context = strdup(context)) == NULL) {
++        SNMP_FREE(ptr);
++        return NULL;
++    }
++    if ((ptr->vrf = strdup(vrf)) == NULL) {
++        SNMP_FREE(ptr->context);
++        SNMP_FREE(ptr);
++        return NULL;
++    }
++    ctx_mapping = ptr;
++
++    return ptr->context;
++}
++
++/** Completely clears the Context Mapping.
++ */
++void
++netsnmp_clear_context_mapping(void)
++{
++    context_mapping *ptr = NULL, *next = NULL;
++
++    ptr = get_context_mapping();
++    while (ptr) {
++        next = ptr->next;
++
++        free(NETSNMP_REMOVE_CONST(char*, ptr->context));
++        free(NETSNMP_REMOVE_CONST(char*, ptr->vrf));
++        SNMP_FREE(ptr);
++
++        ptr = next;
++    }
++    ctx_mapping = NULL;
++}
++
++/**  @} */
++/* End of Context Mapping code */
++
+ /** @defgroup agent_mib_subtree Maintaining MIB subtrees.
+  *     Maintaining MIB nodes and subtrees.
+  *   @ingroup agent_registry
+diff --git a/agent/mibgroup/agentx/master_admin.c b/agent/mibgroup/agentx/master_admin.c
+index e08dace0dc..3fe401c169 100644
+--- a/agent/mibgroup/agentx/master_admin.c
++++ b/agent/mibgroup/agentx/master_admin.c
+@@ -190,6 +190,71 @@ close_agentx_session(netsnmp_session * session, int sessid)
+     return AGENTX_ERR_NOT_OPEN;
+ }
+ 
++void
++register_agentx_list_all_contexts(netsnmp_session *session, netsnmp_pdu *pdu,
++                                    netsnmp_session *sp, oid *name, u_long flags)
++{
++    char            buf[128];
++    oid             ubound = *name;
++    netsnmp_handler_registration *reg;
++    int             cacheid;
++    context_mapping *ptr = NULL;
++
++    DEBUGMSGTL(("agentx/master", "in register_agentx_list_all_contexts\n"));
++
++    for (ptr = get_context_mapping(); ptr; ptr = ptr->next) {
++        if (!ptr->context)
++            continue;
++
++        snprintf(buf, sizeof(buf), "AgentX subagent %ld, session %8p, subsession %8p, context %s",
++                sp->sessid, session, sp, ptr->context);
++        buf[sizeof(buf)-1] = 0;
++
++        reg = netsnmp_create_handler_registration(buf, agentx_master_handler, pdu->variables->name, pdu->variables->name_length, HANDLER_CAN_RWRITE | HANDLER_CAN_GETBULK); /* fake it */
++        if (!session->myvoid) {
++            if ((session->myvoid = malloc(sizeof(cacheid))) == NULL) {
++                netsnmp_handler_registration_free(reg);
++                return;
++            }
++            cacheid = netsnmp_allocate_globalcacheid();
++            *((int *) session->myvoid) = cacheid;
++        } else {
++            cacheid = *((int *) session->myvoid);
++        }
++
++        reg->handler->myvoid = session;
++        reg->global_cacheid = cacheid;
++        if ((reg->contextName = strdup((char *)ptr->context)) == NULL) {
++            netsnmp_handler_registration_free(reg);
++            return;
++        }
++
++        /*
++         * register mib. Note that for failure cases, the registration info
++         * (reg) will be freed, and thus is no longer a valid pointer.
++         */
++        switch (netsnmp_register_mib(buf, NULL, 0, 0,
++                                     pdu->variables->name,
++                                     pdu->variables->name_length,
++                                     pdu->priority, pdu->range_subid, ubound,
++                                     sp, (char *) ptr->context, pdu->time,
++                                     flags, reg, 1)) {
++
++        case MIB_REGISTERED_OK:
++            DEBUGMSGTL(("agentx/master", "registered ok with context %s\n", ptr->context));
++            break;
++
++        case MIB_DUPLICATE_REGISTRATION:
++            DEBUGMSGTL(("agentx/master", "duplicate registration with context %s\n", ptr->context));
++            break;
++
++        case MIB_REGISTRATION_FAILED:
++        default:
++            DEBUGMSGTL(("agentx/master", "failed registration with context %s\n", ptr->context));
++        }
++    }
++}
++
+ int
+ register_agentx_list(netsnmp_session * session, netsnmp_pdu *pdu)
+ {
+@@ -248,6 +313,8 @@ register_agentx_list(netsnmp_session * session, netsnmp_pdu *pdu)
+ 
+     case MIB_REGISTERED_OK:
+         DEBUGMSGTL(("agentx/master", "registered ok\n"));
++        if (NULL == pdu->community)
++            register_agentx_list_all_contexts(session, pdu, sp, &ubound, flags);
+         return AGENTX_ERR_NOERROR;
+ 
+     case MIB_DUPLICATE_REGISTRATION:
+@@ -263,6 +330,45 @@ register_agentx_list(netsnmp_session * session, netsnmp_pdu *pdu)
+     return rc;
+ }
+ 
++void
++unregister_agentx_list_all_contexts(netsnmp_pdu *pdu)
++{
++    int             rc = 0;
++    context_mapping *ptr = NULL;
++
++    for (ptr = get_context_mapping(); ptr; ptr = ptr->next) {
++        if (!ptr->context)
++            continue;
++
++        if (pdu->range_subid != 0) {
++            oid             ubound =
++                pdu->variables->val.objid[pdu->range_subid - 1];
++            rc = netsnmp_unregister_mib_table_row(pdu->variables->name,
++                                                  pdu->variables->name_length,
++                                                  pdu->priority,
++                                                  pdu->range_subid, ubound,
++                                                  (char *) ptr->context);
++        } else {
++            rc = unregister_mib_context(pdu->variables->name,
++                                        pdu->variables->name_length,
++                                        pdu->priority, 0, 0,
++                                        (char *) ptr->context);
++        }
++
++        switch (rc) {
++        case MIB_UNREGISTERED_OK:
++            DEBUGMSGTL(("agentx/master", "unregistered ok with context %s\n", ptr->context));
++            break;
++        case MIB_NO_SUCH_REGISTRATION:
++            DEBUGMSGTL(("agentx/master", "No such registration with context %s\n", ptr->context));
++            break;
++        case MIB_UNREGISTRATION_FAILED:
++        default:
++            DEBUGMSGTL(("agentx/master", "failed unregistration with context %s\n", ptr->context));
++        }
++    }
++}
++
+ int
+ unregister_agentx_list(netsnmp_session * session, netsnmp_pdu *pdu)
+ {
+@@ -291,6 +397,8 @@ unregister_agentx_list(netsnmp_session * session, netsnmp_pdu *pdu)
+ 
+     switch (rc) {
+     case MIB_UNREGISTERED_OK:
++        if (NULL == pdu->community)
++            unregister_agentx_list_all_contexts(pdu);
+         return AGENTX_ERR_NOERROR;
+     case MIB_NO_SUCH_REGISTRATION:
+         return AGENTX_ERR_UNKNOWN_REGISTRATION;
+diff --git a/agent/mibgroup/mibII/vacm_conf.c b/agent/mibgroup/mibII/vacm_conf.c
+index 30911d9110..6f9eff3a04 100644
+--- a/agent/mibgroup/mibII/vacm_conf.c
++++ b/agent/mibgroup/mibII/vacm_conf.c
+@@ -50,6 +50,7 @@
+ #include <net-snmp/agent/net-snmp-agent-includes.h>
+ 
+ #include <net-snmp/agent/agent_callbacks.h>
++#include <net-snmp/agent/agent_registry.h>
+ #include "vacm_conf.h"
+ 
+ #include "snmpd.h"
+@@ -71,6 +72,8 @@ init_vacm_config_tokens(void) {
+                                   "name context model level prefix viewname viewval");
+     snmpd_register_config_handler("view", vacm_parse_view, vacm_free_view,
+                                   "name type subtree [mask]");
++    snmpd_register_config_handler("context", vacm_parse_context, vacm_free_context,
++                                  "name id");
+     snmpd_register_const_config_handler("vacmView",
+                                         vacm_parse_config_view, NULL, NULL);
+     snmpd_register_const_config_handler("vacmGroup",
+@@ -708,6 +711,44 @@ vacm_free_view(void)
+     vacm_destroyAllViewEntries();
+ }
+ 
++void
++vacm_parse_context(const char *token, char *param)
++{
++    char *context;
++    char *vrf;
++    char *st;
++
++    context = strtok_r(param, " \t\n", &st);
++    if (!context || *context == '\0') {
++        config_perror("missing CONTEXT parameter");
++        return;
++    }
++    vrf = strtok_r(NULL, " \t\n", &st);
++    if (!vrf || *vrf == '\0') {
++        config_perror("missing CONTEXTID parameter");
++        return;
++    }
++    netsnmp_add_context_vrf(context, vrf);
++
++    if (!netsnmp_subtree_find_first(context)) {
++        oid ccitt[1]           = { 0 };
++        oid iso[1]             = { 1 };
++        oid joint_ccitt_iso[1] = { 2 };
++        netsnmp_register_null_context(snmp_duplicate_objid(ccitt, 1), 1,
++                                      context);
++        netsnmp_register_null_context(snmp_duplicate_objid(iso, 1), 1,
++                                      context);
++        netsnmp_register_null_context(snmp_duplicate_objid(joint_ccitt_iso, 1),
++                                      1, context);
++    }
++}
++
++void
++vacm_free_context(void)
++{
++    netsnmp_clear_context_mapping();
++}
++
+ void
+ vacm_gen_com2sec(int commcount, const char *community, const char *addressname,
+                  const char *publishtoken,
+diff --git a/agent/mibgroup/mibII/vacm_conf.h b/agent/mibgroup/mibII/vacm_conf.h
+index a05bb4cf73..fa31241d14 100644
+--- a/agent/mibgroup/mibII/vacm_conf.h
++++ b/agent/mibgroup/mibII/vacm_conf.h
+@@ -20,10 +20,12 @@ config_belongs_in(agent_module);
+      void            vacm_free_group(void);
+      void            vacm_free_access(void);
+      void            vacm_free_view(void);
++     void            vacm_free_context(void);
+      void            vacm_parse_group(const char *, char *);
+      void            vacm_parse_access(const char *, char *);
+      void            vacm_parse_setaccess(const char *, char *);
+      void            vacm_parse_view(const char *, char *);
++     void            vacm_parse_context(const char *, char *);
+      void            vacm_parse_rocommunity(const char *, char *);
+      void            vacm_parse_rwcommunity(const char *, char *);
+      void            vacm_parse_rocommunity6(const char *, char *);
+diff --git a/include/net-snmp/agent/agent_registry.h b/include/net-snmp/agent/agent_registry.h
+index 78d0f866cc..31ac68f6b2 100644
+--- a/include/net-snmp/agent/agent_registry.h
++++ b/include/net-snmp/agent/agent_registry.h
+@@ -53,6 +53,12 @@ typedef struct subtree_context_cache_s {
+     struct subtree_context_cache_s	*next;
+ } subtree_context_cache;
+ 
++typedef struct context_mapping_s {
++    char                        *context;
++    char                        *vrf;
++    struct context_mapping_s    *next;
++} context_mapping;
++
+ 
+ 
+ void             setup_tree		  (void);
+@@ -79,6 +85,15 @@ netsnmp_session *get_session_for_oid	   (const oid *, size_t,
+ 
+ subtree_context_cache *get_top_context_cache(void);
+ 
++context_mapping *get_context_mapping(void);
++
++const char *netsnmp_context_find_vrf(const char *context);
++const char *netsnmp_context_get_context_vrf(const char *vrf);
++
++const char *netsnmp_add_context_vrf(char *context, char *vrf);
++
++void netsnmp_clear_context_mapping(void);
++
+ void netsnmp_set_lookup_cache_size(int newsize);
+ int netsnmp_get_lookup_cache_size(void);
+ 

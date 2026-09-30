@@ -1,0 +1,26 @@
+Description: DANOS snmpstatus_use_unsigned_for_counters.patch, rebased onto net-snmp 5.9.5.2
+Origin: vendor, https://github.com/danos/net-snmp debian/patches
+
+diff --git a/apps/snmpstatus.c b/apps/snmpstatus.c
+index 5f67ecf5b1..5f725d7f8f 100644
+--- a/apps/snmpstatus.c
++++ b/apps/snmpstatus.c
+@@ -141,7 +141,7 @@ main(int argc, char *argv[])
+     char           *sysdescr = NULL;
+     u_long          uptime = 0;
+     int             status;
+-    int             ipin = 0, ipout = 0, ipackets = 0, opackets = 0;
++    uint64_t        ipin = 0, ipout = 0, ipackets = 0, opackets = 0;
+     int             good_var;
+     int             down_interfaces = 0;
+     char            buf[40];
+@@ -385,7 +385,8 @@ main(int argc, char *argv[])
+         if (response)
+             snmp_free_pdu(response);
+     }
+-    printf("Interfaces: %d, Recv/Trans packets: %d/%d | IP: %d/%d\n",
++    printf("Interfaces: %d, Recv/Trans packets: %" PRIu64 "/%" PRIu64
++	   " | IP: %" PRIu64 "/%" PRIu64 "\n",
+            interfaces, ipackets, opackets, ipin, ipout);
+     if (down_interfaces > 0) {
+         printf("%d interface%s down!\n",

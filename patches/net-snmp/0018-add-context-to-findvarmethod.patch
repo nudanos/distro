@@ -1,6 +1,11 @@
+Description: DANOS add-context-to-findvarmethod.patch, rebased onto net-snmp 5.9.5.2
+Origin: vendor, https://github.com/danos/net-snmp debian/patches
+
+diff --git a/agent/helpers/old_api.c b/agent/helpers/old_api.c
+index b50e281c5c..2bbdef53f8 100644
 --- a/agent/helpers/old_api.c
 +++ b/agent/helpers/old_api.c
-@@ -349,7 +349,11 @@
+@@ -349,7 +349,11 @@ netsnmp_old_api_helper(netsnmp_mib_handler *handler,
                         sizeof(tmp_name)-tmp_len);
                  tmp_len = requests->requestvb->name_length;
                  access = (*(vp->findVar)) (cvp, tmp_name, &tmp_len,
@@ -13,9 +18,11 @@
                  snmp_set_var_objid( requests->requestvb, tmp_name, tmp_len );
              }
              else
+diff --git a/include/net-snmp/agent/snmp_vars.h b/include/net-snmp/agent/snmp_vars.h
+index 2374690c57..c583882291 100644
 --- a/include/net-snmp/agent/snmp_vars.h
 +++ b/include/net-snmp/agent/snmp_vars.h
-@@ -80,7 +80,11 @@
+@@ -80,7 +80,11 @@ PERFORMANCE OF THIS SOFTWARE.
                                       size_t * length,
                                       int exact,
                                       size_t * var_len,

@@ -397,12 +397,14 @@ packages:
     packaging: "https://forgejo.debian.net/frr/libyang"
   - name: "libzmq-constants-perl"
     kind: "danos"
-    milestone: "2"
+    milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/libzmq-constants-perl"
     ref: "trixie"
   - name: "libzmq-libzmq3-perl"
     kind: "danos"
-    milestone: "2"
+    milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/libzmq-libzmq3-perl"
     ref: "trixie"
   - name: "lintian-profile-vyatta"
@@ -480,10 +482,35 @@ packages:
     packaging_ref: "master"
     audit:
       - {patch: "restore-Debian-deleted-MIBs.patch", verdict: dropped, note: "restores MIBs Debian removes as non-free; the agent serves without MIB files (snmp-mibs-downloader supplies them)"}
-      - {patch: "add-libnetsnmpagent-vyatta-lib.patch", verdict: kept, note: "libnetsnmpagent-vyatta, linked by vyatta-snmp-vrf-agent; Makefile hunks ported to 5.9.5"}
+      - {patch: "commit-50085bc", verdict: kept, note: "_load_v6 made static, so vyatta-snmp-vrf-agent's own ipaddress_linux.c cannot interpose it"}
+      - {patch: "commit-9e70806", verdict: kept, note: "initgroups failure logged only when fatal"}
+      - {patch: "commit-51d4e87", verdict: kept, note: "ifTable drops vanished interfaces after 60s instead of 5 minutes"}
+      - {patch: "commit-24c4337", verdict: upstreamed, note: "removes the binary array's lazy sort; 5.9 inserts in sorted position and sorts lazily only on explicitly unsorted inserts"}
+      - {patch: "netlink-support-for-routes.patch", verdict: kept, note: "netlink route access; ported to 5.9's route access code"}
+      - {patch: "commit-d070f89", verdict: kept, note: "--with-smux-max-peers"}
+      - {patch: "commit-bf95010", verdict: kept, note: "SMUX peer table sized by --with-smux-max-peers"}
+      - {patch: "ignore-spathintf-interface.patch", verdict: kept, note: "skips dataplane internal interfaces"}
+      - {patch: "disable-snmpv3-support.patch", verdict: kept, note: "disableSNMPv3 config token written by vyatta-service-snmp; DS boolean 21"}
+      - {patch: "fix-ipaddress-prefix-update.patch", verdict: kept, note: "ipAddressPrefixTable follows address changes"}
+      - {patch: "dup-ip-addr-detect.patch", verdict: kept, note: "same address on two interfaces"}
+      - {patch: "snmpstatus_use_unsigned_for_counters.patch", verdict: kept, note: "snmpstatus counter overflow"}
+      - {patch: "vrfaware-snmp-agentx-subagent-mib-support.patch", verdict: kept, note: "context-to-VRF mapping used by vyatta-snmp-vrf-agent"}
+      - {patch: "vrfaware-snmp-reqs-traps-support.patch", verdict: kept, note: "ported onto 5.9's <address>@<iface> binding: DANOS's [<address>:]<port>:<vrf> is mapped onto it in netsnmp_parse_ep_str (unit test T022); TCP and UDP/IPv6 client sockets bound to the VRF; trap sink -n <context> kept"}
+      - {patch: "vrfaware-snmp-rdid.patch", verdict: dropped, note: "Vyatta routing-domain kernel only (linux/rtg_domains.h, SO_RTDOMAIN); Debian kernels use L3 VRF devices, and vyatta-snmp-vrf-agent calls these APIs only under HAVE_ROUTING_DOMAIN"}
+      - {patch: "add-context-to-send_linkUpDownNotifications.patch", verdict: kept, note: "ported to L3 VRF: the context comes from the interface's VRF master device, not /sys/class/net/<if>/rdid"}
+      - {patch: "use-netlink-to-scan-interfaces.patch", verdict: kept, note: "interface scan over netlink"}
+      - {patch: "use-netlink-for-ipRouteTable.patch", verdict: kept, note: "ipRouteTable over netlink"}
+      - {patch: "add-libnetsnmpagent-vyatta-lib.patch", verdict: kept, note: "libnetsnmpagent-vyatta, linked by vyatta-snmp-vrf-agent; shipped by packaging patch debian/0001"}
       - {patch: "add-context-to-findvarmethod.patch", verdict: kept, note: "VYATTA_SNMP context argument used by vyatta-snmp-vrf-agent"}
+      - {patch: "fix-cleanup-send-ping-trap.patch", verdict: kept, note: "DISMAN-PING trap cleanup"}
+      - {patch: "use-setreuid-cap-set-proc.patch", verdict: kept, note: "snmpd keeps CAP_NET_RAW after dropping root; libcap build-dep added by packaging patch debian/0002"}
+      - {patch: "make-pingCtlTable-objects-writable.patch", verdict: kept, note: "pingCtlTable writable"}
+      - {patch: "fix-snmpd-restart-linkupdown-traps.patch", verdict: kept, note: "no spurious linkUp/linkDown traps after an snmpd restart"}
+      - {patch: "dataplane-intf-ifdescr-use-ethtool.patch", verdict: kept, note: "ifDescr of dataplane interfaces via ETHTOOL_GDRVINFO"}
+      - {patch: "get-ifalias-from-sysfs.patch", verdict: kept, note: "ifAlias from the interface description in sysfs"}
       - {patch: "suppress-unwanted-log-messages.patch", verdict: dropped, note: "log noise only"}
-      - {patch: "retry-agent-address.patch", verdict: kept, note: "addressRetries/addressTimeout written by vyatta-service-snmp; ported to 5.9.5 (ids 18/19: 15-17 are now upstream's)"}
+      - {patch: "log-msg-for-coldstart-trap.patch", verdict: kept, note: "logs coldStart trap"}
+      - {patch: "retry-agent-address.patch", verdict: kept, note: "addressRetries/addressTimeout written by vyatta-service-snmp; ported to 5.9.5 (ids 18/19: 15-17 are now upstream's); also grants CAP_NET_BIND_SERVICE"}
   - name: "netconfd"
     kind: "danos"
     milestone: "1.1"
@@ -588,12 +615,13 @@ packages:
     milestone: "1.0"
     ready: true
     upstream: "https://github.com/kravietz/pam_tacplus"
-    version: "1.7.0"
-    tag: "v1.7.0"
+    version: "1.6.1"
+    tag: "v1.6.1"
     tag_pattern: "^v(\\d+\\.\\d+\\.\\d+)$"
     track: "latest"
-    packaging_dir: "debian"
-    note: "built with upstream's own Debian packaging for the release (it regenerates gnulib, which the git tag lacks); DANOS's fork packaging targeted 1.6.1"
+    packaging: "https://github.com/nudanos/pam_tacplus"
+    packaging_ref: "trixie"
+    hold: "1.6.2 and later install a libtac.h that includes gnulib headers libtac-dev does not ship, so tacplusd cannot build against them; porting tacplusd to the gl_list API is plan 3"
   - name: "ppp"
     kind: "debian"
     milestone: "1.0"
@@ -657,6 +685,7 @@ packages:
   - name: "tacplusd"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/tacplusd"
     ref: "trixie"
     note: "build-depends on libtac-dev from pam_tacplus (wave D); ported, built after wave D"
@@ -744,12 +773,14 @@ packages:
   - name: "vyatta-cfg-bonding"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-cfg-bonding"
     ref: "trixie"
     note: "build-depends on libvci-perl (wave C) and libvyatta-dataplane-proto-support (wave E); built in wave E"
   - name: "vyatta-cfg-dataplane"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-cfg-dataplane"
     ref: "trixie"
     note: "build-depends on the dataplane protobuf libraries; built in wave E"
@@ -796,9 +827,11 @@ packages:
     ref: "trixie"
   - name: "vyatta-controller"
     kind: "danos"
-    milestone: "2"
+    milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-controller"
     ref: "trixie"
+    note: "no DPDK dependency; vyatta-cfg-dataplane build-depends on its protobuf library and vplane-config depends on vplane-controller"
   - name: "vyatta-cpu-shield"
     kind: "danos"
     milestone: "2"
@@ -810,6 +843,13 @@ packages:
     ready: true
     repo: "https://github.com/nudanos/vyatta-curl-wrapper"
     ref: "trixie"
+  - name: "vyatta-kernel-forwarding"
+    kind: "danos"
+    milestone: "1.0"
+    ready: true
+    repo: "https://github.com/nudanos/vyatta-kernel-forwarding"
+    ref: "trixie"
+    note: "provides vyatta-forwarding for kernel forwarding (spec 4.4); new in NuDanOS"
   - name: "vyatta-dataplane"
     kind: "danos"
     milestone: "1.0"
@@ -901,9 +941,11 @@ packages:
     repo: "https://github.com/nudanos/vyatta-interfaces-l2tpeth"
     ref: "trixie"
   - name: "vyatta-ipmi"
-    kind: "drop"
-    milestone: "none"
-    note: "switch hardware"
+    kind: "danos"
+    milestone: "1.1"
+    repo: "https://github.com/nudanos/vyatta-ipmi"
+    ref: "trixie"
+    note: "server BMC, watchdog and sensor support (IPMI), not switch hardware; vyatta-system Recommends it"
   - name: "vyatta-ipsec-trapd"
     kind: "danos"
     milestone: "1.1"
@@ -1083,6 +1125,7 @@ packages:
   - name: "vyatta-snmp-vrf-agent"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-snmp-vrf-agent"
     ref: "trixie"
     note: "build-depends on libsnmp-dev (< 5.8) | libsnmp-dev-vyatta; rebuilt against net-snmp 5.9 after wave D"

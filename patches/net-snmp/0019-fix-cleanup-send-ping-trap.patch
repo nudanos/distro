@@ -1,0 +1,27 @@
+Description: DANOS fix-cleanup-send-ping-trap.patch, rebased onto net-snmp 5.9.5.2
+Origin: vendor, https://github.com/danos/net-snmp debian/patches
+
+diff --git a/agent/mibgroup/disman/ping/pingCtlTable.c b/agent/mibgroup/disman/ping/pingCtlTable.c
+index a5230fa3d4..431b94273c 100644
+--- a/agent/mibgroup/disman/ping/pingCtlTable.c
++++ b/agent/mibgroup/disman/ping/pingCtlTable.c
+@@ -1212,7 +1212,6 @@ send_ping_trap(struct pingCtlTable_data *item,
+                               item->pingCtlTestName,
+                               item->pingCtlTestNameLen);
+     StorageTmp = header_complex_get(pingResultsTableStorage, vars);
+-    snmp_free_varbind(vars);
+     if (!StorageTmp)
+         return;
+ 
+@@ -1317,9 +1316,9 @@ send_ping_trap(struct pingCtlTable_data *item,
+     DEBUGMSG(("pingTest:send_ping_trap", "success!\n"));
+ 
+     send_v2trap(var_list);
+-    snmp_free_varbind(vars);
+-    vars = NULL;
+     snmp_free_varbind(var_list);
++    var_list = NULL;
++    snmp_free_varbind(vars);
+     vars = NULL;
+ }
+ 

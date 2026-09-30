@@ -1,0 +1,104 @@
+Description: DANOS dataplane-intf-ifdescr-use-ethtool.patch, rebased onto net-snmp 5.9.5.2
+Origin: vendor, https://github.com/danos/net-snmp debian/patches
+
+diff --git a/agent/mibgroup/if-mib/data_access/interface_linux.c b/agent/mibgroup/if-mib/data_access/interface_linux.c
+index b5ab3936c2..97bf6cb81a 100644
+--- a/agent/mibgroup/if-mib/data_access/interface_linux.c
++++ b/agent/mibgroup/if-mib/data_access/interface_linux.c
+@@ -119,6 +119,10 @@ netsnmp_linux_interface_get_if_speed(int fd, const char *name,
+ unsigned long long
+ netsnmp_linux_interface_get_if_speed_mii(int fd, const char *name,
+         unsigned long long defaultspeed);
++int
++netsnmp_linux_interface_get_if_vendor_device_id(int fd, const char *name,
++                                                unsigned short *vendor_id,
++                                                unsigned short *device_id);
+ #endif
+ 
+ #define PROC_SYS_NET_IPVx_NEIGH_RETRANS_TIME_MS "/proc/sys/net/ipv%d/neigh/%s/retrans_time_ms"
+@@ -348,7 +352,7 @@ static int sysfs_get_id(const char *path, unsigned short *id)
+  * so description will not be set.
+  */
+ static void
+-_arch_interface_description_get(netsnmp_interface_entry *entry)
++_arch_interface_description_get(int fd, netsnmp_interface_entry *entry)
+ {
+     const char *descr;
+     char buf[256];
+@@ -357,6 +361,11 @@ _arch_interface_description_get(netsnmp_interface_entry *entry)
+     if (!pci_access)
+ 	return;
+ 
++#ifdef HAVE_LINUX_ETHTOOL_H
++    if (netsnmp_linux_interface_get_if_vendor_device_id(fd, entry->name,
++                                        &vendor_id, &device_id) < 0)
++        return;
++#else
+     snprintf(buf, sizeof(buf),
+ 	     "/sys/class/net/%s/device/vendor", entry->name);
+ 
+@@ -368,6 +377,7 @@ _arch_interface_description_get(netsnmp_interface_entry *entry)
+ 
+     if (!sysfs_get_id(buf, &device_id))
+ 	return;
++#endif
+ 
+     descr = pci_lookup_name(pci_access, buf, sizeof(buf),
+ 			    PCI_LOOKUP_VENDOR | PCI_LOOKUP_DEVICE,
+@@ -898,7 +908,7 @@ netsnmp_arch_interface_container_load(netsnmp_container* container,
+         entry->ns_flags = flags; /* initial flags; we'll set more later */
+ 
+ #ifdef HAVE_PCI_LOOKUP_NAME
+-	_arch_interface_description_get(entry);
++	_arch_interface_description_get(fd, entry);
+ #endif
+ 
+ 
+@@ -1037,6 +1047,47 @@ netsnmp_arch_set_admin_status(netsnmp_interface_entry * entry,
+ }
+ #endif /* NETSNMP_FEATURE_REMOVE_INTERFACE_ARCH_SET_ADMIN_STATUS */
+ 
++#ifdef HAVE_LINUX_ETHTOOL_H
++/**
++ * Determines network interface vendor and device ID from ETHTOOL_GDRVINFO
++ */
++int
++netsnmp_linux_interface_get_if_vendor_device_id(int fd, const char *name,
++                                                unsigned short *vendor_id,
++                                                unsigned short *device_id)
++{
++    char buf[256];
++    struct ethtool_drvinfo driver_info;
++    struct ifreq ifr;
++    char *slot_info;
++    int bus_dir_len;
++
++    memset(&ifr, 0, sizeof(ifr));
++    strlcpy(ifr.ifr_name, name, sizeof(ifr.ifr_name));
++    memset(&driver_info, 0, sizeof (driver_info));
++    driver_info.cmd = ETHTOOL_GDRVINFO;
++    ifr.ifr_data = (char *)&driver_info;
++    if (ioctl(fd, SIOCETHTOOL, &ifr) < 0)
++        return -1;
++
++    slot_info = strrchr(driver_info.bus_info, ':');
++    if (!slot_info)
++        return -1;
++    bus_dir_len = strlen(driver_info.bus_info)-strlen(slot_info);
++    snprintf(buf, sizeof(buf), "/sys/devices/pci%.*s/%s/vendor",
++                        bus_dir_len, driver_info.bus_info, driver_info.bus_info);
++    if (!sysfs_get_id(buf, vendor_id))
++        return -1;
++
++    snprintf(buf, sizeof(buf), "/sys/devices/pci%.*s/%s/device",
++                        bus_dir_len, driver_info.bus_info, driver_info.bus_info);
++    if (!sysfs_get_id(buf, device_id))
++        return -1;
++
++    return 0;
++}
++#endif
++
+ #ifdef HAVE_LINUX_ETHTOOL_H
+ /**
+  * Determines network interface speed from ETHTOOL_GLINKSETTINGS

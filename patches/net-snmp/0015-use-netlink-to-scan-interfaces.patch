@@ -1,0 +1,397 @@
+Description: DANOS use-netlink-to-scan-interfaces.patch, rebased onto net-snmp 5.9.5.2
+Origin: vendor, https://github.com/danos/net-snmp debian/patches
+
+diff --git a/agent/mibgroup/mibII/interfaces.h b/agent/mibgroup/mibII/interfaces.h
+index 93281cdd8a..273f9f4bde 100644
+--- a/agent/mibgroup/mibII/interfaces.h
++++ b/agent/mibgroup/mibII/interfaces.h
+@@ -96,9 +96,12 @@ config_require(mibII/var_route);
+ 
+      struct ifnet {
+          char           *if_name;       /* name, e.g. ``en'' or ``lo'' */
++         int             if_index;      /* interface index */
++         u_int           if_rdid;       /* routing domain index */
+          char           *if_unit;       /* sub-unit for lower level driver */
+          short           if_mtu;        /* maximum transmission unit */
+          short           if_flags;      /* up/down, broadcast, etc. */
++         short           if_ip6;        /* has configured ipv6 address */
+          int             if_metric;     /* routing metric (external only) */
+          char            if_hwaddr[6];  /* ethernet address */
+          int             if_type;       /* interface type: 1=generic,
+diff --git a/agent/mibgroup/mibII/ipAddr.c b/agent/mibgroup/mibII/ipAddr.c
+index a89255f800..77642d3478 100644
+--- a/agent/mibgroup/mibII/ipAddr.c
++++ b/agent/mibgroup/mibII/ipAddr.c
+@@ -498,6 +498,8 @@ Address_Scan_Next(Index, Retin_ifaddr)
+ }
+ 
+ #elif defined(linux)
++
++#if 0
+ static struct ifreq *ifr;
+ static int ifr_counter;
+ 
+@@ -596,6 +598,190 @@ Address_Scan_Next(short *Index, struct ifnet *Retifnet)
+     close(fd);
+     return (0);                 /* EOF */
+ }
++#else
++
++#include <errno.h>
++#include <net/route.h>
++#include <linux/netlink.h>
++#include <linux/rtnetlink.h>
++
++static int nlseq = 0x10000000;
++#define RCVBUF_SIZE 32768
++
++void
++Netlink_Scan(int type, int family, void (*cb)(void *, int len))
++{
++    unsigned char    rcvbuf[RCVBUF_SIZE];
++    int              nlsk;
++    int              end_of_messages = 0;
++    int              count;
++
++    struct {
++        struct nlmsghdr nlh;
++        struct ifinfomsg ifm;
++    } req;
++
++    /*
++     * Open a netlink socket
++     */
++    nlsk = socket(AF_NETLINK, SOCK_DGRAM, NETLINK_ROUTE);
++    if (nlsk < 0) {
++        snmp_log_perror("socket netlink");
++        return;
++    }
++
++    memset(&req, 0, sizeof(req));
++    req.nlh.nlmsg_len = sizeof(req);
++    req.nlh.nlmsg_type = type;
++    req.nlh.nlmsg_flags = NLM_F_DUMP | NLM_F_REQUEST;
++    req.nlh.nlmsg_pid = 0;
++    req.nlh.nlmsg_seq = ++nlseq;
++    req.ifm.ifi_family = family;
++
++    if (send(nlsk, &req, sizeof(req), 0) < 0) {
++        snmp_log_perror("send netlink");
++        close(nlsk);
++        return;
++    }
++
++    /*
++     * Now listen for response
++     */
++    do {
++        struct nlmsghdr *n;
++
++        /*
++         * Get the message
++         */
++        count = recv(nlsk, rcvbuf, sizeof(rcvbuf), MSG_DONTWAIT);
++        if (count < 0) {
++            if (errno == EINTR)
++                continue;
++            if (errno == EAGAIN)
++                break;
++            snmp_log_perror("recv netlink");
++            break;
++        }
++
++        /*
++         * Walk all of the returned messages
++         */
++        for (n = (struct nlmsghdr *)rcvbuf;
++             NLMSG_OK(n, count); n = NLMSG_NEXT(n, count)) {
++
++            /*
++             * Make sure the message is ok
++             */
++            if (n->nlmsg_type == NLMSG_ERROR) {
++                struct nlmsgerr *err = (struct nlmsgerr*) NLMSG_DATA(n);
++                if (n->nlmsg_len < NLMSG_LENGTH(sizeof(struct nlmsgerr)))
++                    snmp_log(LOG_ERR, "kernel netlink error truncated\n");
++                else
++                    snmp_log(LOG_ERR, "kernel netlink error %s\n",
++                             strerror(-err->error));
++                break;
++            }
++
++            /*
++             * End of message, we're done
++             */
++            if (n->nlmsg_type & NLMSG_DONE) {
++                end_of_messages = 1;
++                break;
++            }
++
++            if (n->nlmsg_type != RTM_NEWADDR && n->nlmsg_type != RTM_NEWLINK) {
++                snmp_log(LOG_ERR, "unexpected message of type %d in nlmsg\n",
++                         n->nlmsg_type);
++                continue;
++            }
++
++            ((*cb)(NLMSG_DATA(n), RTM_PAYLOAD(n)));
++        }
++    } while(!end_of_messages);
++
++    close(nlsk);
++
++    return;
++}
++
++static struct ifnet *ifr = NULL, *tail = NULL;
++
++static void
++Enumerate_Addr(void *data, int len)
++{
++    struct ifaddrmsg *ifa = data;
++    struct rtattr *rta;
++    struct ifnet *new;
++
++    new = malloc(sizeof(struct ifnet));
++    memset(new, 0, sizeof(*new));
++
++    new->if_index = ifa->ifa_index;
++    ((struct sockaddr_in *) &(new->ia_subnetmask))->sin_addr.s_addr =
++                                       htonl((~0) << (32 - ifa->ifa_prefixlen));
++    rta = IFA_RTA(ifa);
++    while (RTA_OK(rta, len)) {
++        switch (rta->rta_type) {
++        case IFA_LABEL:
++            new->if_name = strdup(RTA_DATA(rta));
++            break;
++        case IFA_BROADCAST:
++            ((struct sockaddr_in *) &(new->ifu_broadaddr))->sin_addr.s_addr =
++							*(int *)RTA_DATA(rta);
++            break;
++        case IFA_ADDRESS:
++            ((struct sockaddr_in *) &(new->if_addr))->sin_addr.s_addr =
++							*(int *)RTA_DATA(rta);
++            break;
++        }
++
++        rta = RTA_NEXT(rta, len);
++    }
++
++    if (!tail)
++        ifr = tail = new;
++    else {
++        tail->if_next = new;
++        tail = new;
++    }
++}
++
++static void
++Address_Scan_Init(void)
++{
++    struct ifnet *if_next;
++
++    while (ifr) {
++        if_next = ifr->if_next;
++
++        free(ifr->if_name);
++        free(ifr);
++        ifr = if_next;
++    }
++    ifr = tail = NULL;
++
++    Netlink_Scan(RTM_GETADDR, AF_INET, Enumerate_Addr);
++}
++
++static int
++Address_Scan_Next(short *Index, struct ifnet *Retifnet)
++{
++    if (ifr) {
++	if (Retifnet) {
++	    Retifnet->ifu_broadaddr = ifr->ifu_broadaddr;
++	    Retifnet->if_addr = ifr->if_addr;
++	    Retifnet->ia_subnetmask = ifr->ia_subnetmask;
++	}
++	if (Index)
++	    *Index = ifr->if_index;
++	ifr = ifr->if_next;
++	return (1);
++    }
++
++    return (0);
++}
++#endif
+ 
+ #endif                          /* freebsd,hpux11,linux */
+ 
+diff --git a/agent/mibgroup/mibII/ipv6.c b/agent/mibgroup/mibII/ipv6.c
+index f41b3eaa73..68a94e95fc 100644
+--- a/agent/mibgroup/mibII/ipv6.c
++++ b/agent/mibgroup/mibII/ipv6.c
+@@ -515,11 +515,76 @@ header_ipv6_scan(register struct variable *vp,
+     return (MATCH_SUCCEEDED);
+ }
+ 
++#if 0
+ static struct if_nameindex *ifnames = NULL;
++#endif
+ 
+ #ifdef linux
++#if 0
+ static void     linux_if_freenameindex(struct if_nameindex *);
+ static struct if_nameindex *linux_if_nameindex(void);
++#else
++static struct ifnet *ifnames, *tail;
++extern void Netlink_Scan(int type, int family, void (*cb)(void *, int len));
++
++#include <net/route.h>
++#include <linux/netlink.h>
++#include <linux/rtnetlink.h>
++
++static void
++enumerate_links(void *data, int len)
++{
++    struct ifinfomsg *ifi = data;
++    struct rtattr *rta;
++    struct ifnet *new;
++
++    new = malloc(sizeof(struct ifnet));
++    memset(new, 0, sizeof(*new));
++
++    new->if_index = ifi->ifi_index;
++    rta = IFLA_RTA(ifi);
++    while (RTA_OK(rta, len)) {
++        switch (rta->rta_type) {
++        case IFLA_IFNAME:
++            new->if_name = strdup(RTA_DATA(rta));
++            break;
++        }
++
++        rta = RTA_NEXT(rta, len);
++    }
++
++    if (!tail)
++        ifnames = tail = new;
++    else {
++        tail->if_next = new;
++        tail = new;
++    }
++}
++
++static void
++populate_ip6addrs(void *data, int len)
++{
++    struct ifaddrmsg *ifa = data;
++    struct rtattr *rta;
++    struct ifnet *iter;
++
++    rta = IFA_RTA(ifa);
++    while (RTA_OK(rta, len)) {
++        switch (rta->rta_type) {
++        case IFA_ADDRESS:
++            for(iter = ifnames; iter; iter = iter->if_next) {
++                if (iter->if_index == ifa->ifa_index) {
++                    /* for now, just note the presence */
++                    iter->if_ip6 = 1;
++                }
++            }
++            break;
++        }
++
++        rta = RTA_NEXT(rta, len);
++    }
++}
++#endif
+ #endif
+ 
+ static int
+@@ -533,9 +598,23 @@ if_initialize(void)
+         if_freenameindex(ifnames);
+     ifnames = if_nameindex();
+ #else
++#if 0
+     if (ifnames)
+         linux_if_freenameindex(ifnames);
+     ifnames = linux_if_nameindex();
++#else
++    while (ifnames) {
++        struct ifnet *if_next = ifnames->if_next;
++
++        free(ifnames->if_name);
++        free(ifnames);
++        ifnames = if_next;
++    }
++    tail = ifnames = NULL;
++
++    Netlink_Scan(RTM_GETLINK, AF_INET6, enumerate_links);
++    Netlink_Scan(RTM_GETADDR, AF_INET6, populate_ip6addrs);
++#endif
+ #endif
+     if (!ifnames) {
+         ERROR_MSG("if_nameindex() failed");
+@@ -545,6 +624,7 @@ if_initialize(void)
+ #endif
+ }
+ 
++#if 0
+ static int
+ if_maxifindex(void)
+ {
+@@ -605,6 +685,59 @@ if_getname(int idx)
+     return NULL;
+ #endif
+ }
++#else
++static int
++if_maxifindex(void)
++{
++    struct ifnet *p;
++    int max = 0;
++
++    if (!ifnames) {
++        if (if_initialize() < 0)
++            return -1;
++    }
++    for (p = ifnames; p && p->if_index; p = p->if_next) {
++        if (p->if_ip6) {
++            if (max < p->if_index)
++                max = p->if_index;
++	}
++    }
++    return max;
++}
++
++static int
++if_countifindex(void)
++{
++    struct ifnet *p;
++    int count = 0;
++
++    if (!ifnames) {
++        if (if_initialize() < 0)
++            return -1;
++    }
++    for (p = ifnames; p && p->if_index; p = p->if_next) {
++        if (p->if_ip6)
++            count++;
++    }
++    return count;
++}
++
++static char    *
++if_getname(int idx)
++{
++    struct ifnet *p;
++
++    if (!ifnames) {
++        if (if_initialize() < 0)
++            return NULL;
++    }
++    for (p = ifnames; p && p->if_index; p = p->if_next) {
++        if (p->if_index == idx)
++            return p->if_name;
++    }
++    return NULL;
++}
++#endif
+ 
+ #ifdef notused
+ static int

@@ -1,0 +1,109 @@
+Description: DANOS use-setreuid-cap-set-proc.patch, rebased onto net-snmp 5.9.5.2
+Origin: vendor, https://github.com/danos/net-snmp debian/patches
+
+diff --git a/agent/snmpd.c b/agent/snmpd.c
+index 1c53644751..d2a9ba187d 100644
+--- a/agent/snmpd.c
++++ b/agent/snmpd.c
+@@ -115,6 +115,9 @@
+ #ifdef HAVE_CRTDBG_H
+ #include <crtdbg.h>
+ #endif
++#ifdef HAVE_CAPABILITY
++#include <sys/capability.h>
++#endif
+ 
+ #ifndef PATH_MAX
+ # ifdef _POSIX_PATH_MAX
+@@ -983,7 +986,7 @@ main(int argc, char *argv[])
+ #if defined(HAVE_UNISTD_H) && (defined(HAVE_CHOWN) || defined(HAVE_SETGID) || defined(HAVE_SETUID))
+     {
+     const char     *persistent_dir;
+-    int             uid, gid;
++    int             uid, gid, rc;
+ 
+     persistent_dir = get_persistent_directory();
+     mkdirhier( persistent_dir, NETSNMP_AGENT_DIRECTORY_MODE, 0 );
+@@ -1015,7 +1018,7 @@ main(int argc, char *argv[])
+         }
+     }
+ #endif
+-#ifdef HAVE_SETUID
++#if defined(HAVE_SETUID) || defined(HAVE_SETREUID)
+     if ((uid = netsnmp_ds_get_int(NETSNMP_DS_APPLICATION_ID, 
+ 				  NETSNMP_DS_AGENT_USERID)) > 0) {
+ #if defined(HAVE_GETPWNAM) && defined(HAVE_PWD_H) && defined(HAVE_INITGROUPS)
+@@ -1039,13 +1042,32 @@ main(int argc, char *argv[])
+         endpwent();
+ #endif
+         DEBUGMSGTL(("snmpd/main", "Changing uid to %d.\n", uid));
+-        if (setuid(uid) == -1) {
+-            snmp_log_perror("setuid failed");
++#ifdef HAVE_SETREUID
++        rc = setreuid(0, uid);
++#else /* HAVE_SETUID */
++        rc = setuid(uid);
++#endif
++        if (rc == -1) {
++            snmp_log_perror("setuid or setreuid failed");
+             if (!netsnmp_ds_get_boolean(NETSNMP_DS_APPLICATION_ID, 
+ 					NETSNMP_DS_AGENT_NO_ROOT_ACCESS)) {
+                 goto out;
+             }
+         }
++#ifdef HAVE_CAPABILITY
++        {
++            cap_t caps;
++
++            caps = cap_from_text("cap_net_raw=pe");
++            if (!caps)
++                snmp_log_perror("cap_from_text failed");
++            else {
++                if (cap_set_proc(caps) == -1)
++                    snmp_log_perror("cap_set_proc failed");
++                cap_free(caps);
++            }
++        }
++#endif
+     }
+ #endif
+     }
+diff --git a/configure.d/config_os_functions b/configure.d/config_os_functions
+index 9ec2eaada4..289b0e82d7 100644
+--- a/configure.d/config_os_functions
++++ b/configure.d/config_os_functions
+@@ -166,7 +166,7 @@ AC_CHECK_FUNCS([cgetnext        chown          endfsent        ] dnl
+                [localtime_r     mkstemp        mktime          ] dnl
+                [poll            regcomp        setfsent        ] dnl
+                [setgid          setgroups                      ] dnl
+-               [setmntent       setuid                         ] dnl
++               [setmntent       setreuid      setuid           ] dnl
+                [sigaction       sigblock      sigprocmask      ] dnl
+                [statfs          statvfs       stime            ] dnl
+                [strncasecmp     system        usleep           ] )
+diff --git a/configure.d/config_os_misc4 b/configure.d/config_os_misc4
+index 462f55a1b1..a136f7d713 100644
+--- a/configure.d/config_os_misc4
++++ b/configure.d/config_os_misc4
+@@ -430,3 +430,21 @@ AC_CACHE_CHECK([for IP_RECVDSTADDR ],
+ if test x$ac_cv_have_ip_recvdstaddr = xyes; then
+     AC_DEFINE(HAVE_IP_RECVDSTADDR, 1, [Set if IP_RECVDSTADDR is usable])
+ fi
++
++#   Check whether capabilties is available.
++#
++
++netsnmp_save_LIBS="$LIBS"
++LIBS="$LIBS -lcap"
++AC_LINK_IFELSE([AC_LANG_PROGRAM([
++  #include <sys/capability.h>
++], [
++  cap_set_proc(0);
++])], [
++  # Keep LIBS.
++  AGENTLIBS="$AGENTLIBS -lcap"
++  AC_DEFINE(HAVE_CAPABILITY, 1, [Set if capability is available])
++], [
++  true
++])
++LIBS="$netsnmp_save_LIBS"

@@ -1,0 +1,58 @@
+Description: DANOS commit-bf95010, rebased onto net-snmp 5.9.5.2
+Origin: vendor, https://github.com/danos/net-snmp debian/patches
+
+diff --git a/agent/mibgroup/smux/smux.c b/agent/mibgroup/smux/smux.c
+index 0dfe5b904f..0ee5411d6e 100644
+--- a/agent/mibgroup/smux/smux.c
++++ b/agent/mibgroup/smux/smux.c
+@@ -108,7 +108,7 @@ int             var_smux_write(int, u_char *, u_char, size_t, oid *, size_t);
+ static smux_reg *ActiveRegs;    /* Active registrations                 */
+ static smux_reg *PassiveRegs;   /* Currently unused registrations       */
+ 
+-static smux_peer_auth *Auths[SMUX_MAX_PEERS];   /* Configured peers */
++static smux_peer_auth *Auths[NETSNMP_SMUX_MAX_PEERS];   /* Configured peers */
+ static int      nauths, npeers = 0;
+ 
+ 
+@@ -132,7 +132,7 @@ smux_parse_peer_auth(const char *token, char *cptr)
+         snmp_log_perror("smux_parse_peer_auth: malloc");
+         return;
+     }
+-    if (nauths == SMUX_MAX_PEERS) {
++    if (nauths >= NETSNMP_SMUX_MAX_PEERS) {
+ 	config_perror("Too many smuxpeers");
+ 	free(aptr);
+ 	return;
+@@ -653,10 +653,10 @@ smux_accept(int sd)
+         DEBUGMSGTL(("smux", "[smux_accept] accepted fd %d from %s:%d\n",
+                  fd, inet_ntoa(in_socket.sin_addr),
+                  ntohs(in_socket.sin_port)));
+-        if (npeers + 1 == SMUXMAXPEERS) {
++        if (npeers >= NETSNMP_SMUX_MAX_PEERS) {
+             snmp_log(LOG_ERR,
+                      "[smux_accept] denied peer on fd %d, limit %d reached",
+-                     fd, SMUXMAXPEERS);
++                     fd, NETSNMP_SMUX_MAX_PEERS);
+             close(fd);
+             return -1;
+         }
+diff --git a/agent/mibgroup/smux/smux.h b/agent/mibgroup/smux/smux.h
+index f8f0822cb2..42237ea225 100644
+--- a/agent/mibgroup/smux/smux.h
++++ b/agent/mibgroup/smux/smux.h
+@@ -13,7 +13,6 @@ config_belongs_in(agent_module);
+ 
+ #define SMUXMAXPKTSIZE 1500
+ #define SMUXMAXSTRLEN  1024
+-#define SMUXMAXPEERS   10
+ 
+ #define SMUX_OPEN 	(ASN_APPLICATION | ASN_CONSTRUCTOR | 0)
+ #define SMUX_CLOSE      (ASN_APPLICATION | ASN_PRIMITIVE | 1)
+@@ -34,7 +33,6 @@ config_belongs_in(agent_module);
+ #define SMUXC_INTERNALERROR                4
+ #define SMUXC_AUTHENTICATIONFAILURE        5
+ 
+-#define SMUX_MAX_PEERS          10
+ #define SMUX_MAX_PRIORITY       2147483647
+ 
+ #define SMUX_REGOP_DELETE		0

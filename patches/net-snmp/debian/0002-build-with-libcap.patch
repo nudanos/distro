@@ -1,0 +1,24 @@
+Description: Build against libcap (DANOS use-setreuid-cap-set-proc)
+ snmpd keeps CAP_NET_RAW and CAP_NET_BIND_SERVICE after dropping root, and
+ net-snmp-config --agent-libs now lists -lcap.
+
+--- a/debian/control
++++ b/debian/control
+@@ -8,6 +8,7 @@
+  autoconf, automake, procps, pkgconf,
+  libsensors-dev [linux-any],
+  libnl-route-3-dev [linux-any],
++ libcap-dev [linux-any],
+  libmariadb-dev, libpci-dev
+ Build-Conflicts: libsnmp-dev
+ Standards-Version: 4.6.1
+@@ -108,7 +109,8 @@
+          ${misc:Depends}, procps,
+          libwrap0-dev, libssl-dev, libpci-dev,
+          libsensors-dev [linux-any],
+-         libnl-route-3-dev [linux-any]
++         libnl-route-3-dev [linux-any],
++         libcap-dev [linux-any]
+ Recommends: libsnmp-perl
+ Description: SNMP (Simple Network Management Protocol) development files
+  The Simple Network Management Protocol (SNMP) provides a framework

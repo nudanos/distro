@@ -1,0 +1,54 @@
+Description: DANOS log-msg-for-coldstart-trap.patch, rebased onto net-snmp 5.9.5.2
+Origin: vendor, https://github.com/danos/net-snmp debian/patches
+
+diff --git a/agent/agent_trap.c b/agent/agent_trap.c
+index 88c1de9c8c..bf1d9a4e26 100644
+--- a/agent/agent_trap.c
++++ b/agent/agent_trap.c
+@@ -946,6 +946,8 @@ netsnmp_send_traps(int trap, int specific,
+         }
+         template_v1pdu->trap_type     = trap;
+         template_v1pdu->specific_type = specific;
++        if (trap == SNMP_TRAP_COLDSTART)
++            template_v1pdu->is_coldstart = 1;
+         template_v1pdu->time          = netsnmp_get_agent_uptime();
+ 
+         if (snmp_clone_mem((void **) &template_v1pdu->enterprise,
+@@ -1233,6 +1235,7 @@ send_trap_to_sess(netsnmp_session * sess, netsnmp_pdu *template_pdu)
+ {
+     netsnmp_pdu    *pdu;
+     int            result;
++    int            is_coldstart = 0;
+ 
+     if (!sess || !template_pdu)
+         return;
+@@ -1264,6 +1267,7 @@ send_trap_to_sess(netsnmp_session * sess, netsnmp_pdu *template_pdu)
+         (template_pdu->command == SNMP_MSG_TRAP))
+         return;                 /* Skip v2+ sinks for v1 only traps */
+ #endif
++    is_coldstart = template_pdu->is_coldstart;
+     template_pdu->version = sess->version;
+     pdu = snmp_clone_pdu(template_pdu);
+     if(!pdu) {
+@@ -1323,6 +1327,8 @@ send_trap_to_sess(netsnmp_session * sess, netsnmp_pdu *template_pdu)
+         snmp_free_pdu(pdu);
+         /** trap stats for failure handled in callback */
+     } else {
++        if (is_coldstart)
++            snmp_log(LOG_INFO, "coldStart trap successfully sent\n");
+         snmp_increment_statistic(STAT_SNMPOUTTRAPS);
+         snmp_increment_statistic(STAT_SNMPOUTPKTS);
+ #ifndef NETSNMP_NO_TRAP_STATS
+diff --git a/include/net-snmp/types.h b/include/net-snmp/types.h
+index 76809cd385..829e59e168 100644
+--- a/include/net-snmp/types.h
++++ b/include/net-snmp/types.h
+@@ -214,6 +214,8 @@ typedef struct snmp_pdu {
+     long            specific_type;
+     /** This is ONLY used for v1 TRAPs  */
+     unsigned char   agent_addr[4];  
++    /** is coldStart trap */
++    int             is_coldstart;
+ 
+     /*
+      *  SNMPv3 fields

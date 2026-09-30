@@ -1,0 +1,321 @@
+Description: DANOS vrfaware-snmp-reqs-traps-support.patch, rebased onto net-snmp 5.9.5.2
+ Ported to 5.9: sockets are bound to the VRF through upstream's
+ <address>@<iface>:<port> support. DANOS's [<address>:]<port>:<vrf> syntax
+ (written by vyatta-service-snmp) is mapped onto it in netsnmp_parse_ep_str,
+ and TCP and UDP/IPv6 client sockets are bound as upstream already does for
+ UDP/IPv4. Trap sink contexts (-n <context>) are kept.
+Origin: vendor, https://github.com/danos/net-snmp debian/patches
+
+diff --git a/agent/agent_read_config.c b/agent/agent_read_config.c
+index a6b185e24d..63bb8c14ba 100644
+--- a/agent/agent_read_config.c
++++ b/agent/agent_read_config.c
+@@ -254,7 +254,7 @@ init_agent_read_config(const char *app)
+         register_app_config_handler("trap2sink",
+                                     snmpd_parse_config_trap2sink, 
+                                     snmpd_free_trapsinks,
+-                                    "[-profile p] [-name n] [-tag t] host [community] [port]");
++                                    "[-profile p] [-name n] [-tag t] [-n context] host [community] [port]");
+         register_app_config_handler("informsink",
+                                     snmpd_parse_config_informsink,
+                                     snmpd_free_trapsinks,
+diff --git a/agent/agent_trap.c b/agent/agent_trap.c
+index d63c66b405..88c1de9c8c 100644
+--- a/agent/agent_trap.c
++++ b/agent/agent_trap.c
+@@ -342,12 +342,16 @@ remove_trap_session(netsnmp_session * ss)
+ #endif /* NETSNMP_FEATURE_REMOVE_REMOVE_TRAP_SESSION */
+ 
+ #if !defined(NETSNMP_DISABLE_SNMPV1) || !defined(NETSNMP_DISABLE_SNMPV2C)
+-netsnmp_session *
+-netsnmp_create_v1v2_notification_session(const char *sink, const char* sinkport,
+-                                         const char *com, const char *src,
+-                                         int version, int pdutype,
+-                                         const char *name, const char *tag,
+-                                         const char* profile)
++/*
++ * A sink with a context (trap2sink -n <context>) only receives notifications
++ * raised in that context; see send_trap_with_context().
++ */
++static netsnmp_session *
++_create_v1v2_notification_session(const char *sink, const char* sinkport,
++                                  const char *com, const char *src,
++                                  int version, int pdutype,
++                                  const char *name, const char *tag,
++                                  const char* profile, const char *context)
+ {
+     netsnmp_transport *t;
+     netsnmp_session session, *sesp;
+@@ -371,6 +375,11 @@ netsnmp_create_v1v2_notification_session(const char *sink, const char* sinkport,
+         session.community_len = strlen(com);
+     }
+ 
++    if (context && *context != '\0') {
++        session.contextName = strdup(context);
++        session.contextNameLen = strlen(context);
++    }
++
+     /*
+      * for informs, set retries to default
+      */
+@@ -431,6 +440,18 @@ netsnmp_create_v1v2_notification_session(const char *sink, const char* sinkport,
+     return sesp;
+ }
+ 
++netsnmp_session *
++netsnmp_create_v1v2_notification_session(const char *sink, const char* sinkport,
++                                         const char *com, const char *src,
++                                         int version, int pdutype,
++                                         const char *name, const char *tag,
++                                         const char* profile)
++{
++    return _create_v1v2_notification_session(sink, sinkport, com, src,
++                                             version, pdutype, name, tag,
++                                             profile, NULL);
++}
++
+ int
+ create_trap_session_with_src(const char *sink, const char* sinkport,
+                              const char *com, const char *src, int version,
+@@ -1000,14 +1021,16 @@ netsnmp_send_traps(int trap, int specific,
+         if (sink->version == SNMP_VERSION_1) {
+             if (template_v1pdu &&
+                 !netsnmp_ds_get_boolean(NETSNMP_DS_LIBRARY_ID,
+-                                        NETSNMP_DS_LIB_DISABLE_V1)) {
++                                        NETSNMP_DS_LIB_DISABLE_V1) &&
++                send_trap_with_context(sink->sesp, template_v1pdu)) {
+                 send_trap_to_sess(sink->sesp, template_v1pdu);
+             }
+         } else
+ #endif
+         if (template_v2pdu) {
+             template_v2pdu->command = sink->pdutype;
+-            send_trap_to_sess(sink->sesp, template_v2pdu);
++            if (send_trap_with_context(sink->sesp, template_v2pdu))
++                send_trap_to_sess(sink->sesp, template_v2pdu);
+         }
+     }
+ #ifndef NETSNMP_DISABLE_SNMPV1
+@@ -1186,6 +1209,20 @@ handle_inform_response(int op, netsnmp_session * session,
+     return 1;
+ }
+ 
++/*
++ * send_trap_with_context: checks if trap PDU and trap session have context
++ * and if they match. If no context in PDU or session, or context in both
++ * and they match, send the trap.
++*/
++int
++send_trap_with_context(netsnmp_session *sess, netsnmp_pdu *trap_pdu)
++{
++    if (sess->contextNameLen == 0 || trap_pdu->contextNameLen == 0 ||
++        (sess->contextNameLen == trap_pdu->contextNameLen &&
++        strcmp(sess->contextName, trap_pdu->contextName) == 0))
++        return 1;
++    return 0;
++}
+ 
+ /*
+  * send_trap_to_sess: sends a trap to a session but assumes that the
+@@ -1475,6 +1512,7 @@ _parse_config_sink(const char *token, char *cptr, int version, int type)
+ {
+     char           *sp, *cp, *pp = NULL, *src = NULL;
+     char           *st, *name = NULL, *tag = NULL, *profile = NULL;
++    char           *context = NULL;
+     int            done = 0;
+ 
+     if (!snmp_trapcommunity)
+@@ -1496,7 +1534,14 @@ _parse_config_sink(const char *token, char *cptr, int version, int type)
+             profile = strtok_r(NULL, " \t\n", &st);
+         else if (strcmp(sp, "-s") == 0)
+             src = strtok_r(NULL, " \t\n", &st);
+-        else
++        else if (strcmp(sp, "-n") == 0) {
++            context = strtok_r(NULL, " \t\n", &st);
++            if (!context || !netsnmp_context_find_vrf(context)) {
++                netsnmp_config_error("cannot create sink with context: %s",
++                                     context ? context : "(none)");
++                return;
++            }
++        } else
+             netsnmp_config_warn("ignoring unknown argument: %s", sp);
+         sp = strtok_r(NULL, " \t\n", &st);
+     } while (!done);
+@@ -1505,10 +1550,10 @@ _parse_config_sink(const char *token, char *cptr, int version, int type)
+         pp = strtok_r(NULL, " \t\n", &st);
+     if (pp)
+         config_pwarn("The separate port argument for sinks is deprecated");
+-    if (netsnmp_create_v1v2_notification_session(sp, pp,
+-                                                 cp ? cp : snmp_trapcommunity,
+-                                                 src, version, type, name, tag,
+-                                                 profile) == NULL) {
++    if (_create_v1v2_notification_session(sp, pp,
++                                          cp ? cp : snmp_trapcommunity,
++                                          src, version, type, name, tag,
++                                          profile, context) == NULL) {
+         netsnmp_config_error("cannot create sink: %s", cptr);
+     }
+ }
+diff --git a/agent/mibgroup/notification/snmpNotifyTable_data.c b/agent/mibgroup/notification/snmpNotifyTable_data.c
+index 8641fc4cfd..69e8a84fd7 100644
+--- a/agent/mibgroup/notification/snmpNotifyTable_data.c
++++ b/agent/mibgroup/notification/snmpNotifyTable_data.c
+@@ -250,6 +250,8 @@ send_notifications(int major, int minor, void *serverarg, void *clientarg)
+                 if (filter)
+                     continue;
+             }
++            if (!send_trap_with_context(sptr, template_pdu))
++                continue;
+             send_trap_to_sess(sptr, template_pdu);
+             ++count;
+         } /* for(sptr) */
+diff --git a/include/net-snmp/agent/agent_trap.h b/include/net-snmp/agent/agent_trap.h
+index 1e11b1c7fa..2b888bbb6c 100644
+--- a/include/net-snmp/agent/agent_trap.h
++++ b/include/net-snmp/agent/agent_trap.h
+@@ -52,6 +52,8 @@ void            snmpd_parse_config_trapcommunity(const char *, char *);
+ void            snmpd_free_trapcommunity(void);
+ void            send_trap_to_sess(netsnmp_session * sess,
+                                   netsnmp_pdu *template_pdu);
++int             send_trap_with_context(netsnmp_session * sess,
++                                  netsnmp_pdu *template_pdu);
+ 
+ int             create_trap_session(char *, u_short, char *, int, int);
+ int             create_trap_session_with_src(const char *, const char *,
+diff --git a/snmplib/transports/snmpIPBaseDomain.c b/snmplib/transports/snmpIPBaseDomain.c
+index 4ed1589334..e8b9d551a0 100644
+--- a/snmplib/transports/snmpIPBaseDomain.c
++++ b/snmplib/transports/snmpIPBaseDomain.c
+@@ -17,6 +17,37 @@ static int netsnmp_isnumber(const char *cp)
+     return *cp == '\0';
+ }
+ 
++/*
++ * Vyatta endpoints name their routing instance last: [<address>:]<port>:<vrf>
++ * (DANOS agentaddress and trap sink syntax). Split the VRF off so it can be
++ * handled as <address>@<vrf>:<port>; binding to the VRF master device is what
++ * the interface form does. Returns the VRF and truncates @str before it, or
++ * returns NULL and leaves @str untouched when it is not in that form.
++ */
++static char *netsnmp_split_vrf(char *str)
++{
++    char *start = str, *last, *prev;
++
++    if (strchr(str, '@'))
++        return NULL;
++    if (*start == '[') {
++        start = strchr(start, ']');
++        if (!start)
++            return NULL;
++    }
++    last = strrchr(start, ':');
++    if (!last || last[1] == '\0')
++        return NULL;
++    *last = '\0';
++    prev = strrchr(start, ':');
++    if (prev ? (prev[1] != '\0' && netsnmp_isnumber(prev + 1) &&
++                strchr(start, ':') == prev)
++             : (str[0] != '\0' && netsnmp_isnumber(str)))
++        return last + 1;
++    *last = ':';
++    return NULL;
++}
++
+ /**
+  * Parse a Net-SNMP endpoint name.
+  * @ep_str: Parsed endpoint name.
+@@ -29,6 +60,7 @@ static int netsnmp_isnumber(const char *cp)
+ int netsnmp_parse_ep_str(struct netsnmp_ep_str *ep_str, const char *endpoint)
+ {
+     char *dup, *cp, *addrstr = NULL, *iface = NULL, *portstr = NULL;
++    char *vrf;
+     unsigned port;
+ 
+     if (!endpoint)
+@@ -39,6 +71,9 @@ int netsnmp_parse_ep_str(struct netsnmp_ep_str *ep_str, const char *endpoint)
+         return 0;
+ 
+     cp = dup;
++    vrf = netsnmp_split_vrf(dup);
++    if (vrf)
++        iface = vrf;
+     if (netsnmp_isnumber(cp)) {
+         portstr = cp;
+     } else {
+diff --git a/snmplib/transports/snmpTCPDomain.c b/snmplib/transports/snmpTCPDomain.c
+index a356240232..e69dc230c6 100644
+--- a/snmplib/transports/snmpTCPDomain.c
++++ b/snmplib/transports/snmpTCPDomain.c
+@@ -265,6 +265,13 @@ netsnmp_tcp_transport(const struct netsnmp_ep *ep, int local)
+          * had completed.  So this can block.
+          */
+ 
++        /* Reach a sink in a VRF: connect from inside the VRF master device. */
++        rc = netsnmp_bindtodevice(t->sock, ep->iface);
++        if (rc != 0) {
++            DEBUGMSGTL(("netsnmp_tcpbase", "failed to bind to iface %s: %s\n",
++                        ep->iface, strerror(errno)));
++            goto err;
++        }
+         rc = connect(t->sock, (const struct sockaddr *)addr, sizeof(*addr));
+         if (rc < 0)
+             goto err;
+diff --git a/snmplib/transports/snmpTCPIPv6Domain.c b/snmplib/transports/snmpTCPIPv6Domain.c
+index 305a770add..ddcbf468c2 100644
+--- a/snmplib/transports/snmpTCPIPv6Domain.c
++++ b/snmplib/transports/snmpTCPIPv6Domain.c
+@@ -277,6 +277,13 @@ netsnmp_tcp6_transport(const struct netsnmp_ep *ep, int local)
+          * had completed.  So this can block.
+          */
+ 
++        /* Reach a sink in a VRF: connect from inside the VRF master device. */
++        rc = netsnmp_bindtodevice(t->sock, ep->iface);
++        if (rc != 0) {
++            DEBUGMSGTL(("netsnmp_tcp6", "failed to bind to iface %s: %s\n",
++                        ep->iface, strerror(errno)));
++            goto err;
++        }
+         rc = connect(t->sock, (const struct sockaddr *)addr, sizeof(*addr));
+         DEBUGMSGTL(("netsnmp_tcp6", "connect returns %d\n", rc));
+         if (rc < 0)
+diff --git a/snmplib/transports/snmpUDPIPv6Domain.c b/snmplib/transports/snmpUDPIPv6Domain.c
+index 1842d2a89c..ec314eb048 100644
+--- a/snmplib/transports/snmpUDPIPv6Domain.c
++++ b/snmplib/transports/snmpUDPIPv6Domain.c
+@@ -675,6 +675,17 @@ netsnmp_udp6_transport_with_source(const struct netsnmp_ep *ep,
+     if (NULL == bind_addr)
+         return t;
+ 
++    /* for Linux VRF Traps bind the iface, as the UDP/IPv4 transport does */
++    if (!local && ep && ep->iface[0]) {
++        rc = netsnmp_bindtodevice(t->sock, ep->iface);
++        if (rc)
++            DEBUGMSGTL(("netsnmp_udp6", "VRF: Could not bind socket %d to %s\n",
++                        t->sock, ep->iface));
++        else
++            DEBUGMSGTL(("netsnmp_udp6", "VRF: Bound socket %d to %s\n",
++                        t->sock, ep->iface));
++    }
++
+     rc = netsnmp_udp6_transport_bind(t, bind_addr, flags);
+     if (rc) {
+         netsnmp_transport_free(t);
+diff --git a/testing/fulltests/unit-tests/T022netsnmp_parse_ep_str_clib.c b/testing/fulltests/unit-tests/T022netsnmp_parse_ep_str_clib.c
+index a727bdede7..ea1203821b 100644
+--- a/testing/fulltests/unit-tests/T022netsnmp_parse_ep_str_clib.c
++++ b/testing/fulltests/unit-tests/T022netsnmp_parse_ep_str_clib.c
+@@ -28,6 +28,14 @@ static struct one_test_data test_data[] = {
+     { "[::1]:2",           1, { "::1",      "",   "2"    } },
+     { "[::1]@if:2",        1, { "::1",      "if", "2"    } },
+     { "[::1]:2@if",        0, {                          } },
++    /* Vyatta routing-instance suffix: [<address>:]<port>:<vrf> */
++    { "161:vrfblue",       1, { "",         "vrfblue", "161" } },
++    { "1.2.3.4:161:vrfblue", 1, { "1.2.3.4", "vrfblue", "161" } },
++    { "[::1]:162:vrfblue", 1, { "::1",      "vrfblue", "162" } },
++    { "hostname:162:5",    1, { "hostname", "5",  "162"  } },
++    { "fe80::1:2",         1, { "fe80::1:2", "",  ""     } },
++    { "fe80::abcd",        1, { "fe80::abcd", "", ""     } },
++    { "1.2.3.4:vrfblue",   0, {                          } },
+ };
+ 
+ SOCK_STARTUP;
