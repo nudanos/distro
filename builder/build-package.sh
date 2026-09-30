@@ -21,6 +21,9 @@ main() {
     setup_local_repo
     rm -rf /build && mkdir -p /build
     cp -a /src /build/pkg
+    # The CI caller workflow belongs to the repository, not the package; left in,
+    # dh-golang copies it into the Go source tree and dh_missing fails on it.
+    rm -rf /build/pkg/.github
     cd /build/pkg
     local format="1.0"
     [ -f debian/source/format ] && format="$(cat debian/source/format)"
