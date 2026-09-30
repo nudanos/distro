@@ -11,7 +11,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"time"
 
 	"github.com/nudanos/distro/internal/control"
 	"github.com/nudanos/distro/internal/fetch"
@@ -20,14 +22,49 @@ import (
 
 const maintainer = "NuDanOS Maintainers <jon@fernandez.tech>"
 
-// DebianVersion is the version for an upstream build: prevTop's epoch (if
-// any), the upstream version, and revision 0nudanos1.
+// repackSuffix matches the marker Debian adds to a repacked upstream version.
+var repackSuffix = regexp.MustCompile(`\+(dfsg|ds)\d*`)
+
+// DebianVersion is the version for an upstream build from prevTop, the
+// packaging's latest version: its epoch (if any), the upstream version with
+// the packaging's repack suffix (we apply the same Files-Excluded), and
+// revision 0nudanos1 -- or, when the packaging already has this upstream
+// version, its own revision plus nudanos1, so ours sorts after it.
 func DebianVersion(prevTop, upstreamVersion string) string {
-	epoch := ""
-	if i := strings.Index(prevTop, ":"); i > 0 {
-		epoch = prevTop[:i+1]
+	epoch, rest := "", prevTop
+	if i := strings.Index(rest, ":"); i > 0 {
+		epoch, rest = rest[:i+1], rest[i+1:]
 	}
-	return epoch + upstreamVersion + "-0nudanos1"
+	prevUp, prevRev := rest, ""
+	if i := strings.LastIndex(rest, "-"); i > 0 {
+		prevUp, prevRev = rest[:i], rest[i+1:]
+	}
+	up := upstreamVersion
+	if s := repackSuffix.FindString(prevUp); s != "" && !strings.Contains(up, s) {
+		up += s
+	}
+	if up == prevUp && prevRev != "" {
+		return epoch + up + "-" + prevRev + "nudanos1"
+	}
+	return epoch + up + "-0nudanos1"
+}
+
+// changelogDate dates the new entry: the tag's commit date, unless the
+// packaging's latest entry is newer (Debian packaged the release after it was
+// tagged), then one second after that entry. Both are RFC 2822 dates.
+func changelogDate(tagDate, prevDate string) (string, error) {
+	tag, err := time.Parse(time.RFC1123Z, tagDate)
+	if err != nil {
+		return "", fmt.Errorf("tag date %q: %w", tagDate, err)
+	}
+	prev, err := time.Parse(time.RFC1123Z, prevDate)
+	if err != nil {
+		return "", fmt.Errorf("changelog date %q: %w", prevDate, err)
+	}
+	if tag.After(prev) {
+		return tagDate, nil
+	}
+	return prev.Add(time.Second).Format(time.RFC1123Z), nil
 }
 
 // Prepare checks out e.Upstream at e.Tag and e.Packaging at e.PackagingRef, and
@@ -148,6 +185,9 @@ func addPatches(from, to string) error {
 }
 
 // bumpChangelog prepends an entry for e.Version, keeping the packaging's epoch.
+// trailerDate is the date on the first (latest) changelog trailer line.
+var trailerDate = regexp.MustCompile(`(?m)^ -- .*?  (.+)$`)
+
 func bumpChangelog(path string, e manifest.Entry, date string) error {
 	old, err := os.ReadFile(path)
 	if err != nil {
@@ -159,6 +199,11 @@ func bumpChangelog(path string, e manifest.Entry, date string) error {
 		return fmt.Errorf("%s: unparseable first line %q", path, first)
 	}
 	src, prev := fields[0], strings.Trim(fields[1], "()")
+	if m := trailerDate.FindStringSubmatch(string(old)); m != nil {
+		if date, err = changelogDate(date, m[1]); err != nil {
+			return fmt.Errorf("%s: %w", path, err)
+		}
+	}
 	entry := fmt.Sprintf("%s (%s) trixie; urgency=medium\n\n  * New upstream release %s (tag %s), built by NuDanOS.\n\n -- %s  %s\n\n",
 		src, DebianVersion(prev, e.Version), e.Version, e.Tag, maintainer, date)
 	return os.WriteFile(path, append([]byte(entry), old...), 0o644)

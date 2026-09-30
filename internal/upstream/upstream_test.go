@@ -117,9 +117,13 @@ func TestPrepareIsReproducible(t *testing.T) {
 
 func TestDebianVersion(t *testing.T) {
 	cases := map[[2]string]string{
-		{"1:2.3.3-1", "2.4.3"}:              "1:2.4.3-0nudanos1",
-		{"5.9.4+dfsg-2+deb13u1", "5.9.5.2"}: "5.9.5.2-0nudanos1",
-		{"1.2.9.2-5", "1.2.9.2"}:            "1.2.9.2-0nudanos1",
+		{"1:2.3.3-1", "2.4.3"}: "1:2.4.3-0nudanos1",
+		// Debian repacks (Files-Excluded) and so do we: carry the suffix.
+		{"5.9.4+dfsg-2+deb13u1", "5.9.5.2"}: "5.9.5.2+dfsg-0nudanos1",
+		// Debian already packages this upstream version: sort after its
+		// revision, not before it (ntpsec 1.2.5+dfsg-1).
+		{"1.2.5+dfsg-1", "1.2.5"}: "1.2.5+dfsg-1nudanos1",
+		{"1.2.9.2-5", "1.2.9.2"}:  "1.2.9.2-5nudanos1",
 	}
 	for in, want := range cases {
 		if got := DebianVersion(in[0], in[1]); got != want {
@@ -160,5 +164,20 @@ func TestPrepareDropsExcludedFiles(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(dir, kept)); err != nil {
 			t.Errorf("%s should remain: %v", kept, err)
 		}
+	}
+}
+
+func TestChangelogDate(t *testing.T) {
+	const tag = "Fri, 31 Jul 2026 00:27:11 -0400"
+	// Tag newer than the packaging's last entry: use the tag's date.
+	if got, err := changelogDate(tag, "Mon, 01 Jun 2026 10:00:00 +0000"); err != nil || got != tag {
+		t.Errorf("changelogDate = %q, %v; want %q", got, err, tag)
+	}
+	// Debian packaged the release after its tag (ntpsec): the new entry must
+	// still be dated after the previous one (lintian
+	// latest-changelog-entry-without-new-date).
+	want := "Sat, 01 Aug 2026 12:00:01 +0000"
+	if got, err := changelogDate(tag, "Sat, 01 Aug 2026 12:00:00 +0000"); err != nil || got != want {
+		t.Errorf("changelogDate = %q, %v; want %q", got, err, want)
 	}
 }
