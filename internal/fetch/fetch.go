@@ -30,8 +30,14 @@ func Git(ctx context.Context, repo, ref, dir string, log io.Writer) error {
 		if err := run(ctx, log, "", "clone", "--no-checkout", repo, dir); err != nil {
 			return err
 		}
-	} else if err := run(ctx, log, dir, "fetch", "--tags", "--force", "--prune", "origin"); err != nil {
-		return err
+	} else {
+		// The manifest may have moved the entry to another repository.
+		if err := run(ctx, log, dir, "remote", "set-url", "origin", repo); err != nil {
+			return err
+		}
+		if err := run(ctx, log, dir, "fetch", "--tags", "--force", "--prune", "origin"); err != nil {
+			return err
+		}
 	}
 	target := "origin/" + ref
 	if run(ctx, io.Discard, dir, "rev-parse", "--verify", "--quiet", target+"^{commit}") != nil {

@@ -70,3 +70,28 @@ func TestGitUnknownRefFails(t *testing.T) {
 		t.Error("want error for missing ref")
 	}
 }
+
+// A manifest entry can move to another repository (mstpd's packaging moved
+// from the DANOS fork to Debian's). The existing checkout must follow the new
+// URL instead of fetching the old one.
+func TestGitFollowsChangedRepository(t *testing.T) {
+	repo := func(branch, content string) string {
+		r := t.TempDir()
+		git(t, r, "init", "-q", "-b", branch)
+		os.WriteFile(filepath.Join(r, "f"), []byte(content), 0o644)
+		git(t, r, "add", "f")
+		git(t, r, "commit", "-qm", "c")
+		return r
+	}
+	oldRepo, newRepo := repo("master", "fork"), repo("debian/latest", "debian")
+	dir := filepath.Join(t.TempDir(), "packaging", "mstpd")
+	if err := Git(context.Background(), oldRepo, "master", dir, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	if err := Git(context.Background(), newRepo, "debian/latest", dir, io.Discard); err != nil {
+		t.Fatalf("after the repository changed: %v", err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "f")); string(b) != "debian" {
+		t.Errorf("f = %q, want the new repository's content", b)
+	}
+}
