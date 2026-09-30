@@ -26,7 +26,8 @@ def set_ready(text: str, names: list[str]) -> str:
 def main() -> int:
     path, names = sys.argv[1], sys.argv[2:]
     text = open(path).read()
-    open(path, "w").write(set_ready(text, names))
+    out = set_ready(text, names)  # exits on an unknown name: write only after
+    open(path, "w").write(out)
     return 0
 
 

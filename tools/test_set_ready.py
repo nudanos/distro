@@ -37,5 +37,21 @@ class SetReadyTest(unittest.TestCase):
             sr.set_ready(TEXT, ["zzz"])
 
 
+
+class MainTest(unittest.TestCase):
+    def test_unknown_name_leaves_file_untouched(self):
+        import sys
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "manifest.yaml")
+            with open(p, "w") as f:
+                f.write(TEXT)
+            sys.argv = ["set_ready.py", p, "a nope"]
+            with self.assertRaises(SystemExit):
+                sr.main()
+            with open(p) as f:
+                self.assertEqual(f.read(), TEXT)
+
+
 if __name__ == "__main__":
     unittest.main()
