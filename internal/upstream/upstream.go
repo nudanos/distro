@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -105,6 +106,14 @@ func Prepare(ctx context.Context, e manifest.Entry, patchesDir, work string, log
 	if err := dropExcluded(dir, append(filesExcluded(filepath.Join(dir, "debian", "copyright")), e.Exclude...)); err != nil {
 		return "", err
 	}
+	if e.UnpackWaf {
+		if err := unpackWaf(ctx, dir); err != nil {
+			return "", fmt.Errorf("%s: %w", e.Name, err)
+		}
+	}
+	if err := applyPackagingPatches(ctx, filepath.Join(patchesDir, e.Name, "debian"), dir); err != nil {
+		return "", fmt.Errorf("%s: %w", e.Name, err)
+	}
 	if err := addPatches(filepath.Join(patchesDir, e.Name), filepath.Join(dir, "debian", "patches")); err != nil {
 		return "", err
 	}
@@ -163,6 +172,75 @@ func copyTree(src, dst string, skip func(rel string) bool) error {
 			}
 			return os.WriteFile(target, b, info.Mode().Perm())
 		}
+	})
+}
+
+// applyPackagingPatches applies from/*.patch (sorted) to the assembled tree
+// with git apply, which fails rather than half-applying. These change
+// packaging we do not maintain; quilt patches may not touch debian/.
+func applyPackagingPatches(ctx context.Context, from, dir string) error {
+	ps, _ := filepath.Glob(filepath.Join(from, "*.patch"))
+	sort.Strings(ps)
+	for _, p := range ps {
+		cmd := exec.CommandContext(ctx, "git", "apply", "-p1", p)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("packaging patch %s: %v\n%s", filepath.Base(p), err, out)
+		}
+	}
+	return nil
+}
+
+// unpackWaf replaces a self-extracting waf blob with its source, as Debian's
+// debian/repack-waf does: run it once to extract .waf3-*/, move that into the
+// tree and cut waf at its "#==>" marker.
+func unpackWaf(ctx context.Context, dir string) error {
+	cmd := exec.CommandContext(ctx, "python3", "waf", "--help")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("unpacking waf: %v\n%s", err, out)
+	}
+	ex, _ := filepath.Glob(filepath.Join(dir, ".waf3-*"))
+	if len(ex) != 1 {
+		return fmt.Errorf("unpacking waf: want one .waf3-* directory, found %d", len(ex))
+	}
+	entries, err := os.ReadDir(ex[0])
+	if err != nil {
+		return err
+	}
+	for _, en := range entries {
+		if err := os.Rename(filepath.Join(ex[0], en.Name()), filepath.Join(dir, en.Name())); err != nil {
+			return err
+		}
+	}
+	if err := os.Remove(ex[0]); err != nil {
+		return err
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "waf"))
+	if err != nil {
+		return err
+	}
+	i := bytes.Index(b, []byte("\n#==>\n"))
+	if i < 0 {
+		return fmt.Errorf("unpacking waf: no #==> marker")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "waf"), b[:i+1], 0o755); err != nil {
+		return err
+	}
+	return filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() && d.Name() == "__pycache__" {
+			if err := os.RemoveAll(p); err != nil {
+				return err
+			}
+			return filepath.SkipDir
+		}
+		if strings.HasSuffix(p, ".pyc") {
+			return os.Remove(p)
+		}
+		return nil
 	})
 }
 

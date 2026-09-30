@@ -225,3 +225,51 @@ func TestPrepareSubdirAndInTreePackaging(t *testing.T) {
 		t.Errorf("changelog top = %q", first)
 	}
 }
+
+// Packaging we do not maintain (salsa, perfSONAR) is changed only through
+// patches/<name>/debian/*.patch, applied to the assembled tree. They are not
+// quilt patches: quilt patches may not touch debian/.
+func TestPreparePackagingPatches(t *testing.T) {
+	e, patches, work := fixture(t)
+	write(t, filepath.Join(patches, "keepalived", "debian", "0001-control.patch"),
+		"--- a/debian/control\n+++ b/debian/control\n@@ -1 +1,2 @@\n Source: keepalived\n+Section: net\n")
+	dir, err := Prepare(context.Background(), e, patches, work, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "debian", "control")); string(b) != "Source: keepalived\nSection: net\n" {
+		t.Errorf("debian/control = %q, want the packaging patch applied", b)
+	}
+	series, _ := os.ReadFile(filepath.Join(dir, "debian", "patches", "series"))
+	if strings.Contains(string(series), "0001-control.patch") {
+		t.Errorf("packaging patch added to the quilt series: %q", series)
+	}
+}
+
+func TestPreparePackagingPatchMustApply(t *testing.T) {
+	e, patches, work := fixture(t)
+	write(t, filepath.Join(patches, "keepalived", "debian", "0001-stale.patch"),
+		"--- a/debian/control\n+++ b/debian/control\n@@ -1 +1 @@\n-Source: something-else\n+Source: x\n")
+	if _, err := Prepare(context.Background(), e, patches, work, io.Discard); err == nil {
+		t.Error("a packaging patch that does not apply was accepted")
+	}
+}
+
+// ntpsec ships waf as a self-extracting blob; Debian unpacks it into source
+// (debian/repack-waf) and lintian rejects the blob (source-contains-waf-binary).
+func TestUnpackWaf(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "waf"), "#!/usr/bin/env python3\nimport os\nos.makedirs('.waf3-2.1.4-abc/waflib', exist_ok=True)\nopen('.waf3-2.1.4-abc/waflib/__init__.py', 'w').write('# waflib\\n')\n#==>\n#BZh91AY&SY binary tail\n")
+	if err := unpackWaf(context.Background(), dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "waflib", "__init__.py")); err != nil {
+		t.Error("waflib not unpacked into the tree")
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "waf")); strings.Contains(string(b), "#==>") || strings.Contains(string(b), "binary tail") {
+		t.Errorf("waf still carries its blob:\n%s", b)
+	}
+	if m, _ := filepath.Glob(filepath.Join(dir, ".waf3-*")); len(m) != 0 {
+		t.Errorf("extraction directory left behind: %v", m)
+	}
+}
