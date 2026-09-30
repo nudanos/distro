@@ -246,6 +246,22 @@ func TestPreparePackagingPatches(t *testing.T) {
 	}
 }
 
+// distro-build passes -patches as a relative path, and git apply runs inside
+// the assembled tree: the patch path must not depend on the working directory.
+func TestPreparePackagingPatchesRelativeDir(t *testing.T) {
+	e, patches, work := fixture(t)
+	write(t, filepath.Join(patches, "keepalived", "debian", "0001-control.patch"),
+		"--- a/debian/control\n+++ b/debian/control\n@@ -1 +1,2 @@\n Source: keepalived\n+Section: net\n")
+	t.Chdir(filepath.Dir(patches))
+	dir, err := Prepare(context.Background(), e, filepath.Base(patches), work, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "debian", "control")); string(b) != "Source: keepalived\nSection: net\n" {
+		t.Errorf("debian/control = %q, want the packaging patch applied", b)
+	}
+}
+
 func TestPreparePackagingPatchMustApply(t *testing.T) {
 	e, patches, work := fixture(t)
 	write(t, filepath.Join(patches, "keepalived", "debian", "0001-stale.patch"),

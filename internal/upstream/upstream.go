@@ -182,7 +182,12 @@ func applyPackagingPatches(ctx context.Context, from, dir string) error {
 	ps, _ := filepath.Glob(filepath.Join(from, "*.patch"))
 	sort.Strings(ps)
 	for _, p := range ps {
-		cmd := exec.CommandContext(ctx, "git", "apply", "-p1", p)
+		// git apply runs inside dir; a relative -patches path would not resolve.
+		abs, err := filepath.Abs(p)
+		if err != nil {
+			return err
+		}
+		cmd := exec.CommandContext(ctx, "git", "apply", "-p1", abs)
 		cmd.Dir = dir
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("packaging patch %s: %v\n%s", filepath.Base(p), err, out)
