@@ -1,0 +1,15 @@
+Description: Drop the systemd dh add-on
+ Compat 10 runs the systemd helpers by default; debhelper 13 has no systemd
+ add-on and lintian rejects the reference (missing-build-dependency-for-dh-addon).
+
+--- a/debian/rules
++++ b/debian/rules
+@@ -21,7 +21,7 @@
+ export DH_OPTIONS
+ 
+ %:
+-	dh $@ --with autoreconf,systemd
++	dh $@ --with autoreconf
+ 
+ override_dh_auto_configure:
+ 	dh_auto_configure -- \

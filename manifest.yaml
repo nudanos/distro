@@ -225,13 +225,15 @@ packages:
   - name: "i2util"
     kind: "upstream"
     milestone: "1.0"
+    ready: true
     upstream: "https://github.com/perfsonar/i2util"
     version: "5.2.6"
     tag: "v5.2.6"
     tag_pattern: "^v(\\d+\\.\\d+\\.\\d+)$"
     track: "latest"
-    packaging: "https://github.com/nudanos/i2util"
-    packaging_ref: "master"
+    subdir: "I2util/I2util"
+    packaging_dir: "I2util/I2util/unibuild-packaging/deb"
+    note: "built with perfSONAR's own Debian packaging for the release; DANOS's fork packaging targeted 4.2.1"
   - name: "ifmgrd"
     kind: "danos"
     milestone: "1.0"
@@ -266,6 +268,7 @@ packages:
   - name: "keepalived"
     kind: "upstream"
     milestone: "1.0"
+    ready: true
     upstream: "https://github.com/acassen/keepalived"
     version: "2.4.3"
     tag: "v2.4.3"
@@ -275,6 +278,26 @@ packages:
     packaging_ref: "master"
     exclude: ["www"]
     note: "www/ is in the git tag but not the release tarball (non-free RFC draft)"
+    audit:
+      - {patch: "v2_2_20_fixup.patch", verdict: kept, note: "keeps dropping syslog.target from the unit; its D-Bus policy half is upstream (2.4.3 scopes send_destination and adds a default deny)"}
+      - {patch: "vyatta_if_additions.patch", verdict: kept, note: "vyatta_if_setup() per-VMAC sysctls for RFC interfaces; the rest of the stack builds on it"}
+      - {patch: "vyatta_extra_data_structures.patch", verdict: kept, note: "global local-address list used by the RFC and address-overlap code"}
+      - {patch: "vyatta_dbus_rfc_additions.patch", verdict: kept, note: "GetRfcMapping, called by vyatta-vrrp (process_control.py)"}
+      - {patch: "vyatta_upstream_reversions.patch", verdict: kept, note: "VRRPv2 over IPv6 outside strict mode; 'Virtual IP = N' dump line parsed by vyatta-vrrp"}
+      - {patch: "vyatta_rfc_changes.patch", verdict: kept, note: "RFC interface model: VMAC admin down in BACKUP, adverts read through a BPF on the base interface"}
+      - {patch: "vyatta_track_interface_changes.patch", verdict: kept, note: "tracking dump format; stack dependency"}
+      - {patch: "vyatta_dynamic_ipao_detection.patch", verdict: kept, note: "address-owner detection from the configured priority"}
+      - {patch: "vyatta_dbus_reload_function.patch", verdict: kept, note: "ResetMaster, called by vyatta-vrrp (vrrp_group_connection.py)"}
+      - {patch: "vyatta_track_route_feature.patch", verdict: kept, note: "track_route_to, written by vyatta-vrrp"}
+      - {patch: "vyatta_track_pathmon_feature.patch", verdict: kept, note: "track_pathmon, written by vyatta-vrrp"}
+      - {patch: "vyatta_check_lower_is_up.patch", verdict: kept, note: "IFLA_CARRIER counts toward interface state (bonds, VLANs); folded into 2.4's debounced flags"}
+      - {patch: "vyatta_vrf_aware.patch", verdict: kept, note: "VMAC placement in routing instances (vrf_aware)"}
+      - {patch: "vyatta_preemption.patch", verdict: kept, note: "Vyatta preemption behaviour vyatta-vrrp configures"}
+      - {patch: "vyatta_delayed_address_addition_bugfix.patch", verdict: kept, note: "RFC VMACs take the base interface's address; rewritten for 2.4 fault flags"}
+      - {patch: "vyatta_snmp_modifications.patch", verdict: kept, note: "defer the SNMP agent until snmpd is up; IPv6 master address in the RFC MIB"}
+      - {patch: "vyatta_dynamic_debug_options.patch", verdict: kept, note: "AddDebug/RemoveDebug, called by vyatta-vrrp"}
+      - {patch: "vyatta_sync_group_modifications.patch", verdict: kept, note: "sync-group fault count never below zero"}
+      - {patch: "vyatta_interface_exists_bugfix.patch", verdict: kept, note: "interface-exists fix; stack dependency"}
   - name: "libfal-opennsl"
     kind: "drop"
     milestone: "none"
@@ -314,6 +337,7 @@ packages:
   - name: "libteam"
     kind: "upstream"
     milestone: "1.0"
+    ready: true
     upstream: "https://github.com/jpirko/libteam"
     version: "1.32"
     tag: "v1.32"
@@ -321,6 +345,40 @@ packages:
     track: "latest"
     packaging: "https://salsa.debian.org/debian/libteam.git"
     packaging_ref: "master"
+    audit:
+      - {patch: "01-hwaddr_changed.patch", verdict: upstreamed, note: "backport from 1.16"}
+      - {patch: "02-hwaddr_changed.patch", verdict: upstreamed, note: "backport from 1.16"}
+      - {patch: "03-hwaddr_changed.patch", verdict: upstreamed, note: "backport from 1.16"}
+      - {patch: "lb-hwaddr-event-watch.patch", verdict: upstreamed, note: "backport from 1.17"}
+      - {patch: "fix_rtnl_dellink_handling.patch", verdict: upstreamed, note: "backport from 1.17"}
+      - {patch: "libteamdctl-fix-timeval-value-for-select.patch", verdict: upstreamed, note: "backport from 1.17"}
+      - {patch: "libteam_fix_compile_error_with_newer_libnl.patch", verdict: upstreamed, note: "backport from 1.21"}
+      - {patch: "libteam_check_for_definition_of_NLA_PUT_S.patch", verdict: upstreamed, note: "backport from 1.21"}
+      - {patch: "libteam_add_missing_static_inline_in_nl_updates.patch", verdict: upstreamed, note: "backport from 1.21"}
+      - {patch: "libzmq-4.0.patch", verdict: dropped, note: "build tweak for zmq 4.0; Debian builds without zmq"}
+      - {patch: "lacp-refactor.patch", verdict: dropped, note: "preparation for dataplane integration (milestone 2)"}
+      - {patch: "teamd_lw_vplane.patch", verdict: dropped, note: "vplane link watch for the DPDK dataplane (milestone 2); vyatta-cfg-bonding uses the ethtool watch"}
+      - {patch: "libteamdctl_remove_libdaemon.patch", verdict: upstreamed, note: "90% of its lines are in 1.32"}
+      - {patch: "teamd_static_link_libdaemon.patch", verdict: dropped, note: "build choice; Debian links libdaemon normally"}
+      - {patch: "teamd-keep-macaddr.patch", verdict: kept, note: "vyatta-cfg-bonding runs teamd --take-over and manages the bond MAC itself"}
+      - {patch: "teamd-log.patch", verdict: dropped, note: "log level only"}
+      - {patch: "lacp_mux_machine.patch", verdict: dropped, note: "no milestone-1 consumer; revisit if LACP partners stall in ATTACHED"}
+      - {patch: "teamd_handle_nl_iff_up.patch", verdict: dropped, note: "no milestone-1 consumer"}
+      - {patch: "teamd_handle_nl_mtu.patch", verdict: dropped, note: "no milestone-1 consumer; also patches the vplane link watch"}
+      - {patch: "team_handle_cleanup_list.patch", verdict: dropped, note: "infrastructure for the two dropped patches above"}
+      - {patch: "team_ifinfo_update_orig_hwaddr.patch", verdict: dropped, note: "vyatta-cfg-bonding restores member MACs itself (ethtool -P)"}
+      - {patch: "team_runner_ab_debug.patch", verdict: dropped, note: "debug logging"}
+      - {patch: "teamd_lacp_key_config.patch", verdict: kept, note: "vyatta-cfg-bonding writes runner.lacp_key; 1.32 reads it only per port"}
+      - {patch: "teamdctl-zmq-crash", verdict: dropped, note: "zmq transport not built (Debian has no libzmq build-dependency)"}
+      - {patch: "vyatta-lacp-srcaddr.patch", verdict: upstreamed, note: "all of its lines are in 1.32"}
+      - {patch: "vyatta-link-watch-link-params.patch", verdict: dropped, note: "link params from the vplane watcher (milestone 2); kernel ports answer ethtool"}
+      - {patch: "vyatta-lw-vplane-check-ethtool.patch", verdict: dropped, note: "vplane link watch (milestone 2)"}
+      - {patch: "vyatta-message-priority.patch", verdict: dropped, note: "log level only"}
+      - {patch: "vyatta-defer-linkup.patch", verdict: dropped, note: "vplane link watch (milestone 2)"}
+      - {patch: "vyatta-enabled-opt.patch", verdict: dropped, note: "only reachable with the vplane watcher"}
+      - {patch: "vyatta-slave-mac-update.patch", verdict: dropped, note: "vyatta-cfg-bonding handles member MACs itself"}
+      - {patch: "vyatta-lacp-port-link-changed.patch", verdict: dropped, note: "only the vplane watcher raises link changes without a port change"}
+      - {patch: "vyatta-lw-port-link-change.patch", verdict: dropped, note: "vplane link watch (milestone 2)"}
   - name: "libvci"
     kind: "danos"
     milestone: "1.0"
@@ -389,13 +447,21 @@ packages:
   - name: "mstpd"
     kind: "upstream"
     milestone: "1.0"
+    ready: true
     upstream: "https://github.com/mstpd/mstpd"
     version: "0.2.0"
     tag: "0.2.0"
     tag_pattern: "^(\\d+\\.\\d+\\.\\d+)$"
     track: "latest"
-    packaging: "https://github.com/nudanos/mstpd"
-    packaging_ref: "master"
+    packaging: "https://salsa.debian.org/networking-team/mstpd.git"
+    packaging_ref: "debian/latest"
+    note: "Debian packages mstpd 0.2.0 (networking-team, unstable); DANOS's fork packaging targeted 0.0.9"
+    audit:
+      - {patch: "0008-set-not-add-setvid2fid.patch", verdict: kept, note: "vyatta-service-bridge sets MSTI VLAN lists with setvid2fid"}
+      - {patch: "0010-MSTI-driver-updates.patch", verdict: dropped, note: "MSTI state to the DPDK dataplane via libvplaned (milestone 2)"}
+      - {patch: "0020-pvst-filter.patch", verdict: kept, note: "PVST filter and guard, configured by vyatta-service-bridge; includes reordered for glibc/kernel headers"}
+      - {patch: "0030-buster-update", verdict: dropped, note: "header fixes 0.2.0 does not need"}
+      - {patch: "python2-to-python3", verdict: upstreamed, note: "0.2.0's ifquery is Python 3"}
   - name: "ndpi"
     kind: "danos"
     milestone: "2"
@@ -404,6 +470,7 @@ packages:
   - name: "net-snmp"
     kind: "upstream"
     milestone: "1.0"
+    ready: true
     upstream: "https://github.com/net-snmp/net-snmp"
     version: "5.9.5.2"
     tag: "v5.9.5.2"
@@ -411,6 +478,12 @@ packages:
     track: "latest"
     packaging: "https://salsa.debian.org/debian/net-snmp.git"
     packaging_ref: "master"
+    audit:
+      - {patch: "restore-Debian-deleted-MIBs.patch", verdict: dropped, note: "restores MIBs Debian removes as non-free; the agent serves without MIB files (snmp-mibs-downloader supplies them)"}
+      - {patch: "add-libnetsnmpagent-vyatta-lib.patch", verdict: kept, note: "libnetsnmpagent-vyatta, linked by vyatta-snmp-vrf-agent; Makefile hunks ported to 5.9.5"}
+      - {patch: "add-context-to-findvarmethod.patch", verdict: kept, note: "VYATTA_SNMP context argument used by vyatta-snmp-vrf-agent"}
+      - {patch: "suppress-unwanted-log-messages.patch", verdict: dropped, note: "log noise only"}
+      - {patch: "retry-agent-address.patch", verdict: kept, note: "addressRetries/addressTimeout written by vyatta-service-snmp; ported to 5.9.5 (ids 18/19: 15-17 are now upstream's)"}
   - name: "netconfd"
     kind: "danos"
     milestone: "1.1"
@@ -423,6 +496,7 @@ packages:
   - name: "netplug"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/netplug"
     ref: "trixie"
     note: "Debian's 1.2.9.2 plus 12 DANOS patches; a 3.0 (quilt) fork with the full source in git"
@@ -435,6 +509,7 @@ packages:
   - name: "ntp"
     kind: "upstream"
     milestone: "1.0"
+    ready: true
     upstream: "https://gitlab.com/NTPsec/ntpsec"
     version: "1.2.5"
     tag: "NTPsec_1_2_5"
@@ -442,7 +517,12 @@ packages:
     track: "latest"
     packaging: "https://salsa.debian.org/debian/ntpsec.git"
     packaging_ref: "debian/unstable"
-    note: "Debian source package ntpsec"
+    unpack_waf: true
+    note: "Debian source package ntpsec; waf unpacked as debian/repack-waf does"
+    audit:
+      - {patch: "vyatta-fake-debian8-for-all-distros", verdict: dropped, note: "patches sntp, which ntpsec does not have"}
+      - {patch: "vyatta-refresh-peers.patch", verdict: dropped, note: "no milestone-1 consumer; ntpsec re-resolves interfaces on netlink events"}
+      - {patch: "vyatta-private-stat.patch", verdict: dropped, note: "mode 7 counters; ntpsec has no mode 7. vyatta-service-ntp's 'show ntp packets' privatestat needs porting (plan 3)"}
   - name: "op"
     kind: "danos"
     milestone: "1.0"
@@ -465,23 +545,55 @@ packages:
   - name: "owamp"
     kind: "upstream"
     milestone: "1.0"
+    ready: true
     upstream: "https://github.com/perfsonar/owamp"
     version: "5.2.6"
     tag: "v5.2.6"
     tag_pattern: "^v(\\d+\\.\\d+\\.\\d+)$"
     track: "latest"
-    packaging: "https://github.com/nudanos/owamp"
-    packaging_ref: "master"
+    subdir: "owamp/owamp"
+    packaging_dir: "owamp/owamp/unibuild-packaging/deb"
+    note: "built with perfSONAR's own Debian packaging for the release; DANOS's fork packaging targeted 4.2.1"
+    audit:
+      - {patch: "vyatta/remove-owampd-fts.patch", verdict: dropped, note: "build cleanup"}
+      - {patch: "vyatta/Start-Sessions-MBZ-field-can-contain-garbage.patch", verdict: upstreamed, note: "in 5.2.6"}
+      - {patch: "vyatta/owampd-no-perror.patch", verdict: dropped, note: "logging only"}
+      - {patch: "vyatta/owamp-more-logging.patch", verdict: dropped, note: "logging only"}
+      - {patch: "vyatta/stop-sessions-wait-use-ppoll.patch", verdict: kept, note: "closes a signal race in twping's stop wait"}
+      - {patch: "vyatta/owampd-run-state.patch", verdict: kept, note: "session state files read by vyatta-service-twamp's show commands"}
+      - {patch: "vyatta/owping-control-dscp.patch", verdict: kept, note: "prerequisite of set-dscp-for-control-packets"}
+      - {patch: "vyatta/set-dscp-for-control-packets.patch", verdict: kept, note: "controldscpvalue, written by vyatta-service-twamp"}
+      - {patch: "vyatta/owping-multiple-sessions.patch", verdict: kept, note: "twping -r (session-count), passed by vyatta-service-twamp"}
+      - {patch: "vyatta/dont-print-client-usage-after-invalid-arguments.patch", verdict: dropped, note: "usage text only"}
+      - {patch: "vyatta/improve-client-input-validation.patch", verdict: kept, note: "prerequisite: check_errno_erange is used by twamp-configurable-stats-sampling"}
+      - {patch: "vyatta/owping-ensure-line-buffered-output.patch", verdict: kept, note: "twping output is read through a pipe by the op commands"}
+      - {patch: "vyatta/owamp-no-debug-info-in-logging.patch", verdict: upstreamed, note: "95% of its lines are in 5.2.6"}
+      - {patch: "vyatta/owampd-allow-zero-addr-mask.patch", verdict: kept, note: "client prefixes such as 0.0.0.0/0 written by vyatta-service-twamp"}
+      - {patch: "vyatta/twamp-no-unnecessary-stats.patch", verdict: kept, note: "stats output format parsed by twping-output-to-json"}
+      - {patch: "vyatta/twamp-configurable-stats-sampling.patch", verdict: kept, note: "twping -l (sample), passed by vyatta-service-twamp"}
+      - {patch: "vyatta/twamp-fix-refl-seqno.patch", verdict: kept, note: "reflector sequence-number fix (RFC 5357 behaviour)"}
+      - {patch: "vyatta/twamp-remove-invalid-empty-test-spec-error.patch", verdict: dropped, note: "log message only"}
+      - {patch: "vyatta/default-log-level-debug.patch", verdict: dropped, note: "log level only"}
+      - {patch: "vyatta/twamp-dont-compute-error-on-lost-packets.patch", verdict: kept, note: "statistics correctness"}
+      - {patch: "vyatta/dont-log-compile-date.patch", verdict: dropped, note: "cosmetic"}
+      - {patch: "vyatta/twping-allow-more-immediate-start-time.patch", verdict: dropped, note: "start-time tweak; no consumer option"}
+      - {patch: "vyatta/add-check-ut.patch", verdict: dropped, note: "tests for the dropped scheduling patches"}
+      - {patch: "vyatta/twamp-schedule-slot-flags.patch", verdict: dropped, note: "cycle-to scheduling is not used by vyatta-service-twamp"}
+      - {patch: "vyatta/twamp-cycle-to-scheduling.patch", verdict: dropped, note: "cycle-to scheduling is not used by vyatta-service-twamp"}
+      - {patch: "vyatta/twping-cycle-to-schedule.patch", verdict: dropped, note: "cycle-to scheduling is not used by vyatta-service-twamp"}
+      - {patch: "vyatta/twping-end-delay.patch", verdict: dropped, note: "vyatta-service-twamp does not pass -E"}
+      - {patch: "vyatta/twamp-dataplane-offload.patch", verdict: dropped, note: "needs the DPDK dataplane libraries (milestone 2); vyatta-service-twamp now tolerates the missing offload column"}
   - name: "pam_tacplus"
     kind: "upstream"
     milestone: "1.0"
+    ready: true
     upstream: "https://github.com/kravietz/pam_tacplus"
     version: "1.7.0"
     tag: "v1.7.0"
     tag_pattern: "^v(\\d+\\.\\d+\\.\\d+)$"
     track: "latest"
-    packaging: "https://github.com/nudanos/pam_tacplus"
-    packaging_ref: "master"
+    packaging_dir: "debian"
+    note: "built with upstream's own Debian packaging for the release (it regenerates gnulib, which the git tag lacks); DANOS's fork packaging targeted 1.6.1"
   - name: "ppp"
     kind: "debian"
     milestone: "1.0"

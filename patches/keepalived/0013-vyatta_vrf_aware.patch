@@ -1,0 +1,103 @@
+Add VRF VMAC awareness
+
+Vyatta specific change.
+Added config option on a per-group basis to allow VRRP VMAC interfaces to be
+created in either the base interface's VRF or in the default global interface
+
+
+diff --git a/keepalived/include/vrrp.h b/keepalived/include/vrrp.h
+index 0165c532..e1b0bfb9 100644
+--- a/keepalived/include/vrrp.h
++++ b/keepalived/include/vrrp.h
+@@ -327,6 +327,9 @@ typedef struct _vrrp_t {
+ 	int			ipvlan_type;		/* Bridge, private or VEPA mode */
+ #endif
+ 	interface_t		*configured_ifp;	/* Interface the configuration says we are on */
++#ifdef _HAVE_VRF_
++	bool 			vrf_aware; 			/* Create VMAC interface in the base interface VRF or the Global VRF*/
++#endif
+ #endif
+ 	list_head_t		track_ifp;		/* tracked_if_t - Interface state we monitor */
+ 	list_head_t		track_script;		/* tracked_sc_t - Script state we monitor */
+diff --git a/keepalived/vrrp/vrrp.c b/keepalived/vrrp/vrrp.c
+index db5ee4d0..57d34847 100644
+--- a/keepalived/vrrp/vrrp.c
++++ b/keepalived/vrrp/vrrp.c
+@@ -3641,6 +3641,14 @@ vrrp_complete_instance(vrrp_t * vrrp)
+ 							, vrrp->iname);
+ 		vrrp->num_config_faults++;	/* Stop the vrrp instance running */
+ 	}
++#ifdef _HAVE_VRF_
++	if (vrrp->vrf_aware == PARAMETER_UNSET)
++		vrrp->vrf_aware = false;
++	if((!__test_bit(VRRP_VMAC_BIT, &vrrp->vmac_flags)) && vrrp->vrf_aware) {
++		log_message(LOG_INFO, "VRRP_Instance(%s) is VRF aware but not using an RFC interface, discarding VRF aware");
++		vrrp->vrf_aware = false;
++	}
++#endif
+ #endif
+ 
+ 	/* If the interface doesn't support multicast, then we need to use unicast */
+diff --git a/keepalived/vrrp/vrrp_data.c b/keepalived/vrrp/vrrp_data.c
+index 0671d5c6..1b564c20 100644
+--- a/keepalived/vrrp/vrrp_data.c
++++ b/keepalived/vrrp/vrrp_data.c
+@@ -768,6 +768,9 @@ dump_vrrp(FILE *fp, const vrrp_t *vrrp)
+ #ifdef _HAVE_VRRP_VMAC_
+ 	if (vrrp->ifp && vrrp->configured_ifp && vrrp->configured_ifp != vrrp->ifp->base_ifp && vrrp->ifp->is_ours)
+ 		conf_write(fp, "   Configured interface = %s", vrrp->configured_ifp->ifname);
++#ifdef _HAVE_VRF_
++	conf_write(fp, "   VRF aware for VMAC interfaces = %s", (vrrp->vrf_aware? "Yes" : "No"));
++#endif
+ #endif
+ #ifdef _HAVE_VRF_
+ 	if (vrrp->vrf_ifp)
+diff --git a/keepalived/vrrp/vrrp_parser.c b/keepalived/vrrp/vrrp_parser.c
+index 56e04b03..ea376d67 100644
+--- a/keepalived/vrrp/vrrp_parser.c
++++ b/keepalived/vrrp/vrrp_parser.c
+@@ -637,6 +637,15 @@ vrrp_vmac_xmit_base_handler(__attribute__((unused)) const vector_t *strvec)
+ {
+ 	__set_bit(VRRP_VMAC_XMITBASE_BIT, &current_vrrp->flags);
+ }
++#ifdef _HAVE_VRF_
++static void
++vrrp_vmac_vrf_aware_handler(__attribute__((unused)) const vector_t *strvec)
++{
++	vrrp_t *vrrp = list_last_entry(&vrrp_data->vrrp, vrrp_t, e_list);
++
++	vrrp->vrf_aware = true;
++}
++#endif
+ #endif
+ #ifdef _HAVE_VRRP_IPVLAN_
+ static void
+@@ -2350,6 +2359,9 @@ init_vrrp_keywords(bool active)
+ 	install_keyword("use_vmac", &vrrp_vmac_handler);
+ 	install_keyword("use_vmac_addr", &vrrp_vmac_addr_handler);
+ 	install_keyword("vmac_xmit_base", &vrrp_vmac_xmit_base_handler);
++#ifdef _HAVE_VRF_
++	install_keyword("vrf_aware", &vrrp_vmac_vrf_aware_handler);
++#endif
+ #endif
+ #ifdef _HAVE_VRRP_IPVLAN_
+ 	install_keyword("use_ipvlan", &vrrp_ipvlan_handler);
+diff --git a/keepalived/vrrp/vrrp_vmac.c b/keepalived/vrrp/vrrp_vmac.c
+index a61c9c24..836f156d 100644
+--- a/keepalived/vrrp/vrrp_vmac.c
++++ b/keepalived/vrrp/vrrp_vmac.c
+@@ -444,8 +444,12 @@ netlink_link_add_vmac(vrrp_t *vrrp, const interface_t *old_interface)
+ #ifdef _HAVE_VRF_
+ 		/* If the underlying interface is enslaved to a VRF master, then this
+ 		 * interface should be as well. */
+-		if (vrrp->configured_ifp->vrf_master_ifp || update_interface)
+-			addattr32(&req.n, sizeof(req), IFLA_MASTER, vrrp->configured_ifp->vrf_master_ifp ? vrrp->configured_ifp->vrf_master_ifp->ifindex : 0);
++		/* Vyatta: only a vrf_aware instance puts its VMAC in the base interface's
++		 * VRF; otherwise it stays in the default VRF (and is moved back there on
++		 * update). */
++		if (update_interface || (vrrp->vrf_aware && vrrp->configured_ifp->vrf_master_ifp))
++			addattr32(&req.n, sizeof(req), IFLA_MASTER,
++				  vrrp->vrf_aware && vrrp->configured_ifp->vrf_master_ifp ? vrrp->configured_ifp->vrf_master_ifp->ifindex : 0);
+ #endif
+ 
+ 		if (netlink_talk(&nl_cmd, &req.n) < 0) {

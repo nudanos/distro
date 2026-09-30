@@ -1,0 +1,792 @@
+Description: Adapt the DANOS patch stack to keepalived 2.4.3 after the rebase from 2.2.0.
+ 
+ - _HAVE_FIB_ROUTING_ no longer exists; the guards around track_route code
+   would have compiled it out silently. Removed with their #endif.
+ - vrrp->vmac_flags is now part of vrrp->flags; nopreempt is the
+   VRRP_FLAG_NOPREEMPT bit.
+ - The num_script_if_fault counter became fault flags: trackers use
+   set_fault()/down_instance()/try_up_instance() with VRRP_FAULT_FL_TRACKER;
+   a VMAC that cannot be brought up at MASTER sets
+   VRRP_FAULT_FL_INTERFACE_DOWN.
+ - Parser handlers use current_vrrp: in 2.4 the instance being parsed is not
+   yet on vrrp_data->vrrp, so list_last_entry() returned a bogus instance
+   and track_pathmon crashed the config test (track_route wrote through the
+   same bad pointer).
+ - vrrp_sync_backup() gained a resign argument; the state-transition table
+   uses a wrapper keeping resign=false.
+ - vrrp_snmp_check_for_daemon() uses the 2.4 thread API.
+ - sockaddr_t replaces struct sockaddr_storage in DANOS code; interface
+   address checks test the in_addr/in6_addr directly.
+ - Removed the SOCK_CLOEXEC/SOCK_NONBLOCK fallbacks (2.4 dropped the checks).
+ - DANOS bugs fixed on the way: uninitialised sockopt/auxopt passed to
+   setsockopt (auxopt 0 disables PACKET_AUXDATA and the VLAN check),
+   unbounded strncpy of track_route/track_pathmon names, a missing log
+   argument, and a bool compared with PARAMETER_UNSET.
+ 
+
+
+diff --git a/keepalived/core/keepalived_netlink.c b/keepalived/core/keepalived_netlink.c
+index 06f2fe94..ceee89a4 100644
+--- a/keepalived/core/keepalived_netlink.c
++++ b/keepalived/core/keepalived_netlink.c
+@@ -163,28 +163,14 @@ addr_is_equal2(struct ifaddrmsg* ifa, void* addr, ip_address_t* vip_addr, interf
+ 		return false;
+ 	if (vip_addr->ifa.ifa_family == AF_INET) {
+ 		sin_addr = PTR_CAST(struct in_addr, addr);
+-		struct sockaddr_in zero_addr;
+-		zero_addr.sin_family = AF_INET;
+-		zero_addr.sin_addr.s_addr = 0;
+-		struct sockaddr_storage saddr;
+-		memset((void *)&saddr, 0, sizeof(struct sockaddr_storage));
+-		inet_ip4tosockaddr(&ifp->sin_addr, &saddr);
+-		if (inet_sockaddrcmp(&saddr, &zero_addr) == 0)
++		/* Vyatta: an interface without an address cannot own the VIP */
++		if (ifp->sin_addr.s_addr == 0)
+ 			return false;
+ 		return vip_addr->u.sin.sin_addr.s_addr == sin_addr->s_addr;
+ 	}
+ 
+-	struct sockaddr_in6 zero_addr6;
+-	zero_addr6.sin6_family = AF_INET6;
+-	zero_addr6.sin6_addr.s6_addr32[0] = 0;
+-	zero_addr6.sin6_addr.s6_addr32[1] = 0;
+-	zero_addr6.sin6_addr.s6_addr32[2] = 0;
+-	zero_addr6.sin6_addr.s6_addr32[3] = 0;
+-	struct sockaddr_storage saddr;
+-	memset((void *)&saddr, 0, sizeof(struct sockaddr_storage));
+-	inet_ip6tosockaddr(&ifp->sin6_addr, &saddr);
+ 	sin6_addr = PTR_CAST(struct in6_addr, addr);
+-	if (inet_sockaddrcmp(&saddr, &zero_addr6) == 0)
++	if (IN6_IS_ADDR_UNSPECIFIED(&ifp->sin6_addr))
+ 		return false;
+ 	return vip_addr->u.sin6_addr.s6_addr32[0] == sin6_addr->s6_addr32[0] &&
+ 	       vip_addr->u.sin6_addr.s6_addr32[1] == sin6_addr->s6_addr32[1] &&
+@@ -1267,7 +1253,7 @@ netlink_if_address_filter(__attribute__((unused)) struct sockaddr_nl *snl, struc
+ 			}
+ 
+ 			/* If one of our VIPs/eVIPs has been deleted, transition to backup so long as preempt isn't disabled */
+-			if (address_vrrp && address_vrrp->state == VRRP_STATE_MAST && !address_vrrp->nopreempt) {
++			if (address_vrrp && address_vrrp->state == VRRP_STATE_MAST && !__test_bit(VRRP_FLAG_NOPREEMPT, &address_vrrp->flags)) {
+ 				set_vrrp_backup(address_vrrp);
+ 			}
+ 		}
+@@ -2811,9 +2797,7 @@ kernel_netlink_init(void)
+ #ifdef _WITH_VRRP_
+ 	netlink_socket(&nl_kernel, global_data->vrrp_netlink_monitor_rcv_bufs, global_data->vrrp_netlink_monitor_rcv_bufs_force,
+ 			SOCK_NONBLOCK,
+-#ifdef _HAVE_FIB_ROUTING_
+ 			 RTNLGRP_IPV4_ROUTE, RTNLGRP_IPV6_ROUTE,
+-#endif
+ 			 RTNLGRP_LINK, RTNLGRP_IPV4_IFADDR, RTNLGRP_IPV6_IFADDR, 0);
+ #else
+ 	netlink_socket(&nl_kernel, global_data->lvs_netlink_monitor_rcv_bufs, global_data->lvs_netlink_monitor_rcv_bufs_force,
+@@ -2824,9 +2808,7 @@ kernel_netlink_init(void)
+ 	if (prog_type == PROG_TYPE_VRRP)
+ 		netlink_socket(&nl_kernel, global_data->vrrp_netlink_monitor_rcv_bufs, global_data->vrrp_netlink_monitor_rcv_bufs_force,
+ 				SOCK_NONBLOCK,
+-#ifdef _HAVE_FIB_ROUTING_
+ 				RTNLGRP_IPV4_ROUTE, RTNLGRP_IPV6_ROUTE,
+-#endif
+ 				RTNLGRP_LINK, RTNLGRP_IPV4_IFADDR, RTNLGRP_IPV6_IFADDR, 0);
+ #endif
+ #ifdef _WITH_LVS_
+diff --git a/keepalived/include/keepalived_netlink.h b/keepalived/include/keepalived_netlink.h
+index 5cad43d7..4adbfabe 100644
+--- a/keepalived/include/keepalived_netlink.h
++++ b/keepalived/include/keepalived_netlink.h
+@@ -52,7 +52,6 @@ typedef struct _nl_handle {
+ #define NLMSG_TAIL(nmsg) ((void *)(((char *) (nmsg)) + NLMSG_ALIGN((nmsg)->nlmsg_len)))
+ #endif
+ 
+-#ifdef _HAVE_FIB_ROUTING_
+ /* Build system complains that the macro doesn't exist
+  * but the code still works with the 0x2000 added to the flag.
+  * Adding this define in case it doesn't exist
+@@ -60,7 +59,6 @@ typedef struct _nl_handle {
+ #ifndef RTM_F_FIB_MATCH
+ #define RTM_F_FIB_MATCH 0x2000
+ #endif
+-#endif
+ #define RTA_TAIL(rta)	PTR_CAST(struct rtattr, (char *)(rta) + RTA_ALIGN((rta)->rta_len))
+ 
+ /* Global vars exported */
+@@ -139,9 +137,7 @@ extern size_t rta_nest_end(struct rtattr *, struct rtattr *);
+ extern ssize_t netlink_talk(nl_handle_t *, struct nlmsghdr *);
+ extern int netlink_interface_lookup(char *);
+ extern int netlink_address_lookup(void);
+-#ifdef _HAVE_FIB_ROUTING_
+ extern int netlink_route_lookup(void);
+-#endif
+ extern void kernel_netlink_poll(void);
+ extern void process_if_status_change(interface_t *);
+ #endif
+diff --git a/keepalived/include/vrrp.h b/keepalived/include/vrrp.h
+index 4a704446..ecd6eb52 100644
+--- a/keepalived/include/vrrp.h
++++ b/keepalived/include/vrrp.h
+@@ -343,9 +343,7 @@ typedef struct _vrrp_t {
+ 	unsigned		num_config_faults;	/* Number of configuration errors */
+ 	unsigned		num_track_fault;	/* Number of trackers (script, bfd...) in fault state */
+ 	unsigned long		flags_if_fault;		/* Flags of interface fault */
+-#ifdef _HAVE_FIB_ROUTING_
+ 	list_head_t		track_route;	/* tracked_route_t - Route whose value we monitor */
+-#endif
+ #ifdef _WITH_DBUS_
+ 	list_head_t		track_pathmon;	/* tracked_pathmon_t - Path monitor whose value we monitor */
+ #endif
+diff --git a/keepalived/include/vrrp_data.h b/keepalived/include/vrrp_data.h
+index c3c40f4a..cbf657a2 100644
+--- a/keepalived/include/vrrp_data.h
++++ b/keepalived/include/vrrp_data.h
+@@ -27,9 +27,7 @@
+ #include <sys/types.h>
+ #include <stdio.h>
+ #include <stdbool.h>
+-#ifdef _HAVE_FIB_ROUTING_
+ #include <gmodule.h>
+-#endif
+ 
+ /* local includes */
+ #include "list_head.h"
+@@ -58,9 +56,7 @@ typedef struct _vrrp_data {
+ 	list_head_t		vrrp_track_bfds;	/* vrrp_tracked_bfd_t */
+ #endif
+ 	unsigned		num_smtp_alert;		/* No of smtp_alerts configured */
+-#ifdef _HAVE_FIB_ROUTING_
+ 	GHashTable 		*vrrp_tracked_routes;
+-#endif
+ #ifdef _WITH_DBUS_
+ 	list_head_t		vrrp_tracked_pathmons;
+ #endif
+@@ -103,9 +99,7 @@ extern void alloc_vrrp_group_track_process(const vector_t *);
+ #ifdef _WITH_BFD_
+ extern void alloc_vrrp_group_track_bfd(const vector_t *);
+ #endif
+-#ifdef _HAVE_FIB_ROUTING_
+ extern void alloc_vrrp_track_route(const vector_t *);
+-#endif
+ #ifdef _WITH_DBUS_
+ extern void alloc_vrrp_track_pathmon(const vector_t *);
+ #endif
+diff --git a/keepalived/include/vrrp_track.h b/keepalived/include/vrrp_track.h
+index 883d7dbb..3d789c78 100644
+--- a/keepalived/include/vrrp_track.h
++++ b/keepalived/include/vrrp_track.h
+@@ -179,7 +179,6 @@ typedef struct _tracked_bfd {
+ } tracked_bfd_t;
+ #endif
+ 
+-#ifdef _HAVE_FIB_ROUTING_
+ typedef struct _route_to {
+ 	struct sockaddr_storage 	network;	/* Network */
+ 	uint32_t				 	prefix;		/* Prefix */
+@@ -194,7 +193,6 @@ typedef struct _tracked_route {
+ 	/* linked list member */
+ 	list_head_t		e_list;
+ } tracked_route_t;
+-#endif
+ 
+ #ifdef _WITH_DBUS_
+ /* Tracked path monitor structure definition */
+@@ -257,13 +255,11 @@ extern void free_track_bfd(tracked_bfd_t *);
+ extern void free_track_bfd_list(list_head_t *);
+ extern void alloc_track_bfd(const char *, list_head_t *, const vector_t *);
+ #endif
+-#ifdef _HAVE_FIB_ROUTING_
+ extern void dump_track_route_list(FILE *, const list_head_t *);
+ extern void free_track_route(tracked_route_t *);
+ extern void free_track_route_list(list_head_t *);
+ extern void alloc_track_route(const char *, list_head_t *, const vector_t *);
+ extern void update_route_priorities(struct _vrrp_t *, route_to_t *);
+-#endif
+ #ifdef _WITH_DBUS_
+ extern void dump_track_pathmon_list(FILE *, const list_head_t *);
+ extern void free_track_pathmon(tracked_pathmon_t *);
+diff --git a/keepalived/vrrp/vrrp.c b/keepalived/vrrp/vrrp.c
+index b36f0fb7..61086fb7 100644
+--- a/keepalived/vrrp/vrrp.c
++++ b/keepalived/vrrp/vrrp.c
+@@ -1980,16 +1980,18 @@ vrrp_state_become_master(vrrp_t * vrrp)
+ 
+ #ifdef _HAVE_VRRP_VMAC_
+ 	int status;
+-	if (__test_bit(VRRP_VMAC_BIT, &vrrp->vmac_flags)) {
++	if (__test_bit(VRRP_VMAC_BIT, &vrrp->flags)) {
+ 		status = netlink_link_up(vrrp);
+ 		if (status != -1)
+-			__set_bit(VRRP_VMAC_UP_BIT, &vrrp->vmac_flags);
++			__set_bit(VRRP_VMAC_UP_BIT, &vrrp->flags);
+ 		else {
+-			vrrp->num_script_if_fault++;
++			/* The VMAC could not be brought up: stay in FAULT until the
++			 * interface comes back (cleared by the interface up handling). */
++			__set_bit(VRRP_FAULT_FL_INTERFACE_DOWN, &vrrp->flags_if_fault);
+ 			vrrp->state = vrrp->wantstate = VRRP_STATE_FAULT;
+ 			/* Set the down timer */
+ 			vrrp->master_adver_int = vrrp->adver_int;
+-			vrrp->ms_down_timer = 3 * vrrp->master_adver_int + VRRP_TIMER_SKEW(vrrp);
++			vrrp->ms_down_timer = VRRP_MS_DOWN_TIMER(vrrp);
+ 			vrrp_init_instance_sands(vrrp);
+ 			vrrp->last_transition = timer_now();
+ 			return;
+@@ -2184,8 +2186,8 @@ vrrp_state_leave_master(vrrp_t * vrrp, bool advF)
+ 	send_instance_notifies(vrrp);
+ 
+ #ifdef _HAVE_VRRP_VMAC_
+-	if (__test_bit(VRRP_VMAC_BIT, &vrrp->vmac_flags)) {
+-		__clear_bit(VRRP_VMAC_UP_BIT, &vrrp->vmac_flags);
++	if (__test_bit(VRRP_VMAC_BIT, &vrrp->flags)) {
++		__clear_bit(VRRP_VMAC_UP_BIT, &vrrp->flags);
+ 		netlink_link_down(vrrp);
+ 	}
+ #endif
+@@ -2209,8 +2211,8 @@ vrrp_state_leave_fault(vrrp_t * vrrp)
+ 	/* set the new vrrp state */
+ 	if (vrrp->wantstate == VRRP_STATE_MAST) {
+ #ifdef _HAVE_VRRP_VMAC_
+-		if (__test_bit(VRRP_VMAC_BIT, &vrrp->vmac_flags)){
+-			__set_bit(VRRP_VMAC_UP_BIT, &vrrp->vmac_flags);
++		if (__test_bit(VRRP_VMAC_BIT, &vrrp->flags)){
++			__set_bit(VRRP_VMAC_UP_BIT, &vrrp->flags);
+ 			netlink_link_up(vrrp);
+ 		}
+ #endif
+@@ -2933,7 +2935,6 @@ open_vrrp_read_socket(sa_family_t family, int proto, const interface_t *ifp,
+ 	socklen_t len = sizeof(val);
+ 	int sockopt = 1;	/* was uninitialised in DANOS 2.2 */
+ 	int auxopt = 1;		/* likewise: 0 would disable PACKET_AUXDATA */
+-	struct ifreq ifopts;
+ 	struct packet_mreq pmreq = {0};
+ 	struct sockaddr_ll bind_struct;
+ 
+@@ -2969,12 +2970,6 @@ open_vrrp_read_socket(sa_family_t family, int proto, const interface_t *ifp,
+ 		return -1;
+ 	}
+ 
+-#if !HAVE_DECL_SOCK_CLOEXEC
+-	set_sock_flags(fd, F_SETFD, FD_CLOEXEC);
+-#endif
+-#if !HAVE_DECL_SOCK_NONBLOCK
+-	set_sock_flags(fd, F_SETFL, O_NONBLOCK);
+-#endif
+ 
+ 	if (rx_buf_size) {
+ 		if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &val, len))
+@@ -3465,11 +3460,10 @@ vrrp_complete_instance(vrrp_t * vrrp)
+ #ifdef _WITH_BFD_
+ 	tracked_bfd_t *tbfd, *tbfd_tmp;
+ #endif
+-	tracked_route_t *tr, *tr_tmp;
+ 	ip_route_t *route;
+ 	ip_rule_t *rule;
+ #ifdef _WITH_DBUS_
+-	tracked_pathmon_t *tpm, *tpm_tmp;
++	tracked_pathmon_t *tpm;
+ #endif
+ 
+ 	if (vrrp->strict_mode == PARAMETER_UNSET)
+@@ -3656,10 +3650,8 @@ vrrp_complete_instance(vrrp_t * vrrp)
+ 		vrrp->num_config_faults++;	/* Stop the vrrp instance running */
+ 	}
+ #ifdef _HAVE_VRF_
+-	if (vrrp->vrf_aware == PARAMETER_UNSET)
+-		vrrp->vrf_aware = false;
+-	if((!__test_bit(VRRP_VMAC_BIT, &vrrp->vmac_flags)) && vrrp->vrf_aware) {
+-		log_message(LOG_INFO, "VRRP_Instance(%s) is VRF aware but not using an RFC interface, discarding VRF aware");
++	if((!__test_bit(VRRP_VMAC_BIT, &vrrp->flags)) && vrrp->vrf_aware) {
++		log_message(LOG_INFO, "VRRP_Instance(%s) is VRF aware but not using an RFC interface, discarding VRF aware", vrrp->iname);
+ 		vrrp->vrf_aware = false;
+ 	}
+ #endif
+@@ -5584,7 +5576,7 @@ restore_vrrp_state(vrrp_t *old_vrrp, vrrp_t *vrrp)
+ 	bool added_ip_addr = false;
+ 
+ 	/* If the new state is master, we must be reloading from master */
+-	if(vrrp->state == VRRP_STATE_MAST || (old_vrrp->state == VRRP_STATE_MAST && vrrp->nopreempt && vrrp->base_priority != old_vrrp->base_priority)) {
++	if(vrrp->state == VRRP_STATE_MAST || (old_vrrp->state == VRRP_STATE_MAST && __test_bit(VRRP_FLAG_NOPREEMPT, &vrrp->flags) && vrrp->base_priority != old_vrrp->base_priority)) {
+ 		vrrp->reload_master = true;
+ 		vrrp->state =
+ #ifdef _WITH_SNMP_VRRP
+@@ -5949,8 +5941,8 @@ vrrp_check_for_owner_mode(vrrp_t *vrrp)
+ 	bool was_owner = vrrp->addr_owner;
+ 	ip_address_t *vip;
+ 	interface_t *ifp = IF_BASE_IFP(vrrp->ifp);
+-	struct sockaddr_storage saddr;
+-	memset((void *)&saddr, 0, sizeof(struct sockaddr_storage));
++	sockaddr_t saddr;
++	memset(&saddr, 0, sizeof(saddr));
+ 	if (vrrp->family == AF_INET) {
+ 		inet_ip4tosockaddr(&ifp->sin_addr, &saddr);
+ 	} else {
+diff --git a/keepalived/vrrp/vrrp_daemon.c b/keepalived/vrrp/vrrp_daemon.c
+index b4d64804..867fd1b6 100644
+--- a/keepalived/vrrp/vrrp_daemon.c
++++ b/keepalived/vrrp/vrrp_daemon.c
+@@ -619,10 +619,8 @@ start_vrrp(data_t *prev_global_data)
+ 		}
+ 	}
+ 
+-#ifdef _HAVE_FIB_ROUTING_
+ 	if (g_hash_table_size(vrrp_data->vrrp_tracked_routes) > 0)
+ 		netlink_route_lookup();
+-#endif
+ 
+ 	if (!__test_bit(CONFIG_TEST_BIT, &debug)) {
+ 		/* Init & start the VRRP packet dispatcher */
+diff --git a/keepalived/vrrp/vrrp_data.c b/keepalived/vrrp/vrrp_data.c
+index 1b564c20..ef726d83 100644
+--- a/keepalived/vrrp/vrrp_data.c
++++ b/keepalived/vrrp/vrrp_data.c
+@@ -612,10 +612,8 @@ free_vrrp(vrrp_t *vrrp)
+ #ifdef _WITH_BFD_
+ 	free_track_bfd_list(&vrrp->track_bfd);
+ #endif
+-#ifdef _HAVE_FIB_ROUTING_
+ 	// Free the list, the elements should be freed from the global hash map
+ 	free_track_route_list(&vrrp->track_route);
+-#endif
+ #ifdef _WITH_DBUS_
+ 	free_track_pathmon_list(&vrrp->track_pathmon);
+ #endif
+@@ -939,7 +937,6 @@ dump_vrrp(FILE *fp, const vrrp_t *vrrp)
+ 		dump_tracked_bfd_list(fp, &vrrp->track_bfd);
+ 	}
+ #endif
+-#ifdef _HAVE_FIB_ROUTING_
+ 	if (!list_empty(&vrrp->track_route)) {
+ 		uint32_t length = 0;
+ 		list_head_t *e;
+@@ -948,7 +945,6 @@ dump_vrrp(FILE *fp, const vrrp_t *vrrp)
+ 		conf_write(fp, "   Tracked routes = %d", length);
+ 		dump_track_route_list(fp, &vrrp->track_route);
+ 	}
+-#endif
+ #ifdef _WITH_DBUS_
+ 	if (!list_empty(&vrrp->track_pathmon)) {
+ 		uint32_t length = 0;
+@@ -1065,9 +1061,7 @@ alloc_vrrp(const char *iname)
+ #ifdef _WITH_BFD_
+ 	INIT_LIST_HEAD(&new->track_bfd);
+ #endif
+-#ifdef _HAVE_FIB_ROUTING_
+ 	INIT_LIST_HEAD(&new->track_route);
+-#endif
+ #ifdef _WITH_DBUS_
+ 	INIT_LIST_HEAD(&new->track_pathmon);
+ #endif
+@@ -1221,23 +1215,17 @@ alloc_vrrp_track_bfd(const vector_t *strvec)
+ }
+ #endif
+ 
+-#ifdef _HAVE_FIB_ROUTING_
+ void
+ alloc_vrrp_track_route(const vector_t *strvec)
+ {
+-	vrrp_t *vrrp = list_last_entry(&vrrp_data->vrrp, vrrp_t, e_list);
+-
+-	alloc_track_route(vrrp->iname, &vrrp->track_route, strvec);
++	alloc_track_route(current_vrrp->iname, &current_vrrp->track_route, strvec);
+ }
+-#endif
+ 
+ #ifdef _WITH_DBUS_
+ void
+ alloc_vrrp_track_pathmon(const vector_t *strvec)
+ {
+-	vrrp_t *vrrp = list_last_entry(&vrrp_data->vrrp, vrrp_t, e_list);
+-
+-	alloc_track_pathmon(vrrp->iname, &vrrp->track_pathmon, strvec);
++	alloc_track_pathmon(current_vrrp->iname, &current_vrrp->track_pathmon, strvec);
+ }
+ #endif
+ 
+@@ -1458,9 +1446,7 @@ alloc_vrrp_data(void)
+ 	INIT_LIST_HEAD(&new->vrrp_track_bfds);
+ #endif
+ 	INIT_LIST_HEAD(&new->vrrp_socket_pool);
+-#ifdef _HAVE_FIB_ROUTING_
+ 	new->vrrp_tracked_routes = g_hash_table_new(g_str_hash, g_str_equal);
+-#endif
+ #ifdef _WITH_DBUS_
+ 	INIT_LIST_HEAD(&new->vrrp_tracked_pathmons);
+ #endif
+@@ -1468,7 +1454,6 @@ alloc_vrrp_data(void)
+ 	return new;
+ }
+ 
+-#ifdef _HAVE_FIB_ROUTING_
+ static void
+ free_hash_table_entries(gpointer key, gpointer value, gpointer user_data)
+ {
+@@ -1501,7 +1486,6 @@ dump_tracked_routes(FILE *fp, GHashTable * route_map)
+ {
+ 	g_hash_table_foreach(route_map, (GHFunc)dump_route_to, (gpointer)fp);
+ }
+-#endif
+ 
+ #ifdef _WITH_DBUS_
+ static void
+@@ -1525,10 +1509,8 @@ void
+ free_vrrp_data(vrrp_data_t ** datap)
+ {
+ 	vrrp_data_t *data = *datap;
+-#ifdef _HAVE_FIB_ROUTING_
+ 	g_hash_table_foreach(data->vrrp_tracked_routes, (GHFunc)free_hash_table_entries, NULL);
+ 	g_hash_table_destroy(data->vrrp_tracked_routes);
+-#endif
+ 
+ 	free_ipaddress_list(&data->static_addresses);
+ 	free_iproute_list(&data->static_routes);
+@@ -1602,12 +1584,10 @@ dump_vrrp_data(FILE *fp, const vrrp_data_t * data)
+ 		dump_vrrp_tracked_bfd_list(fp, &data->vrrp_track_bfds);
+ 	}
+ #endif
+-#ifdef _HAVE_FIB_ROUTING_
+ 	if (data->vrrp_tracked_routes != NULL && g_hash_table_size(data->vrrp_tracked_routes) > 0) {
+ 		conf_write(fp, "------< VRRP Tracked Routes >------");
+ 		dump_tracked_routes(fp, data->vrrp_tracked_routes);
+ 	}
+-#endif
+ #ifdef _WITH_DBUS_
+ 	if (!list_empty(&data->vrrp_tracked_pathmons)) {
+ 		conf_write(fp, "------< VRRP Tracked Pathmonitors >------");
+diff --git a/keepalived/vrrp/vrrp_dbus.c b/keepalived/vrrp/vrrp_dbus.c
+index adb8226b..7dcfe7a4 100644
+--- a/keepalived/vrrp/vrrp_dbus.c
++++ b/keepalived/vrrp/vrrp_dbus.c
+@@ -71,9 +71,7 @@
+ #include "vrrp_print.h"
+ #include "vrrp_sync.h"
+ #include "vrrp_track.h"
+-#ifdef _RECVMSG_DEBUG_
+ #include "vrrp_scheduler.h"
+-#endif
+ #include "global_data.h"
+ #include "main.h"
+ #include "logger.h"
+@@ -1110,9 +1108,9 @@ handle_dbus_msg(__attribute__((unused)) thread_ref_t thread)
+ 										if (tpm->pathmon == vpm) {
+ 											if (!tpm->weight) {
+ 												if (tpm->pathmon->is_up)
+-													try_up_instance(vrrp, false);
++													try_up_instance(vrrp, false, VRRP_FAULT_FL_TRACKER);
+ 												else
+-													down_instance(vrrp);
++													down_instance(vrrp, VRRP_FAULT_FL_TRACKER);
+ 											} else if (vrrp->base_priority != VRRP_PRIO_OWNER ) {
+ 												if ((tpm->weight > 0) == tpm->pathmon->is_up) {
+ 													vrrp->total_priority += tpm->weight;
+diff --git a/keepalived/vrrp/vrrp_parser.c b/keepalived/vrrp/vrrp_parser.c
+index ea376d67..af993528 100644
+--- a/keepalived/vrrp/vrrp_parser.c
++++ b/keepalived/vrrp/vrrp_parser.c
+@@ -641,9 +641,7 @@ vrrp_vmac_xmit_base_handler(__attribute__((unused)) const vector_t *strvec)
+ static void
+ vrrp_vmac_vrf_aware_handler(__attribute__((unused)) const vector_t *strvec)
+ {
+-	vrrp_t *vrrp = list_last_entry(&vrrp_data->vrrp, vrrp_t, e_list);
+-
+-	vrrp->vrf_aware = true;
++	current_vrrp->vrf_aware = true;
+ }
+ #endif
+ #endif
+@@ -972,13 +970,11 @@ vrrp_track_bfd_handler(const vector_t *strvec)
+ 	alloc_value_block(alloc_vrrp_track_bfd, strvec);
+ }
+ #endif
+-#ifdef _HAVE_FIB_ROUTING_
+ static void
+ vrrp_track_route_handler(const vector_t *strvec)
+ {
+ 	alloc_value_block(alloc_vrrp_track_route, strvec);
+ }
+-#endif
+ #ifdef _WITH_DBUS_
+ static void
+ vrrp_track_pathmon_handler(const vector_t *strvec)
+@@ -2388,9 +2384,7 @@ init_vrrp_keywords(bool active)
+ #ifdef _WITH_BFD_
+ 	install_keyword("track_bfd", &vrrp_track_bfd_handler);
+ #endif
+-#ifdef _HAVE_FIB_ROUTING_
+ 	install_keyword("track_route_to", &vrrp_track_route_handler);
+-#endif
+ #ifdef _WITH_DBUS_
+ 	install_keyword("track_pathmon", &vrrp_track_pathmon_handler);
+ #endif
+diff --git a/keepalived/vrrp/vrrp_scheduler.c b/keepalived/vrrp/vrrp_scheduler.c
+index 89cba2f5..7ab88b2d 100644
+--- a/keepalived/vrrp/vrrp_scheduler.c
++++ b/keepalived/vrrp/vrrp_scheduler.c
+@@ -171,6 +171,14 @@ static void vrrp_read_dispatcher_thread(thread_ref_t);
+  *    o F->F: To speed up FAULT state transition if group is not already
+  *            synced to FAULT state.
+  */
++/* vrrp_sync_backup() gained a resign argument for the DBus ResetMaster
++ * method; state transitions keep the original behaviour. */
++static void
++vrrp_sync_backup_tsm(vrrp_t *vrrp)
++{
++	vrrp_sync_backup(vrrp, false);
++}
++
+ static struct {
+ 	void (*handler) (vrrp_t *);
+ } VRRP_TSM[VRRP_MAX_TSM_STATE + 1][VRRP_MAX_TSM_STATE + 1] =
+@@ -178,7 +186,7 @@ static struct {
+ /* From:	  To: >	  BACKUP			MASTER		    FAULT */
+ /*   v    */	{ {NULL}, {NULL},			{NULL},		   {NULL} },
+ /* BACKUP */	{ {NULL}, {NULL},			{vrrp_sync_master}, {NULL} },
+-/* MASTER */	{ {NULL}, {vrrp_sync_backup},		{vrrp_sync_master}, {NULL} },
++/* MASTER */	{ {NULL}, {vrrp_sync_backup_tsm},	{vrrp_sync_master}, {NULL} },
+ /* FAULT  */	{ {NULL}, {NULL},			{vrrp_sync_master}, {NULL} }
+ };
+ 
+@@ -1009,7 +1017,7 @@ vrrp_dispatcher_read(sock_t *sock)
+ 
+ 	/* IPv4 */
+ 	struct iphdr *iph;
+-	uint32_t pkt_saddr_ipv4;
++	struct in_addr pkt_saddr_ipv4;
+ 	char ipv4_str[INET_ADDRSTRLEN];
+ 
+ 	/* IPv6 */
+@@ -1260,7 +1268,7 @@ vrrp_dispatcher_read(sock_t *sock)
+ 		if (sock->family == AF_INET) {
+ 			/* IPv4 - Extract source addr, and check for own pkt */
+ 			iph = (struct iphdr *) eth_payload;
+-			pkt_saddr_ipv4 = iph->saddr;
++			pkt_saddr_ipv4.s_addr = iph->saddr;
+ 
+ 			inet_ntop(AF_INET, &pkt_saddr_ipv4,
+ 					  ipv4_str, sizeof(ipv4_str));
+diff --git a/keepalived/vrrp/vrrp_snmp.c b/keepalived/vrrp/vrrp_snmp.c
+index 9206ec46..a9d4157c 100644
+--- a/keepalived/vrrp/vrrp_snmp.c
++++ b/keepalived/vrrp/vrrp_snmp.c
+@@ -3505,7 +3505,8 @@ vrrp_rfcv2_snmp_opertable(struct variable *vp, oid *name, size_t *length,
+ 			*var_len = sizeof(struct in6_addr);
+ 			return PTR_CAST2(u_char, struct sockaddr_in6, &rt->master_saddr, sin6_addr);
+ 		}
+-		/* Fall through. If we are master, we want to return the Primary IP address */
++		/* If we are master, we want to return the Primary IP address */
++		__attribute__((fallthrough));
+ 	case VRRP_RFC_SNMP_OPER_PIP:
+ 		if (!rt->ifp)
+ 			return NULL;
+@@ -4571,31 +4572,29 @@ vrrp_handles_global_oid(const data_t *global_data_in_use)
+  * we're connected so there may still be problems. This should solve the problem
+  * where keepalived doesn't connect to SNMP after a reboot.
+  */
+-int
+-vrrp_snmp_check_for_daemon(thread_t * thread)
++void
++vrrp_snmp_check_for_daemon(thread_ref_t thread)
+ {
+ 	log_message(LOG_DEBUG, "Checking if SNMPd is running");
+ 	defer_snmp_args_t * args;
+ 	args = THREAD_ARG(thread);
+ 	if (access("/var/run/snmpd.pid", F_OK) != 0) {
+-		timeval_t now = timer_now();
+ 		log_message(LOG_DEBUG, "SNMPd is not running, creating timer thread to "
+ 					"check in %d seconds.", (1<<args->retries));
+ 		/* Check for the file presence using an exponential backoff algorithm. */
+-		thread_add_timer(thread->master, vrrp_snmp_check_for_daemon, args,
++		thread_add_timer(master, vrrp_snmp_check_for_daemon, args,
+ 			(1<<args->retries)*TIMER_HZ);
+ 		/* SNMP_RETRY_CEILING defined in include/snmp.h, set to 8 */
+ 		if (args->retries < SNMP_RETRY_CEILING) {
+ 			args->retries++;
+ 		}
+-		return -1;
++		return;
+ 	}
+ 	/* Assume SNMPd is running when the pid file exists. */
+ 	log_message(LOG_DEBUG, "SNMPD is running");
+ 	snmp_agent_init(args->socket, args->base_mib);
+ 	free((void *)args);
+ 	vrrp_snmp_register_mibs();
+-	return 0;
+ }
+ 
+ 
+@@ -4616,7 +4615,7 @@ vrrp_snmp_agent_init(const char *snmp_socket_name)
+ }
+ 
+ void
+-vrrp_snmp_register_mibs()
++vrrp_snmp_register_mibs(void)
+ {
+ 
+ #ifdef _WITH_SNMP_VRRP_
+diff --git a/keepalived/vrrp/vrrp_sync.c b/keepalived/vrrp/vrrp_sync.c
+index c5dd73a2..22666d41 100644
+--- a/keepalived/vrrp/vrrp_sync.c
++++ b/keepalived/vrrp/vrrp_sync.c
+@@ -54,9 +54,7 @@ vrrp_sync_set_group(vrrp_sgroup_t *sgroup)
+ 	unsigned int i;
+ 	bool group_member_down = false;
+ 	tracked_if_t *tip, *tip_tmp;
+-#ifdef _HAVE_FIB_ROUTING_
+ 	tracked_route_t *tr, *tr_tmp;
+-#endif
+ 
+ 	/* Can't handle no members of the group */
+ 	if (!sgroup->iname)
+@@ -87,7 +85,6 @@ vrrp_sync_set_group(vrrp_sgroup_t *sgroup)
+ 				tip->weight = 0;
+ 			}
+ 		}
+-#ifdef _HAVE_FIB_ROUTING_
+ 		list_for_each_entry_safe(tr, tr_tmp, &vrrp->track_route, e_list) {
+ 			if (tr->weight) {
+ 				report_config_error(CONFIG_GENERAL_ERROR, "(%s) ignoring"
+@@ -96,7 +93,6 @@ vrrp_sync_set_group(vrrp_sgroup_t *sgroup)
+ 				tr->weight = 0;
+ 			}
+ 		}
+-#endif
+ 
+ 		/* set eventual sync group state. Unless all members are master and address owner,
+ 		 * then we must be backup */
+diff --git a/keepalived/vrrp/vrrp_track.c b/keepalived/vrrp/vrrp_track.c
+index bb134475..71f3224e 100644
+--- a/keepalived/vrrp/vrrp_track.c
++++ b/keepalived/vrrp/vrrp_track.c
+@@ -541,7 +541,6 @@ alloc_track_bfd(const char *name, list_head_t *l, const vector_t *strvec)
+ }
+ #endif
+ 
+-#ifdef _HAVE_FIB_ROUTING_
+ /* Track route dump */
+ static void
+ dump_track_route(FILE *fp, const tracked_route_t *tr)
+@@ -605,7 +604,7 @@ alloc_track_route(const char *name, list_head_t *l, const vector_t *strvec)
+ 	char *vector = vector_slot(strvec, 0);
+ 	char route_to_config[INET6_ADDRSTRLEN+10];
+ 	memset(route_to_config, 0, sizeof(route_to_config));
+-	strncpy(route_to_config, vector, strlen(vector));
++	snprintf(route_to_config, sizeof(route_to_config), "%s", vector);	/* was an unbounded strncpy */
+ 
+ 	if (vector_size(strvec) >= 2) {
+ 		if (strcmp(strvec_slot(strvec, 1), "weight")) {
+@@ -691,7 +690,6 @@ alloc_track_route(const char *name, list_head_t *l, const vector_t *strvec)
+ 
+ 	list_add_tail(&troute->e_list, l);
+ }
+-#endif
+ #ifdef _WITH_DBUS_
+ /* Track route dump */
+ static void
+@@ -750,10 +748,8 @@ alloc_track_pathmon(const char *name, list_head_t *l, const vector_t *strvec)
+ 
+ 	memset(pathmonitor, 0, sizeof(pathmonitor));
+ 	monitor = MALLOC(sizeof(char)*PATHMON_NAME_MAX_SIZE+1);
+-	memset(monitor, 0, sizeof(monitor));
+ 	policy = MALLOC(sizeof(char)*PATHMON_NAME_MAX_SIZE+1);
+-	memset(policy, 0, sizeof(policy));
+-	strncpy(pathmonitor, vector, strlen(vector));
++	snprintf(pathmonitor, sizeof(pathmonitor), "%s", vector);	/* was an unbounded strncpy */
+ 
+ 	if (vector_size(strvec) >= 2) {
+ 		if (strcmp(strvec_slot(strvec, 1), "weight")) {
+@@ -1060,7 +1056,6 @@ initialise_track_bfd_state(tracked_bfd_t *tbfd, vrrp_t *vrrp)
+ }
+ #endif
+ 
+-#ifdef _HAVE_FIB_ROUTING_
+ static void
+ initialise_track_route_state(tracked_route_t *tr, vrrp_t *vrrp)
+ {
+@@ -1074,16 +1069,15 @@ initialise_track_route_state(tracked_route_t *tr, vrrp_t *vrrp)
+ 			if (tr->weight < 0)
+ 				vrrp->total_priority += tr->weight * multiplier;
+ 			else if (!tr->weight) {
+-				vrrp->num_script_if_fault++;
++				set_fault(vrrp, VRRP_FAULT_FL_TRACKER);
+ 				vrrp->state = VRRP_STATE_FAULT;
+ 			}
+ 		}
+ 	} else if (tr->route->is_up == tr->weight_reverse) {
+-		vrrp->num_script_if_fault++;
++		set_fault(vrrp, VRRP_FAULT_FL_TRACKER);
+ 		vrrp->state = VRRP_STATE_FAULT;
+ 	}
+ }
+-#endif
+ 
+ #ifdef _WITH_DBUS_
+ static void
+@@ -1100,7 +1094,7 @@ initialise_track_pathmon_state(tracked_pathmon_t *tpm, vrrp_t *vrrp)
+ 				vrrp->total_priority += tpm->weight * multiplier;
+ 		}
+ 	} else if (tpm->pathmon->is_up == tpm->weight_reverse) {
+-		vrrp->num_script_if_fault++;
++		set_fault(vrrp, VRRP_FAULT_FL_TRACKER);
+ 		vrrp->state = VRRP_STATE_FAULT;
+ 	}
+ }
+@@ -1225,9 +1219,7 @@ initialise_vrrp_tracking_priorities(vrrp_t *vrrp)
+ 	tracked_bfd_t *tbfd;
+ #endif
+ 
+-#ifdef _HAVE_FIB_ROUTING_
+ 	tracked_route_t *tr;
+-#endif
+ 
+ #ifdef _WITH_DBUS_
+ 	tracked_pathmon_t *tpm;
+@@ -1253,11 +1245,9 @@ initialise_vrrp_tracking_priorities(vrrp_t *vrrp)
+ 		initialise_track_bfd_state(tbfd, vrrp);
+ #endif
+ 
+-#ifdef _HAVE_FIB_ROUTING_
+ 	/* Initialise the VRRP instance's tracked routes */
+ 	list_for_each_entry(tr, &vrrp->track_route, e_list)
+ 		initialise_track_route_state(tr, vrrp);
+-#endif
+ 
+ #ifdef _WITH_DBUS_
+ 	/* Initialise the VRRP instance's tracked pathmonitors */
+@@ -1345,7 +1335,6 @@ process_update_track_process_status(vrrp_tracked_process_t *tprocess, bool now_u
+ }
+ #endif
+ 
+-#ifdef _HAVE_FIB_ROUTING_
+ void
+ update_route_priorities(vrrp_t *vrrp, route_to_t *route)
+ {
+@@ -1356,9 +1345,9 @@ update_route_priorities(vrrp_t *vrrp, route_to_t *route)
+ 		if (tr->route == route) {
+ 			if(!tr->weight) {
+ 				if (tr->route->is_up)
+-					try_up_instance(vrrp, false);
++					try_up_instance(vrrp, false, VRRP_FAULT_FL_TRACKER);
+ 				else
+-					down_instance(vrrp);
++					down_instance(vrrp, VRRP_FAULT_FL_TRACKER);
+ 			}
+ 			else if (vrrp->base_priority != VRRP_PRIO_OWNER) {
+ 				if ((tr->weight > 0) == tr->route->is_up)
+@@ -1370,7 +1359,6 @@ update_route_priorities(vrrp_t *vrrp, route_to_t *route)
+ 		}
+ 	}
+ }
+-#endif
+ 
+ #ifdef _WITH_DBUS_
+ /*
+diff --git a/keepalived/vrrp/vrrp_vmac.c b/keepalived/vrrp/vrrp_vmac.c
+index 97fab14f..65afc570 100644
+--- a/keepalived/vrrp/vrrp_vmac.c
++++ b/keepalived/vrrp/vrrp_vmac.c
+@@ -210,7 +210,7 @@ int
+ netlink_link_up(vrrp_t *vrrp)
+ {
+ #ifdef _HAVE_VRRP_VMAC_
+-	if (__test_bit(VRRP_VMAC_BIT,&vrrp->vmac_flags) && vrrp->family == AF_INET6 && IN6_IS_ADDR_UNSPECIFIED((struct in6_addr *)&vrrp->ifp->sin6_addr)) {
++	if (__test_bit(VRRP_VMAC_BIT,&vrrp->flags) && vrrp->family == AF_INET6 && IN6_IS_ADDR_UNSPECIFIED((struct in6_addr *)&vrrp->ifp->sin6_addr)) {
+ 		ip_address_t ipaddress;
+ 		memset(&ipaddress, 0, sizeof(ipaddress));
+ 		if (!IN6_IS_ADDR_UNSPECIFIED((struct in6_addr *)&(IF_BASE_IFP(vrrp->ifp)->sin6_addr))) {

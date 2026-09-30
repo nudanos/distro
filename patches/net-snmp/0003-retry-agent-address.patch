@@ -1,0 +1,271 @@
+SIAD fails to start SNMP service once it reboots
+
+Retry agent addresses that fail to bind on the
+first attempt. This can happen when snmp daemon
+starts up before the address has been configured
+on an interface. Register an alarm with timeout
+set to a configurable value, and an handler that
+retries all the failed agent addresses. Unregister
+the alarm after attempting configurable maximum
+number of retries.
+
+VRVDR-55962
+--- a/agent/agent_read_config.c
++++ b/agent/agent_read_config.c
+@@ -300,6 +300,12 @@
+     netsnmp_ds_register_config(ASN_INTEGER, app, "maxGetbulkResponses",
+                                NETSNMP_DS_APPLICATION_ID,
+                                NETSNMP_DS_AGENT_MAX_GETBULKRESPONSES);
++    netsnmp_ds_register_config(ASN_INTEGER, app, "addressRetries",
++                               NETSNMP_DS_APPLICATION_ID,
++                               NETSNMP_DS_AGENT_ADDRESS_RETRIES);
++    netsnmp_ds_register_config(ASN_INTEGER, app, "addressTimeout",
++                               NETSNMP_DS_APPLICATION_ID,
++                               NETSNMP_DS_AGENT_ADDRESS_TIMEOUT);
+     netsnmp_ds_register_config(ASN_INTEGER, app, "avgBulkVarbindSize",
+                                NETSNMP_DS_APPLICATION_ID,
+                                NETSNMP_DS_AGENT_AVG_BULKVARBINDSIZE);
+--- a/agent/snmp_agent.c
++++ b/agent/snmp_agent.c
+@@ -1244,7 +1244,133 @@
+ 
+ netsnmp_session *main_session = NULL;
+ 
++static void
++free_retry_addr(netsnmp_retry_address_info *addr)
++{
++    if (addr) {
++        if (!addr->registered)
++            netsnmp_transport_free(addr->transport);
++        if (addr->address)
++            free(addr->address);
++        addr->next = NULL;
++        SNMP_FREE(addr);
++    }
++}
++
++static void
++free_addrlist(netsnmp_retry_address_info *addrlist)
++{
++    netsnmp_retry_address_info *addr = addrlist;
++    netsnmp_retry_address_info *next = NULL;
++
++    while (addr != NULL) {
++        next = addr->next;
++        free_retry_addr(addr);
++        addr = next;
++    }
++}
++
++static void
++add_retry_addr(netsnmp_retry_address_info **addr_list,
++               netsnmp_retry_address_info *addr)
++{
++    addr->next = *addr_list;
++    *addr_list = addr;
++}
++
++static void
++retry_agent_address(unsigned int clientreg, void *clientarg)
++{
++    netsnmp_retry_agent_address *retry_addr = (netsnmp_retry_agent_address *)clientarg;
++    netsnmp_retry_address_info *addr_list;
++    netsnmp_retry_address_info *addr;
++    char           *cptr;
++
++    DEBUGMSGTL(("snmp_retry_address",
++                "retry_agent_address; start max_retries %d, cur_retries %d\n",
++                retry_addr->max_retries, retry_addr->cur_retries));
++
++#ifndef NETSNMP_NO_LISTEN_SUPPORT
++    addr_list = retry_addr->addr_list;
++    if (!addr_list) {
++        DEBUGMSGTL(("snmp_retry_address", "no agent addresses to retry\n"));
++        goto done;
++    }
++    if (retry_addr->cur_retries >= retry_addr->max_retries) {
++        DEBUGMSGTL(("snmp_retry_address", "max retries %d reached\n",
++                    retry_addr->max_retries));
++        goto done;
++    }
++    addr = addr_list;
++    while (addr) {
++        cptr = addr->address;
++
++        DEBUGMSGTL(("snmp_retry_address", "address %s transport %p\n",
++                    cptr, addr->transport));
++
++        if (!addr->registered) {
++            if (addr->transport == NULL) {
++                addr->transport = netsnmp_transport_open_server("snmp",
++                                                                cptr);
++            }
++            if (addr->transport == NULL) {
++                snmp_log(LOG_ERR, "Error opening specified endpoint \"%s\"\n",
++                         cptr);
++            } else if (netsnmp_register_agent_nsap(addr->transport) < 0) {
++                snmp_log(LOG_ERR,
++                         "Error registering specified transport \"%s\" as an "
++                         "agent NSAP\n", cptr);
++            } else {
++                DEBUGMSGTL(("snmp_retry_address",
++                            "retry address; \"%s\" registered as an agent "
++                            "NSAP\n", cptr));
++                addr->registered = 1;
++            }
++        }
++        addr = addr->next;
++    }
++    retry_addr->cur_retries++;
++    return;
++
++done:
++    if (retry_addr->alarm_id)
++        snmp_alarm_unregister(retry_addr->alarm_id);
++    free_addrlist(addr_list);
++    SNMP_FREE(retry_addr);
++#endif /* NETSNMP_NO_LISTEN_SUPPORT */
++}
+ 
++static int
++create_retry_address(netsnmp_retry_address_info **addr_list,
++                  const char *cptr,
++                  netsnmp_transport *t)
++{
++    netsnmp_retry_address_info *addr;
++
++    if (!cptr || !addr_list)
++        return 1;
++
++    addr = SNMP_MALLOC_TYPEDEF(netsnmp_retry_address_info);
++    if (NULL == addr) {
++        snmp_log(LOG_ERR,"malloc error in netsnmp_retry_address_info\n");
++        goto error;
++    }
++    addr->address = strdup(cptr);
++    if (NULL == addr->address) {
++        snmp_log(LOG_ERR,"malloc error in retry address\n");
++        goto error;
++    }
++    addr->registered = 0;
++    addr->transport = t;
++    addr->next = NULL;
++    add_retry_addr(addr_list, addr);
++    DEBUGMSGTL(("snmp_retry_address", "added retry port %s\n", cptr));
++    return 0;
++
++error:
++    free_retry_addr(addr);
++    return 1;
++}
+ 
+ /*
+  * Set up an agent session on the given transport.  Return a handle
+@@ -1455,9 +1581,17 @@
+ int
+ init_master_agent(void)
+ {
++    netsnmp_transport *transport;
++    netsnmp_retry_address_info *addr_list = NULL;
+     char           *cptr;
+     char           *buf = NULL;
+     char           *st;
++    int            retry_address = 0;
++    int            max_retries = netsnmp_ds_get_int(NETSNMP_DS_APPLICATION_ID,
++                                    NETSNMP_DS_AGENT_ADDRESS_RETRIES);
++    int            timeout = netsnmp_ds_get_int(NETSNMP_DS_APPLICATION_ID,
++                                                NETSNMP_DS_AGENT_ADDRESS_TIMEOUT);
++    int            retry = (max_retries && timeout);
+ 
+     /* default to a default cache size */
+     netsnmp_set_lookup_cache_size(-1);
+@@ -1522,12 +1656,53 @@
+ 			"requested\n"));
+             break;
+         }
+-        if (-1 == netsnmp_agent_listen_on(cptr)) {
+-            SNMP_FREE(buf);
+-            return 1;
++        /* Opened and registered inline (not netsnmp_agent_listen_on) so an
++         * address that is not configured yet can be retried with its
++         * transport: the interface may come up after snmpd starts. */
++        transport = netsnmp_transport_open_server("snmp", cptr);
++        if (transport == NULL) {
++            snmp_log(LOG_ERR, "Error opening specified endpoint \"%s\"\n",
++                     cptr);
++            if (retry && create_retry_address(&addr_list, cptr, transport) == 0)
++                retry_address = 1;
++            continue;
++        }
++
++        if (netsnmp_register_agent_nsap(transport) < 0) {
++            snmp_log(LOG_ERR,
++                     "Error registering specified transport \"%s\" as an "
++                     "agent NSAP\n", cptr);
++            if (retry && create_retry_address(&addr_list, cptr, transport) == 0)
++                retry_address = 1;
++            continue;
+         }
++        DEBUGMSGTL(("snmp_agent",
++                    "init_master_agent; \"%s\" registered as an agent "
++                    "NSAP\n", cptr));
+     } while(st && *st != '\0');
+     SNMP_FREE(buf);
++    if (retry_address) {
++        netsnmp_retry_agent_address *retry_addr;
++
++        retry_addr = SNMP_MALLOC_TYPEDEF(netsnmp_retry_agent_address);
++        if (NULL == retry_addr) {
++            snmp_log(LOG_ERR,"malloc error in netsnmp_retry_agent_address\n");
++            return 0;
++        }
++        retry_addr->max_retries = max_retries;
++        retry_addr->timeout = timeout;
++        retry_addr->cur_retries = 0;
++        retry_addr->addr_list = addr_list;
++        retry_addr->alarm_id = snmp_alarm_register(retry_addr->timeout, SA_REPEAT,
++                                                retry_agent_address, retry_addr);
++        if(0 == retry_addr->alarm_id) {
++            snmp_log(LOG_ERR,"could not register alarm for retry agent address\n");
++            return 0;
++        }
++        DEBUGMSGTL(("snmp_agent",
++                    "init_master_agent; registered alarm %u for retry agent address\n",
++                    retry_addr->alarm_id));
++    }
+ #endif /* NETSNMP_NO_LISTEN_SUPPORT */
+ 
+ #ifdef USING_AGENTX_MASTER_MODULE
+--- a/include/net-snmp/agent/ds_agent.h
++++ b/include/net-snmp/agent/ds_agent.h
+@@ -77,4 +77,6 @@
+ #define NETSNMP_DS_AGENT_AVG_BULKVARBINDSIZE 15 /* avg varbind size estimate */
+ #define NETSNMP_DS_AGENT_PDU_STATS_MAX       16 /* size of top N array*/
+ #define NETSNMP_DS_AGENT_PDU_STATS_THRESHOLD 17 /* minimum threshold time */
++#define NETSNMP_DS_AGENT_ADDRESS_RETRIES 18 /* retries on agent address (was 15 in DANOS, now taken) */
++#define NETSNMP_DS_AGENT_ADDRESS_TIMEOUT 19 /* timeout in seconds on agent address retry */
+ #endif
+--- a/include/net-snmp/agent/snmp_agent.h
++++ b/include/net-snmp/agent/snmp_agent.h
+@@ -126,6 +126,21 @@
+         netsnmp_request_info *requests_end;
+     } netsnmp_tree_cache;
+ 
++    typedef struct netsnmp_retry_address_info_s {
++        char *address;
++        int registered;
++        netsnmp_transport *transport;
++        struct netsnmp_retry_address_info_s *next;
++    } netsnmp_retry_address_info;
++
++    typedef struct netsnmp_retry_agent_address_s {
++        int max_retries;
++        int cur_retries;
++        int timeout;
++        unsigned int alarm_id;
++        netsnmp_retry_address_info *addr_list;
++    } netsnmp_retry_agent_address;
++
+ #define MODE_GET              SNMP_MSG_GET
+ #define MODE_GETNEXT          SNMP_MSG_GETNEXT
+ #define MODE_GETBULK          SNMP_MSG_GETBULK

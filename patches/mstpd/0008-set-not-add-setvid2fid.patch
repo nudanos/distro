@@ -1,0 +1,39 @@
+From: Vyatta Package Maintainers <DL-vyatta-help@att.com>
+Date: Tue, 23 Mar 2021 14:25:52 +0000
+Subject: set-not-add-setvid2fid
+--- a/mstp.c
++++ b/mstp.c
+@@ -1333,13 +1333,31 @@
+ {
+     bool vid2mstid_changed;
+     int vid;
++    bool fidmatch[MAX_FID+1];
+ 
++    memset(fidmatch, 0, sizeof(fidmatch));
+     vid2mstid_changed = false;
+     for(vid = 1; vid <= MAX_VID; ++vid)
++        if (vids2fids[vid] <= MAX_FID)
++            fidmatch[vids2fids[vid]] = true;
++
++    for(vid = 1; vid <= MAX_VID; ++vid)
+     {
+         if(vids2fids[vid] > MAX_FID)
+-        { /* Incorrect value == keep prev value */
+-            vids2fids[vid] = br->vid2fid[vid];
++        {
++            /*
++             * Treat the "set" as set rather than an "add": remove any
++             * old VID that previously matched the new FID, otherwise
++             * simply copy the existing value.
++             */
++            if ((br->vid2fid[vid] <= MAX_FID) && fidmatch[br->vid2fid[vid]])
++            {
++                vids2fids[vid] = 0;
++                vid2mstid_changed = true;
++            }
++            else
++                vids2fids[vid] = br->vid2fid[vid];
++
+             continue;
+         }
+         if(br->fid2mstid[vids2fids[vid]] != br->fid2mstid[br->vid2fid[vid]])

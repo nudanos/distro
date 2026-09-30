@@ -1,0 +1,172 @@
+
+diff --git a/keepalived/include/vrrp_vyatta_if.h b/keepalived/include/vrrp_vyatta_if.h
+new file mode 100644
+index 00000000..04ba4705
+--- /dev/null
++++ b/keepalived/include/vrrp_vyatta_if.h
+@@ -0,0 +1,39 @@
++/*
++ * Copyright (c) 2018-2019 AT&T Intellectual Property.
++ * All rights reserved.
++ *
++ * Copyright (c) 2015-2016 by Brocade Communications Systems, Inc.
++ * All rights reserved.
++ *
++ * SPDX-License-Identifier: GPL-2.0-only
++ */
++
++#ifndef _VRRP_VYATTA_IF_H
++#define _VRRP_VYATTA_IF_H
++
++/* global includes */
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <errno.h>
++#include <syslog.h>
++#include <net/if.h>
++
++/* consts */
++static const char PROC_PATH[] = "/proc/sys/";
++
++/* prototypes */
++extern void vyatta_if_write_sysctl_value(const char *, int);
++extern void vyatta_if_write_accept_local(const char *);
++extern void vyatta_if_write_arp_filter(const char *);
++extern void vyatta_if_write_ipv6_disable(const char *);
++extern void vyatta_if_write_sysctl_values(const char *);
++extern void vyatta_if_create_iptables_igmp_filter(const char *);
++extern void vyatta_if_drop_iptables_igmp_filter(const char *);
++extern void vyatta_if_create_iptables_input_filter(const char *, int);
++extern void vyatta_if_drop_iptables_input_filter(const char *, int);
++extern void vyatta_if_setup(const char *);
++
++#endif
++
++
+diff --git a/keepalived/vrrp/Makefile.am b/keepalived/vrrp/Makefile.am
+index 753736c9..4fbab226 100644
+--- a/keepalived/vrrp/Makefile.am
++++ b/keepalived/vrrp/Makefile.am
+@@ -18,7 +18,8 @@ libvrrp_a_SOURCES	= \
+ 	vrrp.c vrrp_notify.c vrrp_scheduler.c vrrp_sync.c \
+ 	vrrp_arp.c vrrp_if.c vrrp_track.c vrrp_ipaddress.c \
+ 	vrrp_ndisc.c vrrp_if_config.c vrrp_static_track.c \
+-	vrrp_iproute.c vrrp_iprule.c vrrp_ip_rule_route_parser.c
++	vrrp_iproute.c vrrp_iprule.c vrrp_ip_rule_route_parser.c \
++	vrrp_vyatta_if.c
+ 
+ libvrrp_a_SOURCES	+= ../include/vrrp_daemon.h
+ 
+diff --git a/keepalived/vrrp/vrrp_vmac.c b/keepalived/vrrp/vrrp_vmac.c
+index db803490..2bea71d0 100644
+--- a/keepalived/vrrp/vrrp_vmac.c
++++ b/keepalived/vrrp/vrrp_vmac.c
+@@ -31,6 +31,7 @@
+ 
+ /* local include */
+ #include "vrrp_vmac.h"
++#include "vrrp_vyatta_if.h"
+ #include "keepalived_netlink.h"
+ #include "logger.h"
+ #include "bitops.h"
+@@ -497,6 +498,7 @@ netlink_link_add_vmac(vrrp_t *vrrp, const interface_t *old_interface)
+ 	/* We cannot include the link up setting with the ADDR_GEN_MODE message above
+ 	 * since the link is set up and an EUI64 address added to the interface before
+ 	 * the ADDR_GEN_MODE setting is changed. */
++	vyatta_if_setup(vrrp->ifp->ifname);
+ 	netlink_link_up(vrrp);
+ 
+ 	/* Mark it as UP ! */
+diff --git a/keepalived/vrrp/vrrp_vyatta_if.c b/keepalived/vrrp/vrrp_vyatta_if.c
+new file mode 100644
+index 00000000..26ee5dbb
+--- /dev/null
++++ b/keepalived/vrrp/vrrp_vyatta_if.c
+@@ -0,0 +1,86 @@
++/*
++ * Copyright (c) 2018-2019 AT&T Intellectual Property.
++ * All rights reserved.
++ *
++ * Copyright (c) 2015-2016 by Brocade Communications Systems, Inc.
++ * All rights reserved.
++ *
++ * SPDX-License-Identifier: GPL-2.0-only
++ */
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <errno.h>
++#include <syslog.h>
++#include <net/if.h>
++#include "vrrp_vyatta_if.h"
++
++void vyatta_if_write_sysctl_value(const char * outpath, int value){
++   int rc = 0;
++   FILE *fp;
++   fp = fopen(outpath, "w");
++   if (!fp){
++     syslog(LOG_INFO, "couldn't open sysctl path: %s\n",outpath);
++     return;
++   }
++   rc = fprintf(fp, "%d\n", value);
++   if (rc < 0)
++     syslog(LOG_INFO,"couldn't write to sysctl path: %s\n",outpath);
++   fclose(fp);
++}
++
++void vyatta_if_write_accept_local(const char * ifname){
++   char ipv4path[] = "net/ipv4/conf/";
++   char accept_local[] = "/accept_local";
++   int al_val = 1;
++   char *outpath;
++   outpath = malloc(strlen(PROC_PATH) + strlen(ipv4path) +
++                    strlen(ifname) + strlen(accept_local) + 1);
++   strcpy(outpath, PROC_PATH);
++   strcat(outpath, ipv4path);
++   strcat(outpath, ifname);
++   strcat(outpath, accept_local);
++   vyatta_if_write_sysctl_value(outpath, al_val);
++   free(outpath);
++}
++
++void vyatta_if_write_link_filter(const char * ifname){
++   char ipv4path[] = "net/ipv4/conf/";
++   char link_filter[] = "/link_filter";
++   int lf_val = 2;
++   char *outpath;
++   outpath = malloc(strlen(PROC_PATH) + strlen(ipv4path) +
++                    strlen(ifname) + strlen(link_filter) + 1);
++   strcpy(outpath, PROC_PATH);
++   strcat(outpath, ipv4path);
++   strcat(outpath, ifname);
++   strcat(outpath, link_filter);
++   vyatta_if_write_sysctl_value(outpath, lf_val);
++   free(outpath);
++}
++
++void vyatta_if_write_arp_filter(const char * ifname){
++   char ipv4path[] = "net/ipv4/conf/";
++   char arp_filter[] = "/arp_filter";
++   int arp_val = 0;
++   char *outpath;
++   outpath = malloc(strlen(PROC_PATH) + strlen(ipv4path) +
++                    strlen(ifname) + strlen(arp_filter) + 1);
++   strcpy(outpath, PROC_PATH);
++   strcat(outpath, ipv4path);
++   strcat(outpath, ifname);
++   strcat(outpath, arp_filter);
++   vyatta_if_write_sysctl_value(outpath, arp_val);
++   free(outpath);
++}
++
++void vyatta_if_write_sysctl_values(const char * ifname){
++  vyatta_if_write_accept_local(ifname);
++  vyatta_if_write_arp_filter(ifname);
++  vyatta_if_write_link_filter(ifname);
++}
++
++void vyatta_if_setup(const char * ifname){
++  vyatta_if_write_sysctl_values(ifname);
++}

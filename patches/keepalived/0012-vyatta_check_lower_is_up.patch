@@ -1,0 +1,171 @@
+Refactor/Add carrier is up interface check patch
+
+Checking for IFF_UP and IFF_RUNNING isn't enough to determine if
+packets can be sent, some interface types also have a carrier protocol
+that must be up before packets can be sent or received.
+
+Relying on IFF_UP and IFF_RUNNING can cause a dual master on these
+interfaces, IFF_LOWER_UP and checking IFLA_CARRIER in the RTM_NEWLINK
+message allows us to wait for these interfaces to come up fully. This
+can stop the need for delaying start up checking these variables means
+we know when an interface is up and can send/receive.
+
+Updated how interface flags are updated so the calculation on if a
+change in state has happened includes the IFLA_CARRIER status. This
+is helpful for VLAN interfaces where if the lower interface is down the
+VRRP group stays up.
+
+
+diff --git a/keepalived/core/keepalived_netlink.c b/keepalived/core/keepalived_netlink.c
+index 788c45cd..761b0a14 100644
+--- a/keepalived/core/keepalived_netlink.c
++++ b/keepalived/core/keepalived_netlink.c
+@@ -1662,6 +1662,15 @@ process_if_status_change(interface_t *ifp)
+ 	}
+ }
+ 
++/* Vyatta: an interface is up only when its carrier is (IFLA_CARRIER, e.g.
++ * bonds and VLANs over a down lower link). Fold the carrier into the flags
++ * so the debounced flags logic below has a single input. */
++static unsigned
++carrier_flags(unsigned ifi_flags, uint32_t carrier_up)
++{
++	return carrier_up ? ifi_flags : ifi_flags & ~(unsigned)(IFF_RUNNING | IFF_LOWER_UP);
++}
++
+ static void
+ process_interface_flags_change(interface_t *ifp, unsigned ifi_flags)
+ {
+@@ -1898,6 +1907,12 @@ netlink_if_link_populate(interface_t *ifp, struct rtattr *tb[], struct ifinfomsg
+ 	ifp->base_netns_id = -1;
+ #endif
+ 
++	if (tb[IFLA_CARRIER]) {
++		ifp->carrier_is_up = *(uint32_t *)RTA_DATA(tb[IFLA_CARRIER]);
++	} else {
++		// Flag not in message default to 1 (true)
++		ifp->carrier_is_up = 1;
++	}
+ #ifdef _HAVE_VRRP_VMAC_
+ 	if (tb[IFLA_LINKINFO]) {
+ 		parse_rtattr_nested(linkinfo, IFLA_INFO_MAX, tb[IFLA_LINKINFO]);
+@@ -2060,6 +2075,7 @@ netlink_if_link_filter(__attribute__((unused)) struct sockaddr_nl *snl, struct n
+ 	interface_t *ifp;
+ 	size_t len;
+ 	char *name;
++	uint32_t carrier_up;
+ 
+ 	ifi = NLMSG_DATA(h);
+ 
+@@ -2078,6 +2094,10 @@ netlink_if_link_filter(__attribute__((unused)) struct sockaddr_nl *snl, struct n
+ 		return -1;
+ 	name = (char *)RTA_DATA(tb[IFLA_IFNAME]);
+ 
++	if (tb[IFLA_CARRIER] == NULL)
++		return -1;
++	carrier_up = *(uint32_t *)RTA_DATA(tb[IFLA_CARRIER]);
++
+ 	/* Skip it if already exists */
+ 	ifp = if_get_by_ifname(name, IF_CREATE_NETLINK);
+ 
+@@ -2090,7 +2110,7 @@ netlink_if_link_filter(__attribute__((unused)) struct sockaddr_nl *snl, struct n
+ 		&& IF_INDEX(ifp) == IF_BASE_INDEX(ifp)
+ #endif
+ 	)
+-		update_interface_flags(ifp, ifi->ifi_flags, true);
++		update_interface_flags(ifp, carrier_flags(ifi->ifi_flags, carrier_up), true);
+ 
+ 	return 0;
+ }
+@@ -2149,6 +2169,7 @@ netlink_link_filter(__attribute__((unused)) struct sockaddr_nl *snl, struct nlms
+ 	list_head_t sav_e_list;
+ 	garp_delay_t *sav_garp_delay;
+ 	bool immediate_change = false;
++	uint32_t carrier_up = 1;
+ 
+ 	if (!(h->nlmsg_type == RTM_NEWLINK || h->nlmsg_type == RTM_DELLINK))
+ 		return 0;
+@@ -2189,6 +2210,7 @@ netlink_link_filter(__attribute__((unused)) struct sockaddr_nl *snl, struct nlms
+ 			} else
+ #endif
+ 				cleanup_lost_interface(ifp);
++			ifp->carrier_is_up = 0;	/* deleted: whichever branch ran */
+ 
+ 			ifp->seen_up = false;
+ 
+@@ -2253,6 +2275,8 @@ netlink_link_filter(__attribute__((unused)) struct sockaddr_nl *snl, struct nlms
+ 			if (tb[IFLA_GROUP])
+ 				ifp->group = *PTR_CAST(uint32_t, RTA_DATA(tb[IFLA_GROUP]));
+ #endif
++			if (tb[IFLA_CARRIER])
++				carrier_up = *(uint32_t *)RTA_DATA(tb[IFLA_CARRIER]);
+ 
+ 			if (strcmp(ifp->ifname, name)) {
+ 				/* The name can change, so handle that here */
+@@ -2368,7 +2392,7 @@ netlink_link_filter(__attribute__((unused)) struct sockaddr_nl *snl, struct nlms
+ 					alloc_vrrp_buffer(ifp->mtu);
+ 
+ 			/* We need to see a transition to up, so mark it down for now */
+-			ifp->ifi_flags &= ~(IFF_UP | IFF_RUNNING);
++			ifp->ifi_flags &= ~(IFF_UP | IFF_RUNNING | IFF_LOWER_UP);
+ 		} else {
+ 			if (__test_bit(LOG_DETAIL_BIT, &debug))
+ 				log_message(LOG_INFO, "Unknown interface %s deleted", (char *)tb[IFLA_IFNAME]);
+@@ -2380,7 +2404,7 @@ netlink_link_filter(__attribute__((unused)) struct sockaddr_nl *snl, struct nlms
+ #ifdef _HAVE_VRRP_VMAC_
+ 	if (IF_INDEX(ifp) == IF_BASE_INDEX(ifp))
+ #endif
+-	update_interface_flags(ifp, (h->nlmsg_type == RTM_DELLINK) ? 0 : ifi->ifi_flags, immediate_change);
++	update_interface_flags(ifp, (h->nlmsg_type == RTM_DELLINK) ? 0 : carrier_flags(ifi->ifi_flags, carrier_up), immediate_change);
+ 
+ 	return 0;
+ }
+diff --git a/keepalived/include/vrrp_if.h b/keepalived/include/vrrp_if.h
+index b4ebe57e..de2b2347 100644
+--- a/keepalived/include/vrrp_if.h
++++ b/keepalived/include/vrrp_if.h
+@@ -35,8 +35,12 @@
+ #include <stdio.h>
+ #ifdef _HAVE_NET_LINUX_IF_H_COLLISION_
+ #define _LINUX_IF_H
++// Explicit define of IFF_LOWER_UP if we're ignoring _LINUX_IF_H_
++#define IFF_LOWER_UP  1<<16
+ #endif
+ #include <linux/netdevice.h>
++/* Need expanded IFF_ values for IFF_LOWER_UP */
++#include <linux/if.h>
+ #ifdef _HAVE_VRRP_VMAC_
+ #include <linux/if_link.h>
+ #endif
+@@ -182,6 +186,7 @@ typedef struct _interface {
+ 	bool			gna_router;		/* Router flag for NA messages */
+ 	bool			promote_secondaries;	/* Original value of promote_secondaries to be restored */
+ 	uint32_t		reset_promote_secondaries; /* Count of how many vrrps have changed promote_secondaries on interface */
++	bool			carrier_is_up;		/* Carrier for interface is up (useful for bonded interfaces) */
+ 	list_head_t		tracking_vrrp;		/* tracking_obj_t - vrrp instances tracking this interface */
+ 
+ 	/* linked list member */
+@@ -215,7 +220,8 @@ typedef struct _tracked_if {
+ #define IF_MII_SUPPORTED(X) ((X)->lb_type & LB_MII)
+ #define IF_ETHTOOL_SUPPORTED(X) ((X)->lb_type & LB_ETHTOOL)
+ #endif
+-#define FLAGS_UP(X) (((X) & (IFF_UP | IFF_RUNNING)) == (IFF_UP | IFF_RUNNING))
++#define FLAGS_UP(X) (((X) & (IFF_UP | IFF_RUNNING | IFF_LOWER_UP)) == (IFF_UP | IFF_RUNNING | IFF_LOWER_UP))
++/* The carrier is folded into ifi_flags (carrier_flags() in keepalived_netlink.c) */
+ #define IF_FLAGS_UP(X) (FLAGS_UP((X)->ifi_flags))
+ #ifdef _HAVE_VRRP_VMAC_
+ extern bool interface_is_up(interface_t *);
+diff --git a/keepalived/vrrp/vrrp_if.c b/keepalived/vrrp/vrrp_if.c
+index ecd90562..214e1c29 100644
+--- a/keepalived/vrrp/vrrp_if.c
++++ b/keepalived/vrrp/vrrp_if.c
+@@ -599,7 +599,8 @@ dump_if(FILE *fp, const interface_t *ifp)
+ 		conf_write(fp, "   MAC broadcast = %s", mac_buf);
+ 	}
+ 
+-	conf_write(fp, "   State = %sUP, %sRUNNING%s%s%s%s%s%s", ifp->ifi_flags & IFF_UP ? "" : "not ", ifp->ifi_flags & IFF_RUNNING ? "" : "not ",
++	conf_write(fp, "   State = %sUP, %sRUNNING, LOWER %sUP%s%s%s%s%s%s", ifp->ifi_flags & IFF_UP ? "" : "not ", ifp->ifi_flags & IFF_RUNNING ? "" : "not ",
++			((ifp->ifi_flags & IFF_LOWER_UP) && ifp->carrier_is_up) ? "" : "not ",
+ 			!(ifp->ifi_flags & IFF_BROADCAST) ? ", no broadcast" : "",
+ 			ifp->ifi_flags & IFF_LOOPBACK ? ", loopback" : "",
+ 			ifp->ifi_flags & IFF_POINTOPOINT ? ", point to point" : "",

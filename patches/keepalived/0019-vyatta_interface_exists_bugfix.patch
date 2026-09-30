@@ -1,0 +1,64 @@
+
+diff --git a/keepalived/core/keepalived_netlink.c b/keepalived/core/keepalived_netlink.c
+index 75bd084c..06f2fe94 100644
+--- a/keepalived/core/keepalived_netlink.c
++++ b/keepalived/core/keepalived_netlink.c
+@@ -2402,7 +2402,7 @@ netlink_link_filter(__attribute__((unused)) struct sockaddr_nl *snl, struct nlms
+ 
+ 			if (__test_bit(LOG_DETAIL_BIT, &debug))
+ 				log_message(LOG_INFO, "Interface %s added", ifp->ifname);
+-
++			ifp->created = true;
+ 			update_added_interface(ifp);
+ 
+ #ifndef _ONE_PROCESS_DEBUG_
+diff --git a/keepalived/include/vrrp_if.h b/keepalived/include/vrrp_if.h
+index de2b2347..25dc4cbe 100644
+--- a/keepalived/include/vrrp_if.h
++++ b/keepalived/include/vrrp_if.h
+@@ -187,6 +187,7 @@ typedef struct _interface {
+ 	bool			promote_secondaries;	/* Original value of promote_secondaries to be restored */
+ 	uint32_t		reset_promote_secondaries; /* Count of how many vrrps have changed promote_secondaries on interface */
+ 	bool			carrier_is_up;		/* Carrier for interface is up (useful for bonded interfaces) */
++	bool			created;			/* Has the interface been created yet */
+ 	list_head_t		tracking_vrrp;		/* tracking_obj_t - vrrp instances tracking this interface */
+ 
+ 	/* linked list member */
+diff --git a/keepalived/vrrp/vrrp_if.c b/keepalived/vrrp/vrrp_if.c
+index 214e1c29..0953362f 100644
+--- a/keepalived/vrrp/vrrp_if.c
++++ b/keepalived/vrrp/vrrp_if.c
+@@ -235,8 +235,12 @@ if_get_by_ifname(const char *ifname, if_lookup_t create)
+ 	INIT_LIST_HEAD(&ifp->e_list);
+ 	list_add_tail(&ifp->e_list, &if_queue);
+ 
+-	if (create == IF_CREATE_IF_DYNAMIC)
++	if (create == IF_CREATE_IF_DYNAMIC) {
+ 		log_message(LOG_INFO, "Configuration specifies interface %s which doesn't currently exist - will use if created", ifname);
++		ifp->created = false;
++	} else {
++		ifp->created = true;
++	}
+ 
+ 	return ifp;
+ }
+diff --git a/keepalived/vrrp/vrrp_track.c b/keepalived/vrrp/vrrp_track.c
+index 92f83b21..bb134475 100644
+--- a/keepalived/vrrp/vrrp_track.c
++++ b/keepalived/vrrp/vrrp_track.c
+@@ -1118,6 +1118,15 @@ initialise_interface_tracking_priorities(void)
+ 	list_for_each_entry(ifp, ifq, e_list) {
+ 		list_for_each_entry(top, &ifp->tracking_vrrp, e_list) {
+ 			vrrp = top->obj.vrrp;
++			/*
++			 * Non-vmac interfaces that haven't been created yet (VIF or bonding) get counted here as down
++			 * and once again when they are actually created but with no corresponding num_script_if_fault--
++			 * To avoid getting stuck in FAULT state don't count interfaces that haven't been created yet
++			 */
++			if (IF_BASE_IFP(ifp) == ifp && !ifp->created) {
++				log_message(LOG_INFO, "Got an interface that hasn't been created yet, skipping");
++				continue;
++			}
+ 			if (top->weight == VRRP_NOT_TRACK_IF)
+ 				continue;
+ 

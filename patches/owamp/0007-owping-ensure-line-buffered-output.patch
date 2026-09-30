@@ -1,0 +1,23 @@
+From: Duncan Eastoe <deastoe@vyatta.att-mail.com>
+Date: Wed, 14 Jun 2017 10:56:41 +0100
+Subject: Force [ot]wping to line buffer its output
+--- a/owping/owping.c
++++ b/owping/owping.c
+@@ -1260,6 +1260,17 @@
+     progname = (progname = strrchr(argv[0], '/')) ? progname+1 : *argv;
+ 
+     /*
++     * Ensure that STDOUT and STDERR are line buffered. This allows us to
++     * reliably pipe output into other programs
++     */
++    if(setvbuf(stdout, NULL, _IOLBF, 0))
++        fprintf(stderr, "%s: Failed to line buffer STDOUT: %s\n",
++                progname, strerror(errno));
++    if(setvbuf(stderr, NULL, _IOLBF, 0))
++        fprintf(stderr, "%s: Failed to line buffer STDERR: %s\n",
++                progname, strerror(errno));
++
++    /*
+      * Start an error logging session for reporing errors to the
+      * standard error
+      */

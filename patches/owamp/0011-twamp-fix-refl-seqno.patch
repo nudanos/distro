@@ -1,0 +1,242 @@
+From: Tom Kiely <tkiely@vyatta.att-mail.com>
+Date: Mon, 12 Jun 2017 12:17:04 +0100
+Subject: Separate first sent seqno handling from first reflected seqno.
+
+PacketGet() bounds-checks the passed in sequence number against
+the sent seqno even for reflected packets. This causes a failure
+when the first packet of a tranche fails to be sent as then
+the reflected seqno will be less than the sent seqno thus failing
+the bounds check here. Need to maintain the reflected first seqno
+independently of the sent first seqno.
+--- a/owamp/api.c
++++ b/owamp/api.c
+@@ -3297,8 +3297,9 @@
+         off_t               fileend,
+         OWPSessionHeaderRec *hdr,
+         uint32_t            *first,
+-        uint32_t            *last
+-        )
++        uint32_t            *last,
++        uint32_t            *first_refl
++    )
+ {
+         OWPTWDataRec rec;
+         uint32_t     temp;
+@@ -3317,6 +3318,7 @@
+             return False;
+         }
+         *first = rec.sent.seq_no;
++        *first_refl = rec.reflected.seq_no;
+ 
+         /*
+          * Retrieve the send sequence number for the final record in
+--- a/owamp/owamp.h
++++ b/owamp/owamp.h
+@@ -1458,7 +1458,8 @@
+         off_t               fileend,
+         OWPSessionHeaderRec *hdr,
+         uint32_t            *first,
+-        uint32_t            *last
++        uint32_t            *last,
++        uint32_t            *first_refl
+         );
+ 
+ /*
+@@ -1698,7 +1699,8 @@
+      */
+     uint32_t            i;      /* keeps track of current record index  */
+ 
+-    uint32_t            first;  /* first seqno of interest (inclusive)  */
++    uint32_t            first[OWP_PKT_TYPE_NUM];  /* first seqno of interest
++    						     (inclusive)  */
+     uint32_t            last;   /* last seqno of interest (non-inclusive)   */
+ 
+     off_t               begin_oset; /* starting file offset                 */
+@@ -1789,7 +1791,8 @@
+         FILE        *output,        /* Print packet records here */
+         off_t       begin_oset,     /* Hint:start offset - multistage parsing */
+         uint32_t   first,           /* first seq num inclusive */
+-        uint32_t   last             /* last seq num non-inclusive */
++        uint32_t   last,            /* last seq num non-inclusive */
++        uint32_t   first_refl       /* first reflected packet seq no */
+         );
+ 
+ extern OWPBoolean
+--- a/owamp/stats.c
++++ b/owamp/stats.c
+@@ -246,9 +246,11 @@
+     /*
+      * Ignore invalid seq num.
+      */
+-    if((seq < stats->first) || (type != TWP_BCK_PKTS && (seq > stats->last))){
++    if((seq < stats->first[type]) ||
++       (type != TWP_BCK_PKTS && (seq > stats->last))){
+         OWPError(stats->ctx,OWPErrFATAL,OWPErrINVALID,
+-                "Invalid type %u seq number request (out of range)",type);
++                "Invalid type %u seq number %u/%u request (out of range)",
++                type, seq, stats->first[type]);
+         return NULL;
+     }
+ 
+@@ -259,7 +261,7 @@
+         node = stats->pend[type];
+ 
+         while(node->seq < seq){
+-            /* bug if context is not alligned with node allocation */
++            /* bug if context is not aligned with node allocation */
+             assert(node->seq+1 == stats->isctx[type]);
+ 
+             if(type != TWP_BCK_PKTS){
+@@ -1034,7 +1036,7 @@
+      * last packet of the "previous" session - should reordering be counted?
+      *
+      */ 
+-    if((rec->seq_no < stats->first) || (rec->seq_no >= stats->last)){
++    if((rec->seq_no < stats->first[OWP_PKTS]) || (rec->seq_no >= stats->last)){
+         return 0;
+     }
+ 
+@@ -1268,7 +1270,8 @@
+      * last packet of the "previous" session - should reordering be counted?
+      *
+      */
+-    if((rec->sent.seq_no < stats->first) || (rec->sent.seq_no >= stats->last)){
++    if((rec->sent.seq_no < stats->first[TWP_FWD_PKTS]) ||
++       (rec->sent.seq_no >= stats->last)){
+         return 0;
+     }
+ 
+@@ -1621,7 +1624,8 @@
+         FILE        *output,
+         off_t       begin_oset,
+         uint32_t    first,
+-        uint32_t    last
++        uint32_t    last,
++        uint32_t    first_refl
+         )
+ {
+     off_t       fileend;
+@@ -1640,7 +1644,8 @@
+ 
+     stats->begin_oset = begin_oset;
+     stats->next_oset = 0;
+-    stats->first = first;
++    stats->first[TWP_FWD_PKTS] = first;
++    stats->first[TWP_BCK_PKTS] = first_refl;
+     stats->last = last;
+     stats->iskip = 0;
+     stats->sent = 0;
+@@ -1698,7 +1703,7 @@
+                 OWPScheduleContextGenerateNextDelta(stats->sctx));
+         stats->isctx[OWP_PKTS]++;
+     }
+-    stats->isctx[TWP_BCK_PKTS] = stats->isctx[OWP_PKTS];
++    stats->isctx[TWP_BCK_PKTS] = stats->isctx[OWP_PKTS] - (first - first_refl);
+     stats->start_time = stats->endnum;
+ 
+     /*
+@@ -1712,7 +1717,8 @@
+         I2HashIterate(stats->ptable[type],PacketBufferClean,stats);
+ 
+         /* alloc first node */
+-        stats->pbegin[type] = stats->pend[type] = PacketAlloc(stats,first,type);
++        stats->pbegin[type] = stats->pend[type] =
++        		PacketAlloc(stats, stats->first[type], type);
+ 
+         /*
+          * update sctx/isctx to approprate place
+@@ -2471,11 +2477,13 @@
+         uint8_t dscp = stats->hdr->test_spec.typeP >> 24;
+         fprintf(output,"DSCP\t0x%2.2x\n",dscp);
+     }
+-    fprintf(output,"LOSS_TIMEOUT\t%"PRIu64"\n",stats->hdr->test_spec.loss_timeout);
++    fprintf(output,"LOSS_TIMEOUT\t%"PRIu64"\n",
++            stats->hdr->test_spec.loss_timeout);
+     fprintf(output,"PACKET_PADDING\t%u\n",
+             stats->hdr->test_spec.packet_size_padding);
+     fprintf(output,"SESSION_PACKET_COUNT\t%u\n",stats->hdr->test_spec.npackets);
+-    fprintf(output,"SAMPLE_PACKET_COUNT\t%u\n", stats->last - stats->first);
++    fprintf(output,"SAMPLE_PACKET_COUNT\t%u\n",
++            stats->last - stats->first[OWP_PKTS]);
+     fprintf(output,"BUCKET_WIDTH\t%g\n",stats->bucketwidth);
+     fprintf(output,"SESSION_FINISHED\t%d\n",
+             (stats->hdr->finished == OWP_SESSION_FINISHED_NORMAL)?1:0);
+--- a/owping/owping.c
++++ b/owping/owping.c
+@@ -351,6 +351,7 @@
+     uint32_t            sum;
+     uint32_t            first;
+     uint32_t            last;
++    uint32_t            first_refl;
+     uint32_t            range;
+     off_t               temp_offset;
+     off_t               fileend;
+@@ -474,7 +475,8 @@
+         OWPStatsFree(stats);
+         return -1;
+ #else
+-        if(!OWPGetTWSeqRange(ctx,fp,*offset,fileend,&hdr,&first,&last)){
++        if(!OWPGetTWSeqRange(ctx,fp,*offset,fileend,&hdr,&first,&last,
++        		     &first_refl)){
+             I2ErrLog(eh,"do_stats_range: failed to get seq num range");
+             OWPStatsFree(stats);
+             return -1;
+@@ -534,7 +536,8 @@
+             tfp = stdout;
+         }
+ 
+-        if( !OWPStatsParse(stats,(ping_ctx.opt.records?tfp:NULL),*offset,first,last)){
++        if( !OWPStatsParse(stats,(ping_ctx.opt.records?tfp:NULL),*offset,first,
++                           last,first_refl)){
+             I2ErrLog(eh,"OWPStatsParse: failed");
+             OWPStatsFree(stats);
+             if(ping_ctx.opt.printfiles){
+@@ -610,7 +613,7 @@
+             }
+ 
+             if( !OWPStatsParse(stats,(ping_ctx.opt.records?tfp:NULL),
+-                        stats->next_oset,begin,end)){
++                        stats->next_oset,begin,end,first_refl)){
+                 I2ErrLog(eh,"OWPStatsParse: failed");
+                 OWPStatsFree(stats);
+                 return -1;
+@@ -652,6 +655,8 @@
+                 fprintf(stdout,"%s\n",sfname);
+                 fflush(stdout);
+             }
++
++            first_refl += stats->sent - stats->lost;
+         }
+     }
+ 
+--- a/powstream/powstream.c
++++ b/powstream/powstream.c
+@@ -725,7 +725,7 @@
+     /*
+      * Parse the data and compute the statistics
+      */
+-    if( !OWPStatsParse(stats,NULL,0,0,~0)){
++    if( !OWPStatsParse(stats,NULL,0,0,~0,0)){
+         I2ErrLog(eh,"OWPStatsParse failed");
+         goto skip_sum;
+     }
+@@ -2088,7 +2088,7 @@
+              */
+             if( !OWPStatsParse(stats,NULL,stats->next_oset,
+                         appctx.opt.numBucketPackets*sum,
+-                        (appctx.opt.numBucketPackets*(sum+1)))){
++                               (appctx.opt.numBucketPackets*(sum+1)),0)){
+                 I2ErrLog(eh,"OWPStatsParse failed");
+                 break;
+             }
+--- a/test/owstats.c
++++ b/test/owstats.c
+@@ -162,7 +162,7 @@
+         goto done;
+     }
+ 
+-    if (!OWPStatsParse(stats, NULL, 0, 0, ~0)) {
++    if (!OWPStatsParse(stats, NULL, 0, 0, ~0, 0)) {
+         printf("OWPStatsParse failed\n");
+         goto done;
+     }

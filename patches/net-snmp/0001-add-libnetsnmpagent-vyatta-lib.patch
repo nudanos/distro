@@ -1,0 +1,128 @@
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -35,7 +35,7 @@
+ INSTALLBUILTINCLUDEHEADERS=@FEATUREHEADERS@
+ INSTALLBINSCRIPTS=net-snmp-config net-snmp-create-v3-user
+ INSTALLUCDHEADERS=ucd-snmp-config.h version.h mib_module_config.h
+-INSTALL_PKGCONFIG=netsnmp.pc netsnmp-agent.pc
++INSTALL_PKGCONFIG=netsnmp.pc netsnmp-agent.pc netsnmp-agent-vyatta.pc
+ 
+ #
+ # other install rules.
+--- a/Makefile.top
++++ b/Makefile.top
+@@ -87,6 +87,7 @@
+ LIBAGE      = 0
+ LIBREVISION = 0
+ 
++LIB_CC_CMD      = $(LIBTOOL) --mode=compile $(CC) $(CPPFLAGS) $(CFLAGS) -c -o
+ LIB_LD_CMD      = $(LIBTOOL) --mode=link $(LINKCC) $(CFLAGS) -rpath $(libdir) -version-info $(LIBCURRENT):$(LIBREVISION):$(LIBAGE) @LD_NO_UNDEFINED@ -o
+ LIB_EXTENSION   = la
+ LIB_VERSION     =
+@@ -98,7 +99,7 @@
+ # libtool definitions
+ .SUFFIXES: .c .o .lo .rc
+ .c.lo:
+-	$(LIBTOOL) --mode=compile $(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
++	$(LIB_CC_CMD) $@ $<
+ .rc.lo:
+ 	$(LIBTOOL) --mode=compile --tag=RC @RC@ -o $@ -i $<
+ 
+--- a/agent/Makefile.in
++++ b/agent/Makefile.in
+@@ -18,8 +18,10 @@
+ SUBDIRS=helpers
+ FTSUBDIRS=mibgroup helpers
+ 
++VYATTA_AGENTLIB = libnetsnmpagent-vyatta.$(LIB_EXTENSION)$(LIB_VERSION)
++
+ INSTALLSBINPROGS= @SNMPD@
+-INSTALLLIBS	= libnetsnmpagent.$(LIB_EXTENSION)$(LIB_VERSION)
++INSTALLLIBS	= libnetsnmpagent.$(LIB_EXTENSION)$(LIB_VERSION) $(VYATTA_AGENTLIB)
+ INSTALLPOSTLIBS	= libnetsnmpmibs.$(LIB_EXTENSION)$(LIB_VERSION)
+ 
+ INCLUDESUBDIR=agent
+@@ -153,6 +155,7 @@
+ 	helpers/multiplexer.o \
+ 	helpers/null.o \
+ 	helpers/old_api.o \
++	helpers/old_vyatta_api.o \
+ 	helpers/read_only.o \
+ 	helpers/row_merge.o \
+ 	helpers/scalar.o \
+@@ -193,7 +196,6 @@
+ 	helpers/mode_end_call.lo \
+ 	helpers/multiplexer.lo \
+ 	helpers/null.lo \
+-	helpers/old_api.lo \
+ 	helpers/read_only.lo \
+ 	helpers/row_merge.lo \
+ 	helpers/scalar.lo \
+@@ -224,6 +226,12 @@
+ 	$(agentgroup_list_lo) \
+ 	@OTHERAGENTLIBLOBJS@
+ 
++NON_VYATTA_LLIBAGENTOBJS= \
++	helpers/old_api.lo
++
++VYATTA_LLIBAGENTOBJS= \
++	helpers/old_api_vyatta.lo
++
+ LLIBAGENTFTS= \
+ 	helpers/all_helpers.ft \
+ 	helpers/baby_steps.ft \
+@@ -276,7 +284,8 @@
+ OBJS		= $(LIBAGENTOBJS)  $(MIBOBJS)   $(AGENTOBJS)   \
+ 		  mib_modules.o  auto_nlist.o
+ LOBJS		= $(LLIBAGENTOBJS) $(LMIBOBJS)  $(LAGENTOBJS)  \
+-		  mib_modules.lo auto_nlist.lo
++		  mib_modules.lo auto_nlist.lo \
++		  $(NON_VYATTA_LLIBAGENTOBJS) $(VYATTA_LLIBAGENTOBJS)
+ FTOBJS		= $(LLIBAGENTFTS)  $(FTMIBOBJS) $(FTAGENTOBJS) \
+ 		  mib_modules.ft auto_nlist.ft
+ 
+@@ -302,10 +311,17 @@
+ snmpd$(EXEEXT):	${LAGENTOBJS} $(USELIBS) $(AGENTLIB) $(HELPERLIB) $(MIBLIB) $(LIBTARG) 
+ 	$(LINK) $(CFLAGS) -o $@ ${LAGENTOBJS} ${LDFLAGS} ${OUR_AGENT_LIBS}
+ 
+-libnetsnmpagent.$(LIB_EXTENSION)$(LIB_VERSION):    ${LLIBAGENTOBJS} $(USELIBS)
+-	$(LIB_LD_CMD) $(AGENTLIB) ${LLIBAGENTOBJS} $(USELIBS) ${LAGENTLIBS} $(LDFLAGS) $(PERLLDOPTS_FOR_LIBS) @AGENTLIBS@
++libnetsnmpagent.$(LIB_EXTENSION)$(LIB_VERSION):    ${LLIBAGENTOBJS} ${NON_VYATTA_LLIBAGENTOBJS} $(USELIBS)
++	$(LIB_LD_CMD) $(AGENTLIB) ${NON_VYATTA_LLIBAGENTOBJS} ${LLIBAGENTOBJS} $(USELIBS) ${LAGENTLIBS} $(LDFLAGS) $(PERLLDOPTS_FOR_LIBS) @AGENTLIBS@
+ 	$(RANLIB) $(AGENTLIB)
+ 
++%_vyatta.lo:
++	$(LIB_CC_CMD) $@ -DVYATTA_SNMP $*.c
++
++$(VYATTA_AGENTLIB):    ${LLIBAGENTOBJS} ${VYATTA_LLIBAGENTOBJS} $(USELIBS)
++	$(LIB_LD_CMD) $(VYATTA_AGENTLIB) ${VYATTA_LLIBAGENTOBJS} ${LLIBAGENTOBJS} $(USELIBS) ${LAGENTLIBS} $(LDFLAGS) $(PERLLDOPTS_FOR_LIBS) @AGENTLIBS@
++	$(RANLIB) $(VYATTA_AGENTLIB)
++
+ libnetsnmpmibs.$(LIB_EXTENSION)$(LIB_VERSION): ${LMIBOBJS} $(AGENTLIB) $(USELIBS) subdirs
+ 	$(LIB_LD_CMD) $(MIBLIB) ${LMIBOBJS} $(AGENTLIB) $(USELIBS) $(LDFLAGS) ${LMIBLIBS} $(PERLLDOPTS_FOR_LIBS) @AGENTLIBS@
+ 	$(RANLIB) $(MIBLIB)
+--- a/configure.ac
++++ b/configure.ac
+@@ -126,7 +126,7 @@
+ 		[chmod +x net-snmp-config])
+ AC_CONFIG_FILES([net-snmp-create-v3-user:net-snmp-create-v3-user.in],
+ 		[chmod +x net-snmp-create-v3-user])
+-AC_CONFIG_FILES([netsnmp.pc:netsnmp.pc.in netsnmp-agent.pc:netsnmp-agent.pc.in])
++AC_CONFIG_FILES([netsnmp.pc:netsnmp.pc.in netsnmp-agent.pc:netsnmp-agent.pc.in netsnmp-agent-vyatta.pc:netsnmp-agent-vyatta.pc.in])
+ AC_CONFIG_FILES([dist/generation-scripts/gen-variables:dist/generation-scripts/gen-variables.in])
+ AC_CONFIG_FILES([local/snmpconf])
+ 
+--- a/netsnmp-agent-vyatta.pc.in
++++ b/netsnmp-agent-vyatta.pc.in
+@@ -0,0 +1,11 @@
++prefix=@prefix@
++exec_prefix=@exec_prefix@
++includedir=@includedir@
++libdir=@libdir@
++
++Name: netsnmp-agent-vyatta (@PACKAGE_NAME@)
++Description: SNMP (Simple Network Management Protocol) sub-agent SDK (Vyatta variant).
++Version: @PACKAGE_VERSION@
++Cflags: -I${includedir} -DVYATTA_SNMP
++Libs: -L${libdir} -lnetsnmpmibs -lnetsnmpagent-vyatta -lnetsnmp
++Libs.private: @LDFLAGS@ @LMIBLIBS@ @LAGENTLIBS@ @PERLLDOPTS_FOR_APPS@ @LNETSNMPLIBS@ @LIBS@

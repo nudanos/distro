@@ -1,0 +1,13 @@
+
+diff --git a/keepalived/keepalived.service.in b/keepalived/keepalived.service.in
+index 49a98d0d..8eddeed1 100644
+--- a/keepalived/keepalived.service.in
++++ b/keepalived/keepalived.service.in
+@@ -1,6 +1,6 @@
+ [Unit]
+ Description=LVS and VRRP High Availability Monitor
+-After=network-online.target syslog.target @SNMP_SERVICE@
++After=network-online.target @SNMP_SERVICE@
+ Wants=network-online.target @SNMP_SERVICE@
+ Documentation=man:keepalived(8)
+ Documentation=man:keepalived.conf(5)

@@ -1,0 +1,269 @@
+ keepalived/dbus/org.keepalived.Vrrp1.Instance.xml      |    4 
+ keepalived/dbus/org.keepalived.Vrrp1.Vrrp.xml_template |    5 
+ keepalived/vrrp/vrrp_dbus.c                            |  111 +++++++++++++++--
+ 3 files changed, 107 insertions(+), 13 deletions(-)
+
+
+diff --git a/keepalived/dbus/org.keepalived.Vrrp1.Instance.xml b/keepalived/dbus/org.keepalived.Vrrp1.Instance.xml
+index 4e6b4f8f..17cd9d5e 100644
+--- a/keepalived/dbus/org.keepalived.Vrrp1.Instance.xml
++++ b/keepalived/dbus/org.keepalived.Vrrp1.Instance.xml
+@@ -27,5 +27,9 @@
+ 	</signal>
+ 	<property type='(s)' name='Name' access='read' />
+ 	<property type='(us)' name='State' access='read' />
++	<property type='s' name='XmitIntf' access='read' />
++	<property type='b' name='AddressOwner' access='read' />
++	<property type='u' name='LastTransition' access='read' />
++	<property type='s' name='SyncGroup' access='read' />
+   </interface>
+ </node>
+diff --git a/keepalived/dbus/org.keepalived.Vrrp1.Vrrp.xml_template b/keepalived/dbus/org.keepalived.Vrrp1.Vrrp.xml_template
+index e365d990..77328a25 100644
+--- a/keepalived/dbus/org.keepalived.Vrrp1.Vrrp.xml_template
++++ b/keepalived/dbus/org.keepalived.Vrrp1.Vrrp.xml_template
+@@ -40,6 +40,11 @@
+ 	-->
+ 	<method name='ReloadConfig'>
+ 	</method>
++	<method name="GetRfcMapping">
++		<arg name="xmit" type="s" direction="in"/>
++		<arg name="recv" type="s" direction="out" />
++		<arg name="vrid" type="y" direction="out" />
++	</method>
+ C		<!--
+ C		  CreateInstance:
+ C		  @iname: unique name for the new instance.
+diff --git a/keepalived/vrrp/vrrp_dbus.c b/keepalived/vrrp/vrrp_dbus.c
+index 5b3953fc..c90427bf 100644
+--- a/keepalived/vrrp/vrrp_dbus.c
++++ b/keepalived/vrrp/vrrp_dbus.c
+@@ -68,6 +68,7 @@
+ #include "vrrp_dbus.h"
+ #include "vrrp_data.h"
+ #include "vrrp_print.h"
++#include "vrrp_sync.h"
+ #include "global_data.h"
+ #include "main.h"
+ #include "logger.h"
+@@ -82,6 +83,7 @@ typedef enum dbus_action {
+ 	DBUS_PRINT_STATS,
+ 	DBUS_PRINT_STATS_CLEAR,
+ 	DBUS_RELOAD,
++	DBUS_GET_RFC_MAPPING,
+ #ifdef _WITH_DBUS_CREATE_INSTANCE_
+ 	DBUS_CREATE_INSTANCE,
+ 	DBUS_DESTROY_INSTANCE,
+@@ -89,6 +91,10 @@ typedef enum dbus_action {
+ 	DBUS_SEND_GARP,
+ 	DBUS_GET_NAME,
+ 	DBUS_GET_STATUS,
++	DBUS_GET_XMIT,
++	DBUS_GET_IPAO,
++	DBUS_GET_LAST_TRANSITION,
++	DBUS_GET_SYNC_GROUP
+ } dbus_action_t;
+ 
+ typedef enum dbus_error {
+@@ -224,6 +230,22 @@ get_vrrp_instance(const char *ifname, int vrid, int family)
+ 	return NULL;
+ }
+ 
++static vrrp_t *
++get_vrrp_instance_from_xmit_intf(const char *ifname)
++{
++	vrrp_t *vrrp;
++
++	list_for_each_entry(vrrp, &vrrp_data->vrrp, e_list) {
++		if (!valid_path_cmp(IF_NAME(vrrp->ifp), ifname) &&
++				valid_path_cmp(IF_NAME(IF_BASE_IFP(vrrp->ifp)), ifname)) {
++			log_message(LOG_DEBUG, "Configured interface: %s, Receiving interface: %s", IF_NAME(vrrp->ifp), IF_NAME(IF_BASE_IFP(vrrp->ifp)));
++			return vrrp;
++		}
++	}
++
++	return NULL;
++}
++
+ static gboolean
+ unregister_object(const void * const key, gpointer value, __attribute__((unused)) gpointer user_data)
+ {
+@@ -373,6 +395,14 @@ handle_get_property(__attribute__((unused)) GDBusConnection *connection,
+ 		action = DBUS_GET_NAME;
+ 	else if (!g_strcmp0(property_name, "State"))
+ 		action = DBUS_GET_STATUS;
++	else if (!g_strcmp0(property_name, "XmitIntf"))
++		action = DBUS_GET_XMIT;
++	else if (!g_strcmp0(property_name, "AddressOwner"))
++		action = DBUS_GET_IPAO;
++	else if (!g_strcmp0(property_name, "LastTransition"))
++		action = DBUS_GET_LAST_TRANSITION;
++	else if (!g_strcmp0(property_name, "SyncGroup"))
++		action = DBUS_GET_SYNC_GROUP;
+ 	else {
+ 		log_message(LOG_INFO, "Property %s does not exist", property_name);
+ 		return NULL;
+@@ -413,6 +443,7 @@ handle_method_call(__attribute__((unused)) GDBusConnection *connection,
+ 	unsigned family;
+ 	guint32 vrid_u;
+ #endif
++	char *xmit;
+ 	dbus_queue_ent_t ent;
+ 	char ifname_str[IFNAMSIZ];
+ 
+@@ -436,6 +467,13 @@ handle_method_call(__attribute__((unused)) GDBusConnection *connection,
+ 			g_dbus_method_invocation_return_value(invocation, NULL);
+ 			kill(getppid(), SIGHUP);
+ 		}
++		else if (g_strcmp0(method_name, "GetRfcMapping") == 0) {
++			ent.action = DBUS_GET_RFC_MAPPING;
++			g_variant_get(parameters, "(s)", &xmit);
++			ent.args = g_variant_new("(s)", xmit);
++			process_method_call(&ent);
++			g_dbus_method_invocation_return_value(invocation, ent.args);
++		}
+ #ifdef _WITH_DBUS_CREATE_INSTANCE_
+ 		else if (g_strcmp0(method_name, "CreateInstance") == 0) {
+ 			g_variant_get(parameters, "(ssuu)", &iname, &ifname, &vrid_u, &family);
+@@ -512,6 +550,8 @@ dbus_create_object_params(const char *instance_name, const char *interface_name,
+ 	gchar *object_path;
+ 	GError *local_error = NULL;
+ 
++	log_message(LOG_INFO, "Creating dbus object for %s %d %s", interface_name, vrid, (family == AF_INET? "IPv4": "IPv6"));
++
+ 	if (g_hash_table_lookup(objects, instance_name)) {
+ 		log_message(LOG_INFO, "An object for instance %s already exists", instance_name);
+ 		return DBUS_OBJECT_ALREADY_EXISTS;
+@@ -541,7 +581,7 @@ dbus_create_object_params(const char *instance_name, const char *interface_name,
+ static void
+ dbus_create_object(vrrp_t *vrrp)
+ {
+-	dbus_create_object_params(vrrp->iname, vrrp->ifp ? IF_NAME(VRRP_CONFIGURED_IFP(vrrp)) : dbus_no_interface_name, vrrp->vrid, vrrp->family, false);
++	dbus_create_object_params(vrrp->iname, vrrp->ifp ? IF_NAME(IF_BASE_IFP(vrrp->ifp)) : dbus_no_interface_name, vrrp->vrid, vrrp->family, false);
+ }
+ 
+ static bool
+@@ -810,6 +850,7 @@ handle_dbus_msg(__attribute__((unused)) thread_ref_t thread)
+ {
+ 	dbus_queue_ent_t *ent;
+ 	char recv_buf;
++	gchar *xmit_intf;
+ 	vrrp_t *vrrp;
+ #ifdef _WITH_DBUS_CREATE_INSTANCE_
+ 	gchar *name;
+@@ -834,6 +875,29 @@ handle_dbus_msg(__attribute__((unused)) thread_ref_t thread)
+ 			log_message(LOG_INFO, "Printing and clearing VRRP stats on DBus request");
+ 			vrrp_print_stats(true);
+ 		}
++		else if (ent->action == DBUS_GET_RFC_MAPPING) {
++			g_variant_get(ent->args, "(s)", &xmit_intf);
++			log_message(LOG_INFO, "Finding Receive interface for interface %s",
++						xmit_intf);
++			vrrp = get_vrrp_instance_from_xmit_intf(xmit_intf);
++			if (NULL != vrrp) {
++				log_message(LOG_INFO, "Found Receive interface %s for Transmit interface %s",
++							vrrp->ifp->base_ifp->ifname, xmit_intf);
++				ent->args = g_variant_new("(sy)",
++								vrrp->ifp->base_ifp->ifname,
++								vrrp->vrid
++								);
++				ent->reply = DBUS_SUCCESS;
++			} else {
++				log_message(LOG_INFO, "%s is not an RFC interface",
++							xmit_intf);
++				ent->reply = DBUS_SUCCESS;
++				ent->args = g_variant_new("(sy)",
++								"",
++								0
++								);
++			}
++		}
+ #ifdef _WITH_DBUS_CREATE_INSTANCE_
+ 		else if (ent->action == DBUS_CREATE_INSTANCE) {
+ 			g_variant_get(ent->args, "(s)", &name);
+@@ -855,7 +919,11 @@ handle_dbus_msg(__attribute__((unused)) thread_ref_t thread)
+ 			}
+ 		}
+ 		else if (ent->action == DBUS_GET_NAME ||
+-			 ent->action == DBUS_GET_STATUS) {
++			 ent->action == DBUS_GET_STATUS ||
++			 ent->action == DBUS_GET_XMIT ||
++			 ent->action == DBUS_GET_IPAO ||
++			 ent->action == DBUS_GET_LAST_TRANSITION ||
++			 ent->action == DBUS_GET_SYNC_GROUP) {
+ 			/* we look for the vrrp instance object that corresponds to our interface and group */
+ 			ent->reply = DBUS_INTERFACE_NOT_FOUND;
+ 
+@@ -867,6 +935,17 @@ handle_dbus_msg(__attribute__((unused)) thread_ref_t thread)
+ 					ent->args = g_variant_new("(s)", vrrp->iname);
+ 				else if (ent->action == DBUS_GET_STATUS)
+ 					ent->args = g_variant_new("(us)", vrrp->state, state_str(vrrp->state));
++				else if (ent->action == DBUS_GET_XMIT)
++					ent->args = g_variant_new("(s)", vrrp->ifp->ifname);
++				else if (ent->action == DBUS_GET_IPAO)
++					ent->args = g_variant_new("(b)", false); // restore with dynamic IPAO patch vrrp->addr_owner);
++				else if (ent->action == DBUS_GET_LAST_TRANSITION)
++					ent->args = g_variant_new("(u)", vrrp->last_transition.tv_sec);
++				else if (ent->action == DBUS_GET_SYNC_GROUP)
++					if (vrrp->sync != NULL)
++						ent->args = g_variant_new("(s)", GROUP_NAME(vrrp->sync));
++					else
++						ent->args = g_variant_new("(s)", "");
+ 				else
+ 					ent->args = NULL;	 /* How did we get here? */
+ 				ent->reply = DBUS_SUCCESS;
+@@ -892,6 +971,7 @@ dbus_reload(const list_head_t *o, const list_head_t *n)
+ 		bool match_found;
+ 
+ 		n_name = vrrp_n->ifp ? VRRP_CONFIGURED_IFP(vrrp_n)->ifname : dbus_no_interface_name;
++		log_message(LOG_DEBUG, "Searching for a dbus instance for %s", n_name);
+ 
+ 		/* Try and find an instance with same vrid/family/interface that existed before and now */
+ 		match_found = false;
+@@ -900,20 +980,23 @@ dbus_reload(const list_head_t *o, const list_head_t *n)
+ 			    vrrp_n->family == vrrp_o->family &&
+ // TODO - need to match on unicast_src if no interface
+ 			    !strcmp(n_name, VRRP_CONFIGURED_IFP(vrrp_o)->ifname)) {
++				log_message(LOG_DEBUG, "Found a matching instance");
+ 				/* If the old instance exists in the new config,
+ 				 * then the dbus object will exist */
+-				if (!strcmp(vrrp_n->iname, vrrp_o->iname)) {
+-					match_found = true;
+-					g_hash_table_replace(objects, no_const_char_p(vrrp_n->iname), g_hash_table_lookup(objects, vrrp_o->iname));
+-					break;
+-				} else {
+-					gpointer instance;
+-					if ((instance = g_hash_table_lookup(objects, vrrp_o->iname))) {
++				gpointer instance;
++				if ((instance = g_hash_table_lookup(objects, vrrp_o->iname))) {
++					if (!strcmp(vrrp_n->iname, vrrp_o->iname)) {
++						log_message(LOG_DEBUG, "New instance name matches old instance name");
++						match_found = true;
++						g_hash_table_replace(objects, no_const_char_p(vrrp_n->iname), instance);
++						break;
++					} else {
++						log_message(LOG_DEBUG, "New instance name does not match old instance name");
+ 						g_hash_table_remove(objects, vrrp_o->iname);
+ 						g_hash_table_insert(objects, no_const_char_p(vrrp_n->iname), instance);
++						match_found = true;
++						break;
+ 					}
+-					match_found = true;
+-					break;
+ 				}
+ 
+ #if 0
+@@ -932,9 +1015,11 @@ dbus_reload(const list_head_t *o, const list_head_t *n)
+ 			}
+ 		}
+ 
+-		if (match_found)
++		if (match_found) {
++			log_message(LOG_DEBUG, "Match found for %s", n_name);
+ 			continue;
+-
++		}
++		log_message(LOG_DEBUG, "Creating instance for %s", n_name);
+ 		dbus_create_object(vrrp_n);
+ 	}
+ 

@@ -1,0 +1,54 @@
+Vyatta specific preemption code
+
+Code to pass Vyatta specific regressions
+
+
+diff --git a/keepalived/core/keepalived_netlink.c b/keepalived/core/keepalived_netlink.c
+index 761b0a14..eadccad9 100644
+--- a/keepalived/core/keepalived_netlink.c
++++ b/keepalived/core/keepalived_netlink.c
+@@ -1248,8 +1248,8 @@ netlink_if_address_filter(__attribute__((unused)) struct sockaddr_nl *snl, struc
+ 						    , addr_str, h->nlmsg_type == RTM_NEWADDR ? "added to" : "removed from", ifp->ifname);
+ 			}
+ 
+-			/* If one of our VIPs/eVIPs has been deleted, transition to backup */
+-			if (address_vrrp && address_vrrp->state == VRRP_STATE_MAST) {
++			/* If one of our VIPs/eVIPs has been deleted, transition to backup so long as preempt isn't disabled */
++			if (address_vrrp && address_vrrp->state == VRRP_STATE_MAST && !address_vrrp->nopreempt) {
+ 				set_vrrp_backup(address_vrrp);
+ 			}
+ 		}
+diff --git a/keepalived/vrrp/vrrp.c b/keepalived/vrrp/vrrp.c
+index 57d34847..0ea1c907 100644
+--- a/keepalived/vrrp/vrrp.c
++++ b/keepalived/vrrp/vrrp.c
+@@ -5570,7 +5570,15 @@ restore_vrrp_state(vrrp_t *old_vrrp, vrrp_t *vrrp)
+ 	bool added_ip_addr = false;
+ 
+ 	/* If the new state is master, we must be reloading from master */
+-	vrrp->reload_master = vrrp->state == VRRP_STATE_MAST;
++	if(vrrp->state == VRRP_STATE_MAST || (old_vrrp->state == VRRP_STATE_MAST && vrrp->nopreempt && vrrp->base_priority != old_vrrp->base_priority)) {
++		vrrp->reload_master = true;
++		vrrp->state =
++#ifdef _WITH_SNMP_VRRP
++		vrrp->configured_state =
++#endif
++		vrrp->wantstate = VRRP_STATE_MAST;
++	} else
++		vrrp->reload_master = false;
+ 
+ 	/* Save old stats */
+ 	memcpy(vrrp->stats, old_vrrp->stats, sizeof(vrrp_stats));
+@@ -5604,6 +5612,12 @@ restore_vrrp_state(vrrp_t *old_vrrp, vrrp_t *vrrp)
+ 			vrrp_handle_iprules(vrrp, IPRULE_ADD, false);
+ 	}
+ 
++	if (!vrrp->reload_master)
++		vrrp->state =
++#ifdef _WITH_SNMP_VRRP
++		vrrp->configured_state =
++#endif
++		vrrp->wantstate = VRRP_STATE_BACK;
+ 	return added_ip_addr;
+ }
+ 

@@ -1,0 +1,30 @@
+--- a/agent/helpers/old_api.c
++++ b/agent/helpers/old_api.c
+@@ -349,7 +349,11 @@
+                        sizeof(tmp_name)-tmp_len);
+                 tmp_len = requests->requestvb->name_length;
+                 access = (*(vp->findVar)) (cvp, tmp_name, &tmp_len,
+-                                           exact, &len, &write_method);
++                                           exact, &len, &write_method
++#ifdef VYATTA_SNMP
++                                           , reginfo->contextName
++#endif
++                                          );
+                 snmp_set_var_objid( requests->requestvb, tmp_name, tmp_len );
+             }
+             else
+--- a/include/net-snmp/agent/snmp_vars.h
++++ b/include/net-snmp/agent/snmp_vars.h
+@@ -80,7 +80,11 @@
+                                      size_t * length,
+                                      int exact,
+                                      size_t * var_len,
+-                                     WriteMethod ** write_method);
++                                     WriteMethod ** write_method
++#ifdef VYATTA_SNMP
++                                     , char * contextName
++#endif
++                                    );
+ 
+     /*
+      * Function pointer called by the master agent for setting up subagent requests 

@@ -1,0 +1,71 @@
+Bring VRRP instance up if address added after interface up
+
+To determine if a VRRP group should move from FAULT state into active state
+Keepalived uses a counter of events that are stopping the transition. In vyatta
+if an interface is brought up without an address then the group is in FAULT if
+an address is then added later the group should come up. This doesn't always
+happen with RFC interfaces, the copying of the source address from the interface
+into the VRRP structure needs to be done.
+This usually happens on a full box restart and if an interface is moved between
+VRFs (this is caused by the netlink DOWN message being received after the netlink
+UP message for the new VRF)
+
+Added code to check if the VRRP source address is null and the address being
+added is the primary address for the interface and then fudge the fault counter
+so the VRRP group comes up correctly
+
+
+
+
+diff --git a/keepalived/core/keepalived_netlink.c b/keepalived/core/keepalived_netlink.c
+index eadccad9..75bd084c 100644
+--- a/keepalived/core/keepalived_netlink.c
++++ b/keepalived/core/keepalived_netlink.c
+@@ -1026,6 +1026,24 @@ netlink_if_address_filter(__attribute__((unused)) struct sockaddr_nl *snl, struc
+ 					 * and see if they can be brought up */
+ 					list_for_each_entry(top, &ifp->tracking_vrrp, e_list) {
+ 						vrrp = top->obj.vrrp;
++#ifdef _HAVE_VRRP_VMAC_
++						/* Vyatta RFC interfaces stay admin down in BACKUP, so the VMAC
++						 * never learns an address of its own: take the base
++						 * interface's. For IPv6, drop a stale source address and mark
++						 * it missing, so the code below takes the new one and brings
++						 * the instance up (DANOS 2.2 did this with its fault counter). */
++						if (__test_bit(VRRP_VMAC_BIT, &vrrp->flags) && IF_BASE_IFP(vrrp->ifp) == ifp && ifa->ifa_family == vrrp->family) {
++							if (ifa->ifa_family == AF_INET) {
++								if (vrrp->ifp->sin_addr.s_addr == 0)
++									vrrp->ifp->sin_addr = ifp->sin_addr;
++							} else if (IN6_IS_ADDR_UNSPECIFIED(&vrrp->ifp->sin6_addr) &&
++								   vrrp->saddr.ss_family != AF_UNSPEC) {
++								memset(&vrrp->saddr, 0, sizeof(vrrp->saddr));
++								vrrp->saddr.ss_family = AF_UNSPEC;
++								__set_bit(VRRP_FAULT_FL_NO_SOURCE_IP, &vrrp->flags_if_fault);
++							}
++						}
++#endif
+ 						vrrp_check_for_owner_mode(vrrp);
+ 
+ 						if (__test_bit(VRRP_FLAG_TRACK_SADDR, &vrrp->flags) && vrrp->family == ifa->ifa_family)
+@@ -2225,6 +2243,8 @@ netlink_link_filter(__attribute__((unused)) struct sockaddr_nl *snl, struct nlms
+ 				thread_add_event(master, recreate_vmac_thread, ifp, 0);
+ #endif
+ 		} else {
++			if (tb[IFLA_MASTER] && ifp->vrf_master_ifp == NULL && !FLAGS_UP(ifi->ifi_flags)) // Changing VRF of interface
++				return 0;
+ 			if (tb[IFLA_ADDRESS]) {
+ 				hw_addr_len = RTA_PAYLOAD(tb[IFLA_ADDRESS]);
+ 
+diff --git a/keepalived/vrrp/vrrp_vmac.c b/keepalived/vrrp/vrrp_vmac.c
+index 836f156d..97fab14f 100644
+--- a/keepalived/vrrp/vrrp_vmac.c
++++ b/keepalived/vrrp/vrrp_vmac.c
+@@ -855,6 +855,9 @@ netlink_update_vrf(vrrp_t *vrrp)
+ 	if (!vrrp->ifp)
+ 		return;
+ 
++	if (!vrrp->vrf_aware)
++		return;
++
+ 	/* Don't update the VMAC if it isn't an interface we created */
+ 	if (!vrrp->ifp->is_ours) {
+ 		log_message(LOG_INFO, "BUG - Attempt to update VRF on VMAC interface %s which we didn't create", vrrp->ifp->ifname);

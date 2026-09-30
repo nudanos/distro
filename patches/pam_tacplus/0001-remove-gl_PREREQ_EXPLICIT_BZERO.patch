@@ -1,0 +1,24 @@
+Description: Remove gl_PREREQ_EXPLICIT_BZERO
+ Debian 13 gnulib (20250303) no longer defines the macro, so autoreconf
+ fails on 1.7.0.
+Origin: upstream, https://github.com/kravietz/pam_tacplus/commit/7908a7f
+Forwarded: not-needed
+
+ configure.ac | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/configure.ac b/configure.ac
+index c5ec5e0..6914561 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -60,7 +60,6 @@ gl_MD5
+ gl_FUNC_EXPLICIT_BZERO
+ if test $HAVE_EXPLICIT_BZERO = 0; then
+   AC_LIBOBJ([explicit_bzero])
+-  gl_PREREQ_EXPLICIT_BZERO
+ fi
+ gl_STRING_MODULE_INDICATOR([explicit_bzero])
+ gl_XALLOC
+-- 
+2.50.1 (Apple Git-155)
+

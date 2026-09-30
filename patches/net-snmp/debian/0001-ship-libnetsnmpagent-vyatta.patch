@@ -1,0 +1,22 @@
+Description: Ship libnetsnmpagent-vyatta (DANOS add-libnetsnmpagent-vyatta-lib)
+ vyatta-snmp-vrf-agent links against it through netsnmp-agent-vyatta.pc.
+
+--- a/debian/libsnmp45.install
++++ b/debian/libsnmp45.install
+@@ -1,5 +1,6 @@
+ usr/lib/*/libnetsnmp.so.*
+ usr/lib/*/libnetsnmpagent.so.*
++usr/lib/*/libnetsnmpagent-vyatta.so.*
+ usr/lib/*/libnetsnmphelpers.so.*
+ usr/lib/*/libnetsnmpmibs.so.*
+ usr/lib/*/libsnmp.so.*
+--- a/debian/libsnmp-dev.install
++++ b/debian/libsnmp-dev.install
+@@ -4,6 +4,7 @@
+ usr/include/*
+ usr/lib/*/lib*.so
+ usr/lib/*/pkgconfig/netsnmp-agent.pc
++usr/lib/*/pkgconfig/netsnmp-agent-vyatta.pc
+ usr/lib/*/pkgconfig/netsnmp.pc
+ # Install the "broke" headers
+ agent/mibgroup/struct.h	usr/include/net-snmp/agent
