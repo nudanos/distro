@@ -30,7 +30,8 @@ var repackSuffix = regexp.MustCompile(`\+(dfsg|ds)\d*`)
 // packaging's latest version: its epoch (if any), the upstream version with
 // the packaging's repack suffix (we apply the same Files-Excluded), and
 // revision 0nudanos1 -- or, when the packaging already has this upstream
-// version, its own revision plus nudanos1, so ours sorts after it.
+// version, its own revision plus "+nudanos1", so ours sorts after it and after
+// Debian's stable updates of it ("+deb13u1": "+n" > "+d").
 func DebianVersion(prevTop, upstreamVersion string) string {
 	epoch, rest := "", prevTop
 	if i := strings.Index(rest, ":"); i > 0 {
@@ -45,7 +46,7 @@ func DebianVersion(prevTop, upstreamVersion string) string {
 		up += s
 	}
 	if up == prevUp && prevRev != "" {
-		return epoch + up + "-" + prevRev + "nudanos1"
+		return epoch + up + "-" + prevRev + "+nudanos1"
 	}
 	return epoch + up + "-0nudanos1"
 }

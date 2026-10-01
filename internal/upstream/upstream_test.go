@@ -121,9 +121,12 @@ func TestDebianVersion(t *testing.T) {
 		// Debian repacks (Files-Excluded) and so do we: carry the suffix.
 		{"5.9.4+dfsg-2+deb13u1", "5.9.5.2"}: "5.9.5.2+dfsg-0nudanos1",
 		// Debian already packages this upstream version: sort after its
-		// revision, not before it (ntpsec 1.2.5+dfsg-1).
-		{"1.2.5+dfsg-1", "1.2.5"}: "1.2.5+dfsg-1nudanos1",
-		{"1.2.9.2-5", "1.2.9.2"}:  "1.2.9.2-5nudanos1",
+		// revision (ntpsec 1.2.5+dfsg-1) and after its stable updates too:
+		// 1.2.5+dfsg-1nudanos1 sorted below 1.2.5+dfsg-1+deb13u1, so a Debian
+		// security update would have replaced our build.
+		{"1.2.5+dfsg-1", "1.2.5"}:         "1.2.5+dfsg-1+nudanos1",
+		{"1.2.9.2-5", "1.2.9.2"}:          "1.2.9.2-5+nudanos1",
+		{"1.2.5+dfsg-1+deb13u1", "1.2.5"}: "1.2.5+dfsg-1+deb13u1+nudanos1",
 	}
 	for in, want := range cases {
 		if got := DebianVersion(in[0], in[1]); got != want {
@@ -221,7 +224,7 @@ func TestPrepareSubdirAndInTreePackaging(t *testing.T) {
 		t.Errorf("debian/control = %q, want the in-tree packaging's", b)
 	}
 	cl, _ := os.ReadFile(filepath.Join(dir, "debian", "changelog"))
-	if first := strings.SplitN(string(cl), "\n", 2)[0]; first != "owamp (5.2.6-1nudanos1) trixie; urgency=medium" {
+	if first := strings.SplitN(string(cl), "\n", 2)[0]; first != "owamp (5.2.6-1+nudanos1) trixie; urgency=medium" {
 		t.Errorf("changelog top = %q", first)
 	}
 }
