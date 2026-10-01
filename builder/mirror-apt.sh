@@ -15,7 +15,7 @@ cat > /etc/apt/sources.list.d/mirror.list <<EOF
 deb [signed-by=/usr/share/keyrings/mirror.gpg] $url $suite $comp
 deb-src [signed-by=/usr/share/keyrings/mirror.gpg] $url $suite $comp
 EOF
-apt-get update
+apt-get update --error-on=any -o Acquire::Retries=3
 cd /out
 declare -A seen
 for pin in $PINS; do

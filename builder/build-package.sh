@@ -13,7 +13,10 @@ setup_local_repo() {
     # /pool is indexed once per tier by index-pool; read it in place.
     echo 'deb [trusted=yes] file:/pool ./' > /etc/apt/sources.list.d/000-local.list
     printf 'Package: *\nPin: origin ""\nPin-Priority: 999\n' > /etc/apt/preferences.d/000-local
-    apt-get update
+    # Fail on any index that cannot be fetched (a DNS outage otherwise
+    # surfaces as misleading "not installable" build-dependencies); retry
+    # transient network errors first.
+    apt-get update --error-on=any -o Acquire::Retries=3
 }
 
 
