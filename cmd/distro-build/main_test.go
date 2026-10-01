@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"github.com/nudanos/distro/internal/manifest"
 	"os"
 	"reflect"
@@ -60,5 +61,19 @@ func TestKeyExtrasCarryProfilesOrderIndependently(t *testing.T) {
 	}
 	if _, ok := got["plain"]; ok {
 		t.Errorf("plain has a key extra: %q", got["plain"])
+	}
+}
+
+// A closure build (per-package CI) must not fail because an unrelated entry
+// could not be fetched, but must fail, naming it, when the closure needs it.
+func TestFetchFailuresBlockOnlyTheirClosure(t *testing.T) {
+	failed := map[string]error{"unrelated": errors.New("host down"), "dep": errors.New("no branch trixie")}
+	if err := fetchBlocks(map[string]bool{"pkg": true}, failed); err != nil {
+		t.Errorf("unrelated failure blocked the build: %v", err)
+	}
+	err := fetchBlocks(map[string]bool{"pkg": true, "dep": true}, failed)
+	if err == nil || !strings.Contains(err.Error(), "dep") || !strings.Contains(err.Error(), "no branch trixie") ||
+		strings.Contains(err.Error(), "unrelated") {
+		t.Errorf("err = %v, want one naming dep and its fetch error only", err)
 	}
 }

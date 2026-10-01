@@ -90,22 +90,38 @@ func (a *app) checkWork() error {
 
 // fetch mirrors every ready apt entry, then checks out every ready danos entry
 // (or uses its -local override) and returns the source directory for each.
-func (a *app) fetch(ctx context.Context, m *manifest.Manifest) (map[string]string, error) {
+// With tolerate, an entry that cannot be fetched or prepared is recorded in
+// failed instead of ending the run; its previous checkout, if any, stays in
+// dirs for planning only (the caller must not build anything that needs it).
+func (a *app) fetch(ctx context.Context, m *manifest.Manifest, tolerate bool) (map[string]string, map[string]error, error) {
 	if err := a.checkWork(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := build.Prune(a.outRoot(), readyNames(m), os.Stderr); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(m.Ready(manifest.Apt)) > 0 {
 		if _, err := a.builderSalt(ctx); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	if err := a.mirror(ctx, m); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	dirs := map[string]string{}
+	failed := map[string]error{}
+	// keep records a failed entry, keeping a previous checkout for planning.
+	keep := func(name, d string, err error) error {
+		if !tolerate {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "==> %s could not be fetched; builds that need it will stop: %v\n", name, err)
+		failed[name] = err
+		if _, serr := os.Stat(filepath.Join(d, "debian", "control")); serr == nil {
+			dirs[name] = d
+		}
+		return nil
+	}
 	for _, e := range m.Ready(manifest.Danos) {
 		if d, ok := a.local[e.Name]; ok {
 			dirs[e.Name] = d
@@ -114,7 +130,10 @@ func (a *app) fetch(ctx context.Context, m *manifest.Manifest) (map[string]strin
 		d := filepath.Join(a.work, "src", e.Name)
 		fmt.Fprintf(os.Stderr, "==> fetch %s@%s\n", e.Name, e.Ref)
 		if err := fetch.Git(ctx, e.Repo, e.Ref, d, os.Stderr); err != nil {
-			return nil, err
+			if err := keep(e.Name, d, err); err != nil {
+				return nil, nil, err
+			}
+			continue
 		}
 		dirs[e.Name] = d
 	}
@@ -122,17 +141,20 @@ func (a *app) fetch(ctx context.Context, m *manifest.Manifest) (map[string]strin
 		fmt.Fprintf(os.Stderr, "==> prepare %s %s (%s)\n", e.Name, e.Version, e.Tag)
 		d, err := upstream.Prepare(ctx, e, filepath.Join(filepath.Dir(a.manifest), "patches"), a.work, os.Stderr)
 		if err != nil {
-			return nil, err
+			if err := keep(e.Name, filepath.Join(a.work, "src", e.Name), err); err != nil {
+				return nil, nil, err
+			}
+			continue
 		}
 		dirs[e.Name] = d
 	}
 
 	for name := range a.local {
 		if _, ok := dirs[name]; !ok {
-			return nil, fmt.Errorf("-local %s: no ready danos entry with that name", name)
+			return nil, nil, fmt.Errorf("-local %s: no ready danos entry with that name", name)
 		}
 	}
-	return dirs, nil
+	return dirs, failed, nil
 }
 
 // readyNames is every entry whose output belongs in the pool.
@@ -248,7 +270,9 @@ func (a *app) run(ctx context.Context, cmd string, names []string) error {
 	if err != nil {
 		return err
 	}
-	dirs, err := a.fetch(ctx, m)
+	// Only a build of named packages tolerates fetch failures: a full build
+	// (or fetch) needs every entry.
+	dirs, fetchFailed, err := a.fetch(ctx, m, len(names) > 0 && cmd != "fetch")
 	if err != nil || cmd == "fetch" {
 		return err
 	}
@@ -257,8 +281,16 @@ func (a *app) run(ctx context.Context, cmd string, names []string) error {
 		return err
 	}
 	if len(names) > 0 {
+		for _, n := range names {
+			if err, ok := fetchFailed[n]; ok {
+				return fmt.Errorf("%s could not be fetched: %w", n, err)
+			}
+		}
 		keep, err := g.Closure(names)
 		if err != nil {
+			return err
+		}
+		if err := fetchBlocks(keep, fetchFailed); err != nil {
 			return err
 		}
 		tiers = plan.Filter(tiers, keep)
@@ -486,4 +518,20 @@ func keyExtras(m *manifest.Manifest) map[string]string {
 		}
 	}
 	return out
+}
+
+// fetchBlocks reports the entries in the build closure keep that could not be
+// fetched.
+func fetchBlocks(keep map[string]bool, failed map[string]error) error {
+	var msgs []string
+	for name, err := range failed {
+		if keep[name] {
+			msgs = append(msgs, fmt.Sprintf("%s: %v", name, err))
+		}
+	}
+	if len(msgs) == 0 {
+		return nil
+	}
+	sort.Strings(msgs)
+	return fmt.Errorf("the build needs entries that could not be fetched:\n  %s", strings.Join(msgs, "\n  "))
 }
