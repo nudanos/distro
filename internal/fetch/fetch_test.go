@@ -95,3 +95,26 @@ func TestGitFollowsChangedRepository(t *testing.T) {
 		t.Errorf("f = %q, want the new repository's content", b)
 	}
 }
+
+// Packaging is pinned to a commit so a push to the followed branch cannot
+// change a prepared tree: checking out the pin stays put after the branch moves.
+func TestGitChecksOutAPinnedCommit(t *testing.T) {
+	origin := t.TempDir()
+	git(t, origin, "init", "-q", "-b", "master")
+	os.WriteFile(filepath.Join(origin, "f"), []byte("one"), 0o644)
+	git(t, origin, "add", "f")
+	git(t, origin, "commit", "-qm", "one")
+	pin := git(t, origin, "rev-parse", "HEAD")
+	os.WriteFile(filepath.Join(origin, "f"), []byte("two"), 0o644)
+	git(t, origin, "commit", "-qam", "two")
+
+	dir := filepath.Join(t.TempDir(), "p")
+	for i := 0; i < 2; i++ { // fresh clone, then an existing checkout
+		if err := Git(context.Background(), origin, pin, dir, io.Discard); err != nil {
+			t.Fatal(err)
+		}
+		if b, _ := os.ReadFile(filepath.Join(dir, "f")); string(b) != "one" {
+			t.Fatalf("run %d: f = %q, want the pinned commit's", i, b)
+		}
+	}
+}

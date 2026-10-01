@@ -34,27 +34,28 @@ type AuditEntry struct {
 
 // Entry is one package or repository in the manifest.
 type Entry struct {
-	Name         string       `yaml:"name"`
-	Kind         Kind         `yaml:"kind"`
-	Milestone    string       `yaml:"milestone"`
-	Ready        bool         `yaml:"ready,omitempty"`
-	Repo         string       `yaml:"repo,omitempty"`
-	Ref          string       `yaml:"ref,omitempty"`
-	Upstream     string       `yaml:"upstream,omitempty"`
-	Track        string       `yaml:"track,omitempty"`
-	Packaging    string       `yaml:"packaging,omitempty"`
-	Patches      string       `yaml:"patches,omitempty"`
-	Version      string       `yaml:"version,omitempty"`       // upstream: upstream version built
-	Tag          string       `yaml:"tag,omitempty"`           // upstream: git tag of Version
-	TagPattern   string       `yaml:"tag_pattern,omitempty"`   // upstream: regexp, group 1 = version
-	PackagingRef string       `yaml:"packaging_ref,omitempty"` // upstream: branch or tag of packaging
-	Audit        []AuditEntry `yaml:"audit,omitempty"`
-	Exclude      []string     `yaml:"exclude,omitempty"`       // upstream: globs absent from the release tarball
-	Subdir       string       `yaml:"subdir,omitempty"`        // upstream: source root inside the upstream repo
-	PackagingDir string       `yaml:"packaging_dir,omitempty"` // upstream: debian/ taken from this upstream path instead of packaging
-	UnpackWaf    bool         `yaml:"unpack_waf,omitempty"`    // upstream: replace the self-extracting waf blob with its source
-	Profiles     []string     `yaml:"profiles,omitempty"`      // Debian build profiles to build with (DEB_BUILD_PROFILES)
-	Hold         string       `yaml:"hold,omitempty"`          // upstream: why a newer release is deliberately not taken
+	Name            string       `yaml:"name"`
+	Kind            Kind         `yaml:"kind"`
+	Milestone       string       `yaml:"milestone"`
+	Ready           bool         `yaml:"ready,omitempty"`
+	Repo            string       `yaml:"repo,omitempty"`
+	Ref             string       `yaml:"ref,omitempty"`
+	Upstream        string       `yaml:"upstream,omitempty"`
+	Track           string       `yaml:"track,omitempty"`
+	Packaging       string       `yaml:"packaging,omitempty"`
+	Patches         string       `yaml:"patches,omitempty"`
+	Version         string       `yaml:"version,omitempty"`          // upstream: upstream version built
+	Tag             string       `yaml:"tag,omitempty"`              // upstream: git tag of Version
+	TagPattern      string       `yaml:"tag_pattern,omitempty"`      // upstream: regexp, group 1 = version
+	PackagingRef    string       `yaml:"packaging_ref,omitempty"`    // upstream: branch or tag of packaging
+	PackagingBranch string       `yaml:"packaging_branch,omitempty"` // upstream: branch the packaging pin follows (check-updates)
+	Audit           []AuditEntry `yaml:"audit,omitempty"`
+	Exclude         []string     `yaml:"exclude,omitempty"`       // upstream: globs absent from the release tarball
+	Subdir          string       `yaml:"subdir,omitempty"`        // upstream: source root inside the upstream repo
+	PackagingDir    string       `yaml:"packaging_dir,omitempty"` // upstream: debian/ taken from this upstream path instead of packaging
+	UnpackWaf       bool         `yaml:"unpack_waf,omitempty"`    // upstream: replace the self-extracting waf blob with its source
+	Profiles        []string     `yaml:"profiles,omitempty"`      // Debian build profiles to build with (DEB_BUILD_PROFILES)
+	Hold            string       `yaml:"hold,omitempty"`          // upstream: why a newer release is deliberately not taken
 
 	Source   string            `yaml:"source,omitempty"`   // apt: "URL SUITE COMPONENT"
 	Key      string            `yaml:"key,omitempty"`      // apt: signing key URL
@@ -68,6 +69,10 @@ type Manifest struct {
 }
 
 // Parse decodes YAML strictly (unknown fields are errors) and validates it.
+
+// commitID is a full git commit id.
+var commitID = regexp.MustCompile(`^[0-9a-f]{40}$`)
+
 func Parse(data []byte) (*Manifest, error) {
 	var m Manifest
 	dec := yaml.NewDecoder(bytes.NewReader(data))
@@ -131,6 +136,9 @@ func (m *Manifest) Validate() error {
 			}
 			if e.Ready && (e.Version == "" || e.Tag == "" || e.TagPattern == "" || (e.Packaging != "" && e.PackagingRef == "")) {
 				bad("ready upstream entries need version, tag, tag_pattern and (with packaging) packaging_ref")
+			}
+			if e.Ready && e.Packaging != "" && e.PackagingRef != "" && !commitID.MatchString(e.PackagingRef) {
+				bad("packaging_ref must be a full commit id, so a push to the packaging cannot change the build; name the branch it follows in packaging_branch")
 			}
 
 		case Apt:

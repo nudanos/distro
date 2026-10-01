@@ -401,6 +401,19 @@ func remoteTags(ctx context.Context, repo string) ([]string, error) {
 	return tags, nil
 }
 
+// remoteHead is the commit branch points at in repo.
+func remoteHead(ctx context.Context, repo, branch string) (string, error) {
+	out, err := exec.CommandContext(ctx, "git", "ls-remote", "--heads", "--", repo, "refs/heads/"+branch).Output()
+	if err != nil {
+		return "", fmt.Errorf("git ls-remote %s: %w", repo, err)
+	}
+	head, _, ok := strings.Cut(strings.TrimSpace(string(out)), "\t")
+	if !ok {
+		return "", fmt.Errorf("%s: no branch %q", repo, branch)
+	}
+	return head, nil
+}
+
 // checkUpdates reports pinned versions that upstream has superseded.
 func (a *app) checkUpdates(ctx context.Context) error {
 	m, err := manifest.Load(a.manifest)
@@ -422,6 +435,15 @@ func (a *app) checkUpdates(ctx context.Context) error {
 		}
 		if d != nil {
 			drift = append(drift, *d)
+		}
+		if e.PackagingBranch != "" {
+			head, err := remoteHead(ctx, e.Packaging, e.PackagingBranch)
+			if err != nil {
+				return err
+			}
+			if d := updates.CheckPackaging(e, head); d != nil {
+				drift = append(drift, *d)
+			}
 		}
 	}
 	client := &http.Client{Timeout: 60 * time.Second}

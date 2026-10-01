@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 )
 
 func run(ctx context.Context, log io.Writer, dir string, args ...string) error {
@@ -20,8 +21,12 @@ func run(ctx context.Context, log io.Writer, dir string, args ...string) error {
 	return nil
 }
 
+// commitRef is a full commit id, which Git checks out as is.
+var commitRef = regexp.MustCompile(`^[0-9a-f]{40}$`)
+
 // Git clones repo into dir (or fetches if dir already holds a clone), checks out
-// ref detached (a remote branch, else a tag), and removes untracked files.
+// ref detached (a full commit id, a remote branch, else a tag), and removes
+// untracked files.
 func Git(ctx context.Context, repo, ref, dir string, log io.Writer) error {
 	if _, err := os.Stat(filepath.Join(dir, ".git")); os.IsNotExist(err) {
 		if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
@@ -40,6 +45,9 @@ func Git(ctx context.Context, repo, ref, dir string, log io.Writer) error {
 		}
 	}
 	target := "origin/" + ref
+	if commitRef.MatchString(ref) {
+		target = ref // a pinned commit: reachable from the fetched branches and tags
+	}
 	if run(ctx, io.Discard, dir, "rev-parse", "--verify", "--quiet", target+"^{commit}") != nil {
 		target = "refs/tags/" + ref
 		if run(ctx, io.Discard, dir, "rev-parse", "--verify", "--quiet", target+"^{commit}") != nil {

@@ -80,6 +80,9 @@ func TestUpstreamReadyNeedsPins(t *testing.T) {
 		"no ref":     {", version: \"1\", tag: v1, tag_pattern: '^v(.*)$'}\n", "packaging_ref"},
 		"bad regexp": {", version: \"1\", tag: v1, tag_pattern: '^v(', packaging_ref: master}\n", "tag_pattern"},
 		"no group":   {", version: \"1\", tag: v1, tag_pattern: '^v.*$', packaging_ref: master}\n", "capture group"},
+		// A branch moves under the pin; a prepared tree must not change
+		// without a manifest change.
+		"branch ref": {", version: \"1\", tag: v1, tag_pattern: '^v(.*)$', packaging_ref: master}\n", "commit"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -89,9 +92,13 @@ func TestUpstreamReadyNeedsPins(t *testing.T) {
 			}
 		})
 	}
-	ok := base + ", version: \"2.4.3\", tag: v2.4.3, tag_pattern: '^v(\\d+\\.\\d+\\.\\d+)$', packaging_ref: master}\n"
-	if _, err := Parse([]byte(ok)); err != nil {
-		t.Errorf("complete upstream entry rejected: %v", err)
+	ok := base + ", version: \"2.4.3\", tag: v2.4.3, tag_pattern: '^v(\\d+\\.\\d+\\.\\d+)$', packaging_ref: 0123456789abcdef0123456789abcdef01234567, packaging_branch: master}\n"
+	m, err := Parse([]byte(ok))
+	if err != nil {
+		t.Fatalf("complete upstream entry rejected: %v", err)
+	}
+	if m.Packages[0].PackagingBranch != "master" {
+		t.Errorf("PackagingBranch = %q", m.Packages[0].PackagingBranch)
 	}
 }
 

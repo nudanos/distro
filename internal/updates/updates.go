@@ -95,3 +95,19 @@ func CheckApt(ctx context.Context, e manifest.Entry, client *http.Client) ([]Dri
 	}
 	return out, nil
 }
+
+// CheckPackaging reports a packaging pin whose followed branch (head is the
+// branch's current commit) has moved past it.
+func CheckPackaging(e manifest.Entry, head string) *Drift {
+	if e.PackagingBranch == "" || head == "" || head == e.PackagingRef {
+		return nil
+	}
+	short := func(c string) string {
+		if len(c) > 7 {
+			return c[:7]
+		}
+		return c
+	}
+	return &Drift{Name: e.Name, Current: short(e.PackagingRef), Latest: short(head),
+		Detail: "packaging " + e.PackagingBranch + " moved past the pin"}
+}

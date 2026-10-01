@@ -6,6 +6,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/nudanos/distro/internal/manifest"
@@ -68,5 +69,23 @@ func TestCheckUpstreamHeld(t *testing.T) {
 	}
 	if open, held := SplitHeld([]Drift{*d, {Name: "x", Current: "1", Latest: "2"}}); len(open) != 1 || len(held) != 1 {
 		t.Errorf("SplitHeld = %v, %v", open, held)
+	}
+}
+
+// Packaging is pinned to a commit; check-updates reports when the branch the
+// pin follows has moved on, so the pin does not go stale silently.
+func TestCheckPackaging(t *testing.T) {
+	pin := "1111111111111111111111111111111111111111"
+	e := manifest.Entry{Name: "net-snmp", PackagingRef: pin, PackagingBranch: "master"}
+	if d := CheckPackaging(e, pin); d != nil {
+		t.Errorf("at the pin: drift %+v", d)
+	}
+	d := CheckPackaging(e, "2222222222222222222222222222222222222222")
+	if d == nil || d.Name != "net-snmp" || d.Current != "1111111" || d.Latest != "2222222" ||
+		!strings.Contains(d.Detail, "packaging master") {
+		t.Errorf("moved branch: drift = %+v", d)
+	}
+	if d := CheckPackaging(manifest.Entry{Name: "x", PackagingRef: pin}, "3333333333333333333333333333333333333333"); d != nil {
+		t.Errorf("no followed branch: drift %+v", d)
 	}
 }

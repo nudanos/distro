@@ -275,7 +275,8 @@ packages:
     tag_pattern: "^v(\\d+\\.\\d+\\.\\d+)$"
     track: "latest"
     packaging: "https://salsa.debian.org/debian/pkg-keepalived.git"
-    packaging_ref: "master"
+    packaging_ref: "94681b5d20478ce5435cf955d14c384e33c4a637"
+    packaging_branch: "master"
     exclude: ["www"]
     note: "www/ is in the git tag but not the release tarball (non-free RFC draft)"
     audit:
@@ -344,7 +345,8 @@ packages:
     tag_pattern: "^v(\\d+\\.\\d+)$"
     track: "latest"
     packaging: "https://salsa.debian.org/debian/libteam.git"
-    packaging_ref: "master"
+    packaging_ref: "48142125234a665ad5367b724af36a58fb484d3d"
+    packaging_branch: "master"
     audit:
       - {patch: "01-hwaddr_changed.patch", verdict: upstreamed, note: "backport from 1.16"}
       - {patch: "02-hwaddr_changed.patch", verdict: upstreamed, note: "backport from 1.16"}
@@ -456,7 +458,8 @@ packages:
     tag_pattern: "^(\\d+\\.\\d+\\.\\d+)$"
     track: "latest"
     packaging: "https://salsa.debian.org/networking-team/mstpd.git"
-    packaging_ref: "debian/latest"
+    packaging_ref: "f281926c8484c03eaaa14de458abf7f6efd84b6c"
+    packaging_branch: "debian/latest"
     note: "Debian packages mstpd 0.2.0 (networking-team, unstable); DANOS's fork packaging targeted 0.0.9"
     audit:
       - {patch: "0008-set-not-add-setvid2fid.patch", verdict: kept, note: "vyatta-service-bridge sets MSTI VLAN lists with setvid2fid"}
@@ -479,7 +482,8 @@ packages:
     tag_pattern: "^v(\\d+\\.\\d+\\.\\d+(?:\\.\\d+)?)$"
     track: "latest"
     packaging: "https://salsa.debian.org/debian/net-snmp.git"
-    packaging_ref: "master"
+    packaging_ref: "c7ebcca1a2f3323d6d39d789b9d0a81a7e3dde26"
+    packaging_branch: "master"
     audit:
       - {patch: "restore-Debian-deleted-MIBs.patch", verdict: dropped, note: "restores MIBs Debian removes as non-free; the agent serves without MIB files (snmp-mibs-downloader supplies them)"}
       - {patch: "commit-50085bc", verdict: kept, note: "_load_v6 made static, so vyatta-snmp-vrf-agent's own ipaddress_linux.c cannot interpose it"}
@@ -543,7 +547,8 @@ packages:
     tag_pattern: "^NTPsec_(\\d+_\\d+_\\d+)$"
     track: "latest"
     packaging: "https://salsa.debian.org/debian/ntpsec.git"
-    packaging_ref: "debian/unstable"
+    packaging_ref: "2e6c96479bf4f5d2c3e835773e5974e5c8b0e526"
+    packaging_branch: "debian/unstable"
     unpack_waf: true
     note: "Debian source package ntpsec; waf unpacked as debian/repack-waf does"
     audit:
@@ -620,7 +625,8 @@ packages:
     tag_pattern: "^v(\\d+\\.\\d+\\.\\d+)$"
     track: "latest"
     packaging: "https://github.com/nudanos/pam_tacplus"
-    packaging_ref: "trixie"
+    packaging_ref: "9250b82d9ad6a395413d95b5ceef36c834f46d2b"
+    packaging_branch: "trixie"
     hold: "1.6.2 and later install a libtac.h that includes gnulib headers libtac-dev does not ship, so tacplusd cannot build against them; porting tacplusd to the gl_list API is plan 3"
   - name: "ppp"
     kind: "debian"
