@@ -96,9 +96,11 @@ func Relations(field string) [][]string {
 // Source summarises one source package's control file.
 type Source struct {
 	Name         string
-	BuildDepends [][]string // Build-Depends, -Indep and -Arch combined
-	Binaries     []string   // sorted
-	Provides     []string   // sorted
+	BuildDepends [][]string            // Build-Depends, -Indep and -Arch combined
+	Binaries     []string              // sorted
+	Provides     []string              // sorted
+	Depends      map[string][][]string // binary -> its Depends and Pre-Depends
+	Providers    map[string]string     // virtual package -> the binary providing it
 }
 
 // ParseSource reads the source paragraph and binary paragraphs of a control file.
@@ -111,12 +113,23 @@ func ParseSource(text string) (*Source, error) {
 	for _, f := range []string{"Build-Depends", "Build-Depends-Indep", "Build-Depends-Arch"} {
 		s.BuildDepends = append(s.BuildDepends, Relations(ps[0][f])...)
 	}
+	s.Depends = map[string][][]string{}
+	s.Providers = map[string]string{}
 	for _, p := range ps[1:] {
-		if n := p["Package"]; n != "" {
+		n := p["Package"]
+		if n != "" {
 			s.Binaries = append(s.Binaries, n)
+			if d := append(Relations(p["Depends"]), Relations(p["Pre-Depends"])...); len(d) > 0 {
+				s.Depends[n] = d
+			}
 		}
 		for _, g := range Relations(p["Provides"]) {
 			s.Provides = append(s.Provides, g...)
+			for _, v := range g {
+				if _, taken := s.Providers[v]; !taken && n != "" {
+					s.Providers[v] = n
+				}
+			}
 		}
 	}
 	sort.Strings(s.Binaries)

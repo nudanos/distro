@@ -87,3 +87,18 @@ func TestFieldNamesAreCaseInsensitive(t *testing.T) {
 		t.Errorf("Binaries = %v Provides = %v", s.Binaries, s.Provides)
 	}
 }
+
+func TestParseSourceRecordsRuntimeDepends(t *testing.T) {
+	s, err := ParseSource(sample + "Pre-Depends: dpkg (>= 1.19)\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Per binary: only what an installed binary depends on matters.
+	want := map[string][][]string{"vyatta-util": {{"libvyatta-util1"}}, "libvyatta-util1": {{"dpkg"}}}
+	if !reflect.DeepEqual(s.Depends, want) {
+		t.Errorf("Depends = %v, want %v", s.Depends, want)
+	}
+	if s.Providers["vyatta-validate"] != "libvyatta-util1" {
+		t.Errorf("Providers = %v", s.Providers)
+	}
+}

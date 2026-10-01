@@ -120,3 +120,50 @@ func TestAddImplicitDepAbsentIsNoop(t *testing.T) {
 		t.Errorf("Deps = %v, want %v", g.Deps, want)
 	}
 }
+
+// A build-dependency is installed with its runtime dependencies, so the
+// sources producing those must be built first and be in the pool: vyatta-system
+// (build-dep of bonding) depends on vyatta-login, which depends on vyatta-cfg.
+func TestBuildAddsRuntimeDependsOfBuildDeps(t *testing.T) {
+	system := src([]string{"vyatta-system", "vyatta-cfg-system"}, nil)
+	system.Depends = map[string][][]string{"vyatta-system": {{"vyatta-login"}, {"libc6"}}}
+	login := src([]string{"vyatta-login"}, nil)
+	login.Depends = map[string][][]string{"vyatta-login": {{"vyatta-cfg"}}}
+	cfg := src([]string{"vyatta-cfg"}, nil)
+	cfg.Depends = map[string][][]string{"vyatta-cfg": {{"vyatta-login"}}} // runtime cycles are normal
+	bonding := src([]string{"vyatta-cfg-bonding"}, nil, []string{"vyatta-system"})
+	g, err := Build(map[string]*control.Source{
+		"vyatta-cfg-system": system, "vyatta-login": login, "vyatta-cfg": cfg, "vyatta-cfg-bonding": bonding})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"vyatta-cfg", "vyatta-cfg-system", "vyatta-login"}
+	if !reflect.DeepEqual(g.Deps["vyatta-cfg-bonding"], want) {
+		t.Errorf("bonding deps = %v, want %v", g.Deps["vyatta-cfg-bonding"], want)
+	}
+	if g.Deps["vyatta-cfg"] != nil || g.Deps["vyatta-login"] != nil {
+		t.Errorf("runtime deps alone must not order builds: cfg=%v login=%v", g.Deps["vyatta-cfg"], g.Deps["vyatta-login"])
+	}
+	if _, err := g.Tiers(); err != nil {
+		t.Errorf("tiers: %v", err)
+	}
+}
+
+// Only the installed binary's dependencies count, not its siblings': vci
+// builds the -dev library notifyd builds against and a daemon that depends on
+// notifyd at runtime. Aggregating per source would make notifyd depend on itself.
+func TestRuntimeDependsArePerBinary(t *testing.T) {
+	vci := src([]string{"golang-github-danos-vci-dev", "vci"}, nil)
+	vci.Depends = map[string][][]string{"vci": {{"notifyd"}}}
+	notifyd := src([]string{"notifyd"}, nil, []string{"golang-github-danos-vci-dev"})
+	g, err := Build(map[string]*control.Source{"vci": vci, "notifyd": notifyd})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(g.Deps["notifyd"], []string{"vci"}) {
+		t.Errorf("notifyd deps = %v", g.Deps["notifyd"])
+	}
+	if _, err := g.Tiers(); err != nil {
+		t.Errorf("tiers: %v", err)
+	}
+}

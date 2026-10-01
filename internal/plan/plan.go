@@ -23,7 +23,8 @@ func sortedKeys[V any](m map[string]V) []string {
 	return keys
 }
 
-// Build derives edges from Build-Depends. A dependency counts only if another
+// Build derives edges from Build-Depends, plus the runtime Depends (transitively)
+// of each build-dependency, since apt installs those with it. A dependency counts only if another
 // source in the set produces it (as a binary, or failing that as a Provides).
 // For alternatives, the first alternative produced inside the set wins.
 // Two sources producing the same binary package is an error.
@@ -50,17 +51,66 @@ func Build(sources map[string]*control.Source) (*Graph, error) {
 			}
 		}
 	}
+	// bin maps a binary or provided name to the source and binary that satisfy it.
+	type ref struct{ src, bin string }
+	bin := map[string]ref{}
+	for _, n := range names {
+		for _, b := range sources[n].Binaries {
+			bin[b] = ref{n, b}
+		}
+	}
+	for _, n := range names {
+		for v, b := range sources[n].Providers {
+			if _, taken := bin[v]; !taken {
+				bin[v] = ref{n, b}
+			}
+		}
+	}
+	resolve := func(rels [][]string) []ref {
+		var out []ref
+		for _, alts := range rels {
+			for _, a := range alts {
+				if r, ok := bin[a]; ok {
+					out = append(out, r)
+					break
+				}
+			}
+		}
+		return out
+	}
 	g := &Graph{Deps: map[string][]string{}}
 	for _, n := range names {
 		set := map[string]bool{}
+		var queue []ref
 		for _, alts := range sources[n].BuildDepends {
 			for _, a := range alts {
 				if p, ok := producer[a]; ok {
 					if p != n {
 						set[p] = true
+						if r, ok := bin[a]; ok {
+							queue = append(queue, r)
+						}
 					}
 					break
 				}
+			}
+		}
+		// A build-dependency is installed with its runtime dependencies, so
+		// their producers must be built first too. Only the installed binary's
+		// own Depends count, transitively, not its sibling binaries'.
+		seen := map[string]bool{}
+		for len(queue) > 0 {
+			r := queue[0]
+			queue = queue[1:]
+			if seen[r.bin] {
+				continue
+			}
+			seen[r.bin] = true
+			for _, d := range resolve(sources[r.src].Depends[r.bin]) {
+				if d.src != n {
+					set[d.src] = true
+				}
+				queue = append(queue, d)
 			}
 		}
 		var deps []string
