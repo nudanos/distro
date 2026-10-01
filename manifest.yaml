@@ -1002,6 +1002,7 @@ packages:
   - name: "vyatta-platform"
     kind: "danos"
     milestone: "1.0"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-platform"
     ref: "trixie"
   - name: "vyatta-poe"
