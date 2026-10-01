@@ -138,6 +138,41 @@ class SystemdOverrideTest(unittest.TestCase):
         self.assertEqual(out, "override_dh_installsystemd:\n\tdh_installsystemd --package p --name=m\n")
 
 
+class SystemdStartSelectionTest(unittest.TestCase):
+    """A start override that named units started only those; the rest were enabled, not started."""
+
+    def test_enable_lines_not_in_start_override_get_no_start(self):
+        # ifmgrd: both units enabled, only ifmgrd started.
+        rules = ("override_dh_systemd_enable:\n\tdh_systemd_enable --name=ifmgrd\n"
+                 "\tdh_systemd_enable --name=ifmgrctl-hook\n\n"
+                 "override_dh_systemd_start:\n\tdh_systemd_start --name=ifmgrd\n")
+        out = port.port_rules(rules)
+        self.assertIn("override_dh_installsystemd:\n\tdh_installsystemd --name=ifmgrd\n"
+                      "\tdh_installsystemd --name=ifmgrctl-hook --no-start\n", out)
+        self.assertEqual(port.port_rules(out), out)
+
+    def test_selective_start_without_enable_override_is_left_for_a_human(self):
+        # vyatta-platform: only vyatta-sfpd.service started; its socket and
+        # vyatta-platform-util's unit must stay stopped, which needs the unit list.
+        rules = ("override_dh_systemd_start:\n\tdh_systemd_start -p vyatta-sfpd vyatta-sfpd.service\n")
+        notes = []
+        out = port.port_rules(rules, notes)
+        self.assertEqual(out, rules)  # dh refuses the old target, so the build fails loudly
+        self.assertTrue(any("vyatta-sfpd.service" in n and "--no-start" in n for n in notes), notes)
+
+    def test_empty_overrides_mean_none(self):
+        out = port.port_rules("override_dh_systemd_start:\n\noverride_dh_auto_test:\n\ttrue\n")
+        self.assertIn("override_dh_installsystemd:\n\tdh_installsystemd --no-start\n", out)
+        out = port.port_rules("override_dh_systemd_enable:\n\noverride_dh_systemd_start:\n\n")
+        self.assertIn("\tdh_installsystemd --no-enable --no-start\n", out)
+
+    def test_foreign_commands_are_kept_with_a_note(self):
+        notes = []
+        out = port.port_rules("override_dh_systemd_start:\n\tdh_systemd_start --no-start\n\ttouch stamp\n", notes)
+        self.assertIn("\tdh_installsystemd --no-start\n\ttouch stamp\n", out)
+        self.assertTrue(any("touch stamp" in n for n in notes), notes)
+
+
 class MergedUsrTest(unittest.TestCase):
     """Debian 13 is merged-usr: lintian rejects files shipped under /lib, /bin, /sbin (aliased-location)."""
 

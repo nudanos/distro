@@ -162,23 +162,92 @@ def _with_flags(cmd: str, flags: list[str]) -> str:
     return " ".join(["dh_installsystemd"] + out)
 
 
-def port_systemd_overrides(text: str) -> str:
+def _split_systemd_cmd(cmd: str) -> tuple[list[str], list[str]]:
+    """(selection tokens: -p/--name/units and other options, start flags) of a dh_systemd_* command."""
+    sel, flags, take = [], [], False
+    for t in cmd.split()[1:]:
+        if take:
+            sel.append(t)
+            take = False
+        elif t in START_FLAGS:
+            flags.append(t)
+        else:
+            sel.append(t)
+            take = t in VALUE_OPTS
+    return sel, flags
+
+
+def _selects(sel: list[str]) -> bool:
+    """Whether a command names packages or units (rather than acting on all)."""
+    return any(t in ("-p", "--package", "--name") or t.startswith(("-p", "--package=", "--name=")) or not t.startswith("-")
+               for t in sel)
+
+
+def _dedupe(tokens: list[str]) -> list[str]:
+    out = []
+    for t in tokens:
+        if t not in out or not t.startswith("--"):
+            out.append(t)
+    return out
+
+
+def port_systemd_overrides(text: str, notes: list[str] | None = None) -> str:
     """Rewrite override_dh_systemd_{enable,start} (removed in compat 11) as override_dh_installsystemd.
 
-    Each dh_systemd_enable line becomes a dh_installsystemd line carrying the start
-    override's flags. A start override alone (which then handled only the units it
-    listed) becomes a global `dh_installsystemd <flags>`: every unit is enabled, as
-    the default dh_systemd_enable did, and none is started, as before.
+    The old overrides replaced the default: an empty one did nothing, and a start
+    override started only the units it named. So each enable line keeps the start
+    flags of the start command naming the same units, and gets --no-start when no
+    start command named them. A start override that started some units with no
+    enable override needs the package's full unit list to say which stay stopped;
+    that is left as is with a NOTE (dh then refuses the old target, so the build
+    fails loudly instead of starting units DANOS kept stopped). Other commands in
+    the overrides are kept, with a NOTE.
     """
+    notes = notes if notes is not None else []
     blocks = {t: (c, a, b) for t, c, a, b in _make_blocks(text) if t in ("override_dh_systemd_enable", "override_dh_systemd_start")}
     if not blocks:
         return text
-    flags = []
-    for c in blocks.get("override_dh_systemd_start", ([], 0, 0))[0]:
-        flags += [t for t in c.split() if t in START_FLAGS and t not in flags]
-    enable = blocks.get("override_dh_systemd_enable", ([], 0, 0))[0]
-    new = [_with_flags(c, flags) for c in enable if c.startswith("dh_systemd_enable")] if enable else \
-        [" ".join(["dh_installsystemd"] + flags)]
+    enable = blocks["override_dh_systemd_enable"][0] if "override_dh_systemd_enable" in blocks else None
+    start = blocks["override_dh_systemd_start"][0] if "override_dh_systemd_start" in blocks else None
+    foreign = [c for c in (enable or []) + (start or []) if not c.startswith(("dh_systemd_enable", "dh_systemd_start"))]
+    for c in foreign:
+        notes.append(f"NOTE: kept '{c}' from a dh_systemd_* override in override_dh_installsystemd; check it")
+    global_flags, selective = [], []
+    for c in (start or []):
+        if not c.startswith("dh_systemd_start"):
+            continue
+        sel, flags = _split_systemd_cmd(c)
+        if "--no-start" in flags or not _selects(sel):
+            global_flags += [f for f in flags if f not in global_flags]
+        else:
+            selective.append((sel, flags))
+    if start is not None and "--no-start" not in global_flags and (selective or not any(c.startswith("dh_systemd_start") for c in start)):
+        rest = global_flags + ["--no-start"]  # units no start command named were not started
+    else:
+        rest = global_flags
+    if enable is None and selective:
+        named = ", ".join(" ".join(sel) for sel, _ in selective)
+        notes.append(f"NOTE: override_dh_systemd_start started only {named}; write override_dh_installsystemd by hand, "
+                     f"giving every other unit of the package(s) --no-start")
+        return text
+    new = []
+    enable_cmds = [c for c in (enable or []) if c.startswith("dh_systemd_enable")]
+    matched = set()
+    for c in enable_cmds:
+        sel, _ = _split_systemd_cmd(c)
+        hit = next((k for k, (s2, _) in enumerate(selective) if s2 == sel), None)
+        if hit is not None:
+            matched.add(hit)
+            new.append(_with_flags(c, [f for f in global_flags if f != "--no-start"] + selective[hit][1]))
+        else:
+            new.append(_with_flags(c, rest))
+    for k, (sel, flags) in enumerate(selective):
+        if k not in matched:  # started though the enable override did not enable it
+            new.append(" ".join(["dh_installsystemd"] + _dedupe(sel + ["--no-enable"] + flags)))
+    if enable is None or not enable_cmds:
+        extra = ["--no-enable"] if enable is not None else []
+        new.append(" ".join(["dh_installsystemd"] + _dedupe(extra + rest)))
+    new += foreign
     block = "override_dh_installsystemd:\n" + "".join(f"\t{c}\n" for c in new)
     lines = text.split("\n")
     spans = sorted((a, b) for _, a, b in blocks.values())
@@ -189,7 +258,7 @@ def port_systemd_overrides(text: str) -> str:
     return "\n".join(lines)
 
 
-def port_rules(text: str) -> str:
+def port_rules(text: str, notes: list[str] | None = None) -> str:
     """Drop obsolete dh addons; put GOPATH-style Go builds in GOPATH mode.
 
     DANOS Go packages run `go vet` from custom targets with GOPATH set; Go 1.26
@@ -199,7 +268,7 @@ def port_rules(text: str) -> str:
     def fix(m: re.Match) -> str:
         addons = [a for a in m.group(2).split(",") if a and a not in ("systemd", "autotools_dev", "autotools-dev")]
         return f" --with {','.join(addons)}" if addons else ""
-    text = port_systemd_overrides(text)
+    text = port_systemd_overrides(text, notes)
     text = re.sub(r" --with(=| )([A-Za-z0-9_,-]+)", fix, text)
     text = re.sub(r" --parallel\b", "", text)
     gopath = r"--buildsystem[= ]golang|--with[= ][^\n]*\bgolang\b|^export GOPATH\b"
@@ -280,7 +349,7 @@ def port_tree(d: str, repo: str, date: str | None = None) -> list[str]:
         os.remove(compat)
     rules = os.path.join(deb, "rules")
     if os.path.exists(rules):
-        new = port_rules(open(rules).read())  # read fully before truncating for write
+        new = port_rules(open(rules).read(), notes)  # read fully before truncating for write
         open(rules, "w").write(new)
     for f in sorted(os.listdir(deb)):
         path = os.path.join(deb, f)
