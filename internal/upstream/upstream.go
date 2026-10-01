@@ -250,13 +250,16 @@ func unpackWaf(ctx context.Context, dir string) error {
 	})
 }
 
-// addPatches copies from/*.patch (sorted) into to/ and appends them to to/series.
+// addPatches copies from/*.patch (sorted) into to/nudanos/ and appends them to
+// to/series.
 func addPatches(from, to string) error {
 	names, err := filepath.Glob(filepath.Join(from, "*.patch"))
 	if err != nil || len(names) == 0 {
 		return err
 	}
-	if err := os.MkdirAll(to, 0o755); err != nil {
+	// Ours go in their own directory: a patch named like one of the
+	// packaging's would otherwise overwrite it.
+	if err := os.MkdirAll(filepath.Join(to, "nudanos"), 0o755); err != nil {
 		return err
 	}
 	series, _ := os.ReadFile(filepath.Join(to, "series"))
@@ -269,10 +272,10 @@ func addPatches(from, to string) error {
 			return err
 		}
 		base := filepath.Base(n)
-		if err := os.WriteFile(filepath.Join(to, base), b, 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(to, "nudanos", base), b, 0o644); err != nil {
 			return err
 		}
-		series = append(series, []byte(base+"\n")...)
+		series = append(series, []byte("nudanos/"+base+"\n")...)
 	}
 	return os.WriteFile(filepath.Join(to, "series"), series, 0o644)
 }

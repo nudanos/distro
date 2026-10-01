@@ -58,6 +58,9 @@ func TestParseRejects(t *testing.T) {
 		"danos no ref":  {"packages:\n  - {name: a, kind: danos, milestone: \"1.0\", repo: r}\n", "repo and ref"},
 		"bad track":     {"packages:\n  - {name: a, kind: upstream, milestone: \"1.1\", upstream: u, packaging: p, track: newest}\n", "track"},
 		"apt source":    {"packages:\n  - {name: a, kind: apt, milestone: \"1.0\", source: \"https://x trixie\", key: k, packages: {p: \"1\"}}\n", "URL SUITE COMPONENT"},
+		// Patches always come from patches/<name>; a patches: key would be
+		// silently ignored if it parsed.
+		"patches field": {"packages:\n  - name: a\n    kind: upstream\n    milestone: \"1.1\"\n    upstream: u\n    packaging: p\n    track: latest\n    patches: elsewhere\n", "patches"},
 		"bad kind":      {"packages:\n  - {name: a, kind: rpm, milestone: \"1.0\"}\n", "unknown kind"},
 		"bad milestone": {"packages:\n  - {name: a, kind: debian, milestone: \"3\"}\n", "milestone"},
 		"debian ready":  {"packages:\n  - {name: a, kind: debian, milestone: \"1.0\", ready: true}\n", "cannot be ready"},

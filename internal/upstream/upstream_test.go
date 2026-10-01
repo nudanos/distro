@@ -61,6 +61,7 @@ func fixture(t *testing.T) (manifest.Entry, string, string) {
 
 	patches := filepath.Join(root, "patches")
 	write(t, filepath.Join(patches, "keepalived", "0001-vyatta-vrrp-hook.patch"), "--- a\n+++ b\n")
+	write(t, filepath.Join(patches, "keepalived", "debian-fix.patch"), "--- ours\n+++ ours\n")
 
 	e := manifest.Entry{Name: "keepalived", Kind: manifest.Upstream, Upstream: up, Tag: "v2.4.3", Version: "2.4.3",
 		TagPattern: `^v(\d+\.\d+\.\d+)$`, Packaging: pk, PackagingRef: "master", Track: "latest"}
@@ -83,8 +84,16 @@ func TestPrepare(t *testing.T) {
 		t.Error("files outside packaging's debian/ were copied")
 	}
 	series, _ := os.ReadFile(filepath.Join(dir, "debian", "patches", "series"))
-	if string(series) != "debian-fix.patch\n0001-vyatta-vrrp-hook.patch\n" {
+	if string(series) != "debian-fix.patch\nnudanos/0001-vyatta-vrrp-hook.patch\nnudanos/debian-fix.patch\n" {
 		t.Errorf("series = %q", series)
+	}
+	// Ours live in their own directory, so one named like a packaging
+	// patch cannot overwrite it.
+	if b, _ := os.ReadFile(filepath.Join(dir, "debian", "patches", "debian-fix.patch")); string(b) != "--- a\n+++ b\n" {
+		t.Errorf("packaging's debian-fix.patch = %q, overwritten by ours", b)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "debian", "patches", "nudanos", "debian-fix.patch")); string(b) != "--- ours\n+++ ours\n" {
+		t.Errorf("our debian-fix.patch = %q", b)
 	}
 	cl, _ := os.ReadFile(filepath.Join(dir, "debian", "changelog"))
 	first := strings.SplitN(string(cl), "\n", 2)[0]

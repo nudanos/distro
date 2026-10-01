@@ -530,7 +530,7 @@ packages:
     ready: true
     repo: "https://github.com/nudanos/netplug"
     ref: "trixie"
-    note: "Debian's 1.2.9.2 plus 12 DANOS patches; a 3.0 (quilt) fork with the full source in git"
+    note: "Debian's 1.2.9.2 plus 12 DANOS patches; a 3.0 (quilt) fork with the full source in git. Versioned 1.2.9.2-5+vyatta11+nudanos1 (no epoch) to sort above Debian 13's -5 and its stable updates"
   - name: "notifyd"
     kind: "danos"
     milestone: "1.0"

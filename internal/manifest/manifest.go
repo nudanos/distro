@@ -43,7 +43,6 @@ type Entry struct {
 	Upstream        string       `yaml:"upstream,omitempty"`
 	Track           string       `yaml:"track,omitempty"`
 	Packaging       string       `yaml:"packaging,omitempty"`
-	Patches         string       `yaml:"patches,omitempty"`
 	Version         string       `yaml:"version,omitempty"`          // upstream: upstream version built
 	Tag             string       `yaml:"tag,omitempty"`              // upstream: git tag of Version
 	TagPattern      string       `yaml:"tag_pattern,omitempty"`      // upstream: regexp, group 1 = version
