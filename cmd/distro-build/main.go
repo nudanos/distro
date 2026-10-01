@@ -274,7 +274,7 @@ func (a *app) run(ctx context.Context, cmd string, names []string) error {
 		return err
 	}
 	b := &build.Builder{SrcDirs: dirs, OutRoot: a.outRoot(), StateFile: filepath.Join(a.work, "state.json"),
-		KeySalt: a.image + ":" + salt, Build: a.containerBuild(m), Log: os.Stderr, Workers: a.jobs, BeforeTier: a.indexPool}
+		KeySalt: a.image + ":" + salt, KeyExtra: keyExtras(m), Build: a.containerBuild(m), Log: os.Stderr, Workers: a.jobs, BeforeTier: a.indexPool}
 	results, err := b.Run(ctx, tiers, g.Deps)
 	if err != nil {
 		return err
@@ -450,4 +450,18 @@ func (a *app) checkUpdates(ctx context.Context) error {
 	}
 	tw.Flush()
 	return fmt.Errorf("%d pinned versions have newer releases", len(drift))
+}
+
+// keyExtras are the per-package build inputs that live in the manifest rather
+// than the source tree; they join each package's cache key.
+func keyExtras(m *manifest.Manifest) map[string]string {
+	out := map[string]string{}
+	for _, e := range m.Packages {
+		if len(e.Profiles) > 0 {
+			p := append([]string(nil), e.Profiles...)
+			sort.Strings(p)
+			out[e.Name] = "profiles=" + strings.Join(p, ",")
+		}
+	}
+	return out
 }

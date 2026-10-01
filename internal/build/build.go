@@ -38,8 +38,9 @@ type Func func(ctx context.Context, name, srcDir, outDir string) error
 type Builder struct {
 	SrcDirs    map[string]string // manifest name -> source checkout
 	OutRoot    string
-	StateFile  string // JSON: name -> cache key of the last successful build
-	KeySalt    string // part of every cache key; change it to invalidate all
+	StateFile  string            // JSON: name -> cache key of the last successful build
+	KeySalt    string            // part of every cache key; change it to invalidate all
+	KeyExtra   map[string]string // per-package build inputs outside its source tree (e.g. profiles)
 	Build      Func
 	Log        io.Writer
 	Workers    int                             // builds run at once within a tier; <=1 means serial
@@ -189,7 +190,8 @@ func (b *Builder) Run(ctx context.Context, tiers [][]string, deps map[string][]s
 	return results, nil
 }
 
-// key is the cache key of name: its source hash, the builder salt, and its
+// key is the cache key of name: its source hash, the builder salt, its
+// KeyExtra (build inputs kept outside the tree), and its
 // dependencies' keys (so a rebuilt dependency rebuilds its dependents,
 // transitively). Dependencies finished in earlier tiers, so state is stable.
 func (b *Builder) key(name string, deps []string, state map[string]string) (string, error) {
@@ -198,6 +200,9 @@ func (b *Builder) key(name string, deps []string, state map[string]string) (stri
 		return "", err
 	}
 	key := hash + ":" + b.KeySalt
+	if extra := b.KeyExtra[name]; extra != "" {
+		key += ":" + extra
+	}
 	for _, d := range deps {
 		key += ":" + d + "=" + state[d]
 	}

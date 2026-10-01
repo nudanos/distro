@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/nudanos/distro/internal/manifest"
 	"os"
 	"reflect"
 	"strings"
@@ -45,5 +46,19 @@ func TestBuildEnvCarriesProfiles(t *testing.T) {
 	}
 	if _, ok := buildEnv("x", 0, 0, 1, nil)["DEB_BUILD_PROFILES"]; ok {
 		t.Error("no profiles must not set DEB_BUILD_PROFILES")
+	}
+}
+
+func TestKeyExtrasCarryProfilesOrderIndependently(t *testing.T) {
+	m := &manifest.Manifest{Packages: []manifest.Entry{
+		{Name: "dp", Profiles: []string{"pkg.b", "pkg.a"}},
+		{Name: "plain"},
+	}}
+	got := keyExtras(m)
+	if got["dp"] != "profiles=pkg.a,pkg.b" {
+		t.Errorf("dp = %q", got["dp"])
+	}
+	if _, ok := got["plain"]; ok {
+		t.Errorf("plain has a key extra: %q", got["plain"])
 	}
 }

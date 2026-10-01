@@ -291,3 +291,28 @@ func TestIndexRunsAfterRebuildingOutputsAreCleared(t *testing.T) {
 		t.Error("index hook ran while a rebuilding package's old artifacts were still in the pool")
 	}
 }
+
+// Build inputs that live outside the source tree (an entry's Debian build
+// profiles in the manifest) must be part of the key, or changing them keeps
+// serving the old build.
+func TestRunRebuildsWhenKeyExtraChanges(t *testing.T) {
+	f := newFixture(t, "a")
+	run := func() Status {
+		rs, err := f.b.Run(context.Background(), [][]string{{"a"}}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return statuses(rs)["a"].Status
+	}
+	f.b.KeyExtra = map[string]string{"a": "profiles=pkg.a.small"}
+	if s := run(); s != Built {
+		t.Fatalf("first run = %s", s)
+	}
+	if s := run(); s != Cached {
+		t.Fatalf("unchanged = %s", s)
+	}
+	f.b.KeyExtra = map[string]string{}
+	if s := run(); s != Built {
+		t.Fatalf("after profiles dropped = %s", s)
+	}
+}
