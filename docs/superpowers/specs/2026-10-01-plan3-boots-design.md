@@ -4,19 +4,10 @@ Addendum to `2026-09-28-debian13-revival-design.md` (the spec). Plan 3 takes the
 milestone-1.0 package set, which plan 2 ported and builds (103 ready entries, CI and
 nightly green), to a bootable, installable system.
 
-**Status (2026-10-01):** brainstorming in progress.
-
-| Section | State |
-|---|---|
-| 1. Scope and success criteria | **Approved** by the user |
-| 2. Interfaces under kernel forwarding | **Approved** by the user |
-| 3. Image | **Draft**, not yet reviewed with the user |
-| 4. Tests and CI | **Draft**, not yet reviewed with the user |
-
-Next steps, in order: review sections 3 and 4 with the user, write the final spec
-(this file, with drafts resolved), get the user's approval of the written spec,
-then write the implementation plan (`superpowers:writing-plans`) and ask the user
-to choose an execution method. No implementation before that.
+**Status (2026-10-01):** all four sections approved by the user in
+brainstorming. Next: the user reviews this written spec; then the implementation
+plan (`superpowers:writing-plans`) and the choice of execution method. No
+implementation before the plan is approved.
 
 Decisions the user took while scoping (2026-10-01):
 
@@ -30,11 +21,14 @@ Decisions the user took while scoping (2026-10-01):
 - Login: the **live ISO keeps `vyatta`/`vyatta`**; `install image` requires a new
   password and rejects `vyatta` before writing the disk.
 - Image tooling: **live-build**, porting DANOS's `build-iso` config (GPL-2.0, per-file
-  SPDX). `vyatta-image-tools` (install image, add system image, rollback) expects
+  SPDX).
+- `nudanos-router` gets **its own repo**, `github.com/nudanos/nudanos-router`
+  (public, default branch `trixie`), built like every other `danos` entry; the
+  user approved creating it. `vyatta-image-tools` (install image, add system image, rollback) expects
   the live-boot squashfs layout, which rules out mmdebstrap-by-hand and
   debian-installer.
 
-## 1. Scope and success criteria (approved)
+## 1. Scope and success criteria
 
 Plan 3 is done when the nightly, unattended, on a fresh build:
 
@@ -49,7 +43,7 @@ Plan 3 is done when the nightly, unattended, on a fresh build:
    `show version` reports Debian 13, FRR 10.7 and the kernel;
 4. on success, publishes the ISO as a GitHub Release artifact.
 
-## 2. Interfaces under kernel forwarding (approved)
+## 2. Interfaces under kernel forwarding
 
 - **Naming.** `vyatta-kernel-forwarding` ships a udev rule that renames each
   kernel NIC from its predictable name to the dataplane name by replacing the `en`
@@ -85,14 +79,13 @@ Plan 3 is done when the nightly, unattended, on a fresh build:
   - `libvyatta-interface-perl` uses `Vyatta::ioctl` from `vyatta-system` without
     declaring it.
 
-## 3. Image (DRAFT — not yet reviewed with the user)
+## 3. Image
 
 - **`nudanos-router` meta-package** (spec §4.5). Depends on the milestone-1 binary
   package set that installs without DPDK; the ISO installs it, and so will
   `install.sh` (M1.5). A CI check generates the list from the manifest and fails if
-  the meta-package drifts. *Open:* where its source lives — a new
-  `nudanos/nudanos-router` repo (creating a repo needs the user's go-ahead) or a
-  native package inside `distro`.
+  the meta-package drifts. Source: the new `nudanos/nudanos-router` repo, a
+  native package (`3.0 (native)`) with the CI caller like every port.
 - **Image hooks move into packages** (spec §4.5): user-isolation sandbox
   (`0990-create-chroot-fs`) → `cli-sandbox` postinst; iptables/ebtables legacy
   alternatives (`14-iptables-legacy`) → `vyatta-kernel-forwarding` postinst;
@@ -113,11 +106,13 @@ Plan 3 is done when the nightly, unattended, on a fresh build:
   (`vyatta-install-image.functions:_dialog_enter_password`) mandatory for the
   administrator and rejects `vyatta`.
 
-## 4. Tests and CI (DRAFT — not yet reviewed with the user)
+## 4. Tests and CI
 
 - **Layer 2, `distro-build test install`**: clean `debian:trixie` container with
   the signed repo; install `nudanos-router`, remove, purge; fail on
-  maintainer-script errors or files left outside an allowlist of state directories.
+  maintainer-script errors or files left outside an allowlist of documented state
+  directories (for example `/config`, `/var/log`), kept in the test with a reason
+  per entry.
 - **Layer 3, `distro-build test boot`**: a Go driver for QEMU over the serial
   console (unix socket, expect-style steps with per-step timeouts) running the
   section 1 script. KVM when `/dev/kvm` exists (GitHub runners), TCG emulation
