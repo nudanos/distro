@@ -1,0 +1,23 @@
+Description: twamp-client and twamp-server provide the -vyatta virtuals
+ vyatta-service-twamp-v1-yang depends on twamp-client-vyatta and
+ twamp-server-vyatta, which the DANOS owamp packaging provided. NuDanOS builds
+ owamp with perfSONAR's packaging.
+
+--- a/debian/control
++++ b/debian/control
+@@ -38,6 +38,7 @@
+ Package: twamp-client
+ Architecture: any
+ Depends: ${shlibs:Depends}, ${misc:Depends}, libcap2-bin
++Provides: twamp-client-vyatta
+ Description: TWAMP command line client utilities
+  TWAMP is a client/server package that allows one to measure the
+  latency between hosts. Like ping, TWAMP enables you to measure the
+@@ -51,6 +52,7 @@
+ Architecture: any
+ Depends: ${shlibs:Depends}, ${misc:Depends}, adduser, lsb-base,
+  ntp | time-daemon
++Provides: twamp-server-vyatta
+ Description: TWAMP daemon
+  TWAMP is a client/server package that allows one to measure the
+  latency between hosts. Like ping, TWAMP enables you to measure the

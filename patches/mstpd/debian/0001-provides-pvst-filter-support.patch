@@ -1,0 +1,15 @@
+Description: Provide mstpd-pvst-filter-support
+ libvyatta-bridge-perl depends on it. The DANOS mstpd packaging provided it;
+ NuDanOS builds mstpd with Debian's packaging and keeps the PVST filter
+ patch (patches/mstpd/0020-pvst-filter.patch).
+
+--- a/debian/control
++++ b/debian/control
+@@ -11,6 +11,7 @@
+ Package: mstpd
+ Architecture: linux-any
+ Depends: iproute2, python3, ${misc:Depends}, ${shlibs:Depends}
++Provides: mstpd-pvst-filter-support
+ Description: user-space STP/RSTP/MSTP daemon for Linux bridges
+  mstpd is a user-space daemon that replaces the spanning-tree handling
+  built into the Linux kernel bridge. It implements STP (IEEE 802.1D),

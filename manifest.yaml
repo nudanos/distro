@@ -1046,8 +1046,11 @@ packages:
   - name: "vyatta-security-vpn"
     kind: "danos"
     milestone: "1.1"
+    ready: true
     repo: "https://github.com/nudanos/vyatta-security-vpn"
     ref: "trixie"
+    profiles: ["pkg.vyatta-security-vpn.vti-only"]
+    note: "built in 1.0 for vyatta-interfaces-vti-v1-yang, which the OSPF, policy and TCP-MSS models import; its VPN packages stay out of nudanos-router until the 1.1 strongswan rewrite"
   - name: "vyatta-service-bridge"
     kind: "danos"
     milestone: "1.0"
