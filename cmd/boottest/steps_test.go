@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"net"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -62,5 +63,30 @@ func TestInstallStepsAnswersTheRealInstaller(t *testing.T) {
 	want := []string{"Yes", "", "", "", "Yes", "", "", "vyatta", "vyatta", testPassword, testPassword, "", "", ""}
 	if r := <-got; strings.Join(r, "|") != strings.Join(want, "|") {
 		t.Errorf("replies\n got %q\nwant %q", r, want)
+	}
+}
+
+// Until the boot configuration has loaded the user does not exist: the
+// console answers "Login incorrect" and the getty restarts. login retries.
+func TestLoginRetriesUntilTheConfigurationHasLoaded(t *testing.T) {
+	a, vm := net.Pipe()
+	defer a.Close()
+	defer vm.Close()
+	c := boottest.NewConsole(a, &bytes.Buffer{})
+	go func() {
+		b := make([]byte, 64)
+		for i := 0; i < 2; i++ {
+			io.WriteString(vm, "\r\nnode login: ")
+			vm.Read(b)
+			io.WriteString(vm, "vyatta\r\nPassword: ")
+			vm.Read(b)
+			if i == 0 {
+				io.WriteString(vm, "\r\nLogin incorrect\r\n")
+			}
+		}
+		io.WriteString(vm, "\r\nvyatta@node:~$ ")
+	}()
+	if err := login(c, "vyatta", "vyatta", regexp.MustCompile(`login: $`), time.Second); err != nil {
+		t.Fatal(err)
 	}
 }

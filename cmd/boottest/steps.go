@@ -21,11 +21,7 @@ const testPassword = "NuDanOS-test-1"
 // liveSteps runs on the ISO: log in, configure, commit, save. (spec addendum §1)
 func liveSteps(c *boottest.Console, t func(time.Duration) time.Duration) error {
 	steps := []func() error{
-		func() error { _, err := c.Expect(loginPrompt, t(20*time.Minute)); return err },
-		func() error { return c.Send("vyatta") },
-		func() error { _, err := c.Expect(passPrompt, t(time.Minute)); return err },
-		func() error { return c.Send("vyatta") },
-		func() error { _, err := c.Expect(opPrompt, t(2*time.Minute)); return err },
+		func() error { return login(c, "vyatta", "vyatta", loginPrompt, t(30*time.Minute)) },
 		func() error { return c.Send("show version") },
 		func() error {
 			_, err := c.Expect(regexp.MustCompile(`(?m)^Base:\s+Debian GNU/Linux 13`), t(time.Minute))
@@ -122,13 +118,8 @@ func installSteps(c *boottest.Console, t func(time.Duration) time.Duration) erro
 func diskSteps(c *boottest.Console, t func(time.Duration) time.Duration) error {
 	steps := []func() error{
 		func() error {
-			_, err := c.Expect(regexp.MustCompile(`nudanos-test login: $`), t(20*time.Minute))
-			return err
+			return login(c, "tester", testPassword, regexp.MustCompile(`nudanos-test login: $`), t(30*time.Minute))
 		},
-		func() error { return c.Send("tester") },
-		func() error { _, err := c.Expect(passPrompt, t(time.Minute)); return err },
-		func() error { return c.Send(testPassword) },
-		func() error { _, err := c.Expect(opPrompt, t(2*time.Minute)); return err },
 		func() error { return c.Send("show interfaces") },
 		func() error {
 			_, err := c.Expect(regexp.MustCompile(`dp0s3\s+192\.0\.2\.1/24`), t(time.Minute))
@@ -150,6 +141,39 @@ func halt(c *boottest.Console, t func(time.Duration) time.Duration) error {
 		return err
 	}
 	return c.Send("y")
+}
+
+// login logs in at the console. Until the boot configuration has loaded the
+// user does not exist: the console answers "Login incorrect" (and the getty
+// restarts once the configuration is applied), so it retries until total.
+func login(c *boottest.Console, user, password string, prompt *regexp.Regexp, total time.Duration) error {
+	incorrect := regexp.MustCompile(`Login incorrect`)
+	deadline := time.Now().Add(total)
+	for {
+		left := time.Until(deadline)
+		if left <= 0 {
+			return errorf("could not log in as %s within %s", user, total)
+		}
+		if _, err := c.Expect(prompt, left); err != nil {
+			return err
+		}
+		if err := c.Send(user); err != nil {
+			return err
+		}
+		if _, err := c.Expect(passPrompt, left); err != nil {
+			return err
+		}
+		if err := c.Send(password); err != nil {
+			return err
+		}
+		i, _, err := c.First([]*regexp.Regexp{opPrompt, incorrect}, left)
+		if err != nil {
+			return err
+		}
+		if i == 0 {
+			return nil
+		}
+	}
 }
 
 func run(steps []func() error) error {
