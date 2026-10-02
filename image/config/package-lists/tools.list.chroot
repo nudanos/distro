@@ -1,0 +1,19 @@
+# Carried over from DANOS build-iso's package lists (editors, os-utils, extras,
+# tuning, live, bootloaders), with trixie names. "install image" needs the
+# GRUB binaries to put a bootloader on disk.
+# editors
+ed mg vim
+# os-utils (cloud-init dropped: no cloud images in milestone 1)
+acpi-support-base acpid arp-scan binutils dialog dma bind9-dnsutils efivar gdisk
+ifupdown jitterentropy-rngd libcap2-bin libio-socket-ssl-perl lshw rng-tools5
+systemd-coredump udev usbutils wireshark-common wakeonlan xz-utils
+# extras (installation-report and wajig dropped: Debian-installer and desktop tools)
+apt-rdepends lftp libjson-xs-perl man-db netplug screen telnet
+# tuning (linux-vyatta-tools was the DANOS kernel's)
+htop iotop iperf iperf3 iptraf-ng jnettop mtr-tiny netcat-openbsd powertop psmisc
+sipcalc tcpdump vlan
+# live
+sudo user-setup eject file dbus busybox live-boot-initramfs-tools live-boot-vyatta
+locales tftp-hpa
+# bootloaders
+grub-pc-bin grub-efi-amd64-bin grub-efi-ia32-bin grub-efi-amd64-signed shim-signed

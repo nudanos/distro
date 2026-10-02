@@ -24,6 +24,7 @@ import (
 	"github.com/nudanos/distro/internal/control"
 	"github.com/nudanos/distro/internal/engine"
 	"github.com/nudanos/distro/internal/fetch"
+	"github.com/nudanos/distro/internal/imagebuild"
 	"github.com/nudanos/distro/internal/installtest"
 	"github.com/nudanos/distro/internal/manifest"
 	"github.com/nudanos/distro/internal/plan"
@@ -264,6 +265,8 @@ func (a *app) run(ctx context.Context, cmd string, names []string) error {
 		return a.repo(ctx)
 	case "check-updates":
 		return a.checkUpdates(ctx)
+	case "image":
+		return a.buildImage(ctx)
 	case "test":
 		return a.test(ctx, names)
 	default:
@@ -327,6 +330,39 @@ func (a *app) run(ctx context.Context, cmd string, names []string) error {
 		return fmt.Errorf("%d of %d packages failed or were skipped", failed, len(results))
 	}
 	return nil
+}
+
+// buildImage builds the ISO from work/repo. Its version and timestamp come from
+// the distro commit, so the same commit builds the same image name.
+func (a *app) buildImage(ctx context.Context) error {
+	repo := filepath.Join(a.work, "repo")
+	if _, err := os.Stat(filepath.Join(repo, "dists", "trixie", "InRelease")); err != nil {
+		return fmt.Errorf("image: no signed repo in %s; run 'distro-build repo' first", repo)
+	}
+	if _, err := a.builderSalt(ctx); err != nil {
+		return err
+	}
+	dir := filepath.Dir(a.manifest)
+	out, err := exec.CommandContext(ctx, "git", "-C", dir, "log", "-1", "--format=%ct").Output()
+	if err != nil {
+		return fmt.Errorf("image: reading the commit time: %w", err)
+	}
+	epoch := strings.TrimSpace(string(out))
+	sec, err := strconv.ParseInt(epoch, 10, 64)
+	if err != nil {
+		return fmt.Errorf("image: commit time %q: %w", epoch, err)
+	}
+	version := "1.0~" + time.Unix(sec, 0).UTC().Format("20060102")
+	config, err := filepath.Abs(filepath.Join(dir, "image"))
+	if err != nil {
+		return err
+	}
+	outDir := filepath.Join(a.work, "image")
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return err
+	}
+	uid, gid := a.eng.OwnerIDs(os.Getuid(), os.Getgid())
+	return a.eng.Run(ctx, imagebuild.Spec(a.image, repo, config, outDir, version, epoch, uid, gid), os.Stderr, os.Stderr)
 }
 
 // test runs the image test layers: "install" (layer 2) and "boot" (layer 3).
@@ -411,7 +447,7 @@ func main() {
 	flag.IntVar(&a.jobs, "jobs", 1, "packages built at once within a tier")
 	flag.Var(a.local, "local", "use a local checkout for a ready danos entry: name=dir (repeatable)")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "usage: distro-build [flags] builder|fetch|plan|build|repo|test install|test boot|check-updates [name…]\n")
+		fmt.Fprintf(os.Stderr, "usage: distro-build [flags] builder|fetch|plan|build|repo|image|test install|test boot|check-updates [name…]\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()

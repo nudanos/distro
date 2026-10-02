@@ -1,0 +1,8 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+grep -q '\(^[^#]*\)\(\.\|source\) /etc/bash_completion' root/.bashrc || \
+    cat <<-EOF >> root/.bashrc
+
+	source /etc/bash_completion
+	EOF

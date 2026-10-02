@@ -1,0 +1,19 @@
+#!/bin/sh
+# NuDanOS live image (live-build). Ported from DANOS build-iso.
+# SPDX-License-Identifier: GPL-2.0-only
+set -e
+lb config noauto \
+    --mode debian --distribution trixie \
+    --archive-areas "main non-free-firmware" \
+    --binary-images iso-hybrid \
+    --bootloaders "grub-pc grub-efi" \
+    --debian-installer none --apt-recommends false \
+    --linux-packages linux-image --linux-flavours amd64 \
+    --iso-application NuDanOS --iso-publisher "NuDanOS https://github.com/nudanos" \
+    --iso-volume "NuDanOS ${NUDANOS_VERSION}" \
+    --bootappend-live "boot=live components console=tty0 console=ttyS0,115200" \
+    --firmware-binary false --firmware-chroot false --source false \
+    --mirror-bootstrap http://deb.debian.org/debian \
+    --mirror-chroot http://deb.debian.org/debian \
+    --mirror-binary http://deb.debian.org/debian \
+    "${@}"
