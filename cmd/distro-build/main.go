@@ -74,6 +74,8 @@ type app struct {
 	eng                                           engine.Engine
 	local                                         localFlags
 	jobs                                          int
+	firmware                                      string
+	smoke                                         bool
 }
 
 func (a *app) outRoot() string { return filepath.Join(a.work, "out") }
@@ -387,9 +389,45 @@ func (a *app) test(ctx context.Context, args []string) error {
 	return fmt.Errorf("unknown test %q (want install or boot)", args[0])
 }
 
-// testBoot runs layer 3; Task 10 implements it.
+// testBoot cross-compiles cmd/boottest, builds the tester image and boots the
+// newest ISO in work/image under QEMU (KVM when /dev/kvm exists).
 func (a *app) testBoot(ctx context.Context) error {
-	return fmt.Errorf("test boot: not implemented yet")
+	isos, _ := filepath.Glob(filepath.Join(a.work, "image", "nudanos-*-amd64.iso"))
+	if len(isos) == 0 {
+		return fmt.Errorf("test boot: no ISO in %s; run 'distro-build image' first", filepath.Join(a.work, "image"))
+	}
+	sort.Strings(isos)
+	iso := isos[len(isos)-1]
+	dir := filepath.Dir(a.manifest)
+	bt := filepath.Join(a.work, "boottest")
+	if err := os.MkdirAll(bt, 0o755); err != nil {
+		return err
+	}
+	build := exec.CommandContext(ctx, "go", "build", "-o", filepath.Join(bt, "boottest"), "./cmd/boottest")
+	build.Dir, build.Env = dir, append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH=amd64")
+	build.Stdout, build.Stderr = os.Stderr, os.Stderr
+	if err := build.Run(); err != nil {
+		return fmt.Errorf("test boot: building boottest: %w", err)
+	}
+	if err := a.eng.BuildImage(ctx, filepath.Join(dir, "tester"), "nudanos/tester:trixie", nil, os.Stderr, os.Stderr); err != nil {
+		return err
+	}
+	spec := engine.RunSpec{Image: "nudanos/tester:trixie",
+		Mounts: []engine.Mount{
+			{Host: filepath.Dir(iso), Container: "/iso", ReadOnly: true},
+			{Host: bt, Container: "/work"},
+		},
+		Cmd: []string{"/work/boottest", "-iso", "/iso/" + filepath.Base(iso), "-firmware", a.firmware}}
+	if a.smoke {
+		spec.Cmd = append(spec.Cmd, "-smoke")
+	}
+	if _, err := os.Stat("/dev/kvm"); err == nil {
+		spec.Devices = []string{"/dev/kvm"}
+		spec.Cmd = append(spec.Cmd, "-kvm")
+	}
+	err := a.eng.Run(ctx, spec, os.Stdout, os.Stderr)
+	fmt.Fprintf(os.Stderr, "serial transcript: %s\n", filepath.Join(bt, "serial.log"))
+	return err
 }
 
 func (a *app) mirror(ctx context.Context, m *manifest.Manifest) error {
@@ -445,6 +483,8 @@ func main() {
 	flag.StringVar(&a.gnupg, "gnupg", filepath.Join(home, ".nudanos", "gnupg"), "GnuPG home with the archive signing key (repo)")
 	flag.StringVar(&a.key, "key", "", "archive signing key fingerprint (repo)")
 	flag.IntVar(&a.jobs, "jobs", 1, "packages built at once within a tier")
+	flag.StringVar(&a.firmware, "firmware", "bios", "test boot: bios or efi")
+	flag.BoolVar(&a.smoke, "smoke", false, "test boot: only boot to the login prompt")
 	flag.Var(a.local, "local", "use a local checkout for a ready danos entry: name=dir (repeatable)")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "usage: distro-build [flags] builder|fetch|plan|build|repo|image|test install|test boot|check-updates [name…]\n")
