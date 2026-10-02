@@ -79,3 +79,9 @@ Op commands that ask the DPDK process report failure under kernel forwarding:
 | vyatta-vrrp-path-monitor-track-interfaces-bonding-v1-yang | later | needs vyatta-vrrp-path-monitor-track-v1-yang |
 | vyatta-vrrp-path-monitor-track-interfaces-dataplane-v1-yang | later | needs vyatta-vrrp-path-monitor-track-v1-yang |
 | vyatta-vrrp-path-monitor-track-interfaces-switch-v1-yang | later | needs vyatta-vrrp-path-monitor-track-v1-yang |
+
+## Optional (installable, left out of nudanos-router)
+
+| Package | Why |
+|---|---|
+| vyatta-system-login-user-isolation-v1-yang | its postinst builds the user sandbox root with mmdebstrap, which needs the network at install time; install it on a running system (optional in DANOS too) |

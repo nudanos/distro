@@ -555,6 +555,13 @@ packages:
       - {patch: "vyatta-fake-debian8-for-all-distros", verdict: dropped, note: "patches sntp, which ntpsec does not have"}
       - {patch: "vyatta-refresh-peers.patch", verdict: dropped, note: "no milestone-1 consumer; ntpsec re-resolves interfaces on netlink events"}
       - {patch: "vyatta-private-stat.patch", verdict: dropped, note: "mode 7 counters; ntpsec has no mode 7. vyatta-service-ntp's 'show ntp packets' privatestat needs porting (plan 3)"}
+  - name: "nudanos-router"
+    kind: "danos"
+    milestone: "1.0"
+    ready: true
+    repo: "https://github.com/nudanos/nudanos-router"
+    ref: "trixie"
+    note: "meta-package: the milestone-1 package set (spec 4.5); its Depends are checked by tools/router_deps.py"
   - name: "op"
     kind: "danos"
     milestone: "1.0"
