@@ -50,3 +50,11 @@ func TestLabelArgs(t *testing.T) {
 		t.Errorf("LabelArgs = %v, want %v", got, want)
 	}
 }
+
+func TestRunArgsPrivilegedAndDevices(t *testing.T) {
+	got := Engine{Bin: "docker"}.RunArgs(RunSpec{Image: "img", Privileged: true, Devices: []string{"/dev/kvm"}})
+	want := []string{"run", "--rm", "--privileged", "--device", "/dev/kvm", "img"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("RunArgs = %v, want %v", got, want)
+	}
+}

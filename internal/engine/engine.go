@@ -18,12 +18,14 @@ type Mount struct {
 
 // RunSpec describes one container run.
 type RunSpec struct {
-	Image   string
-	Mounts  []Mount
-	Env     map[string]string
-	Workdir string
-	Network string // empty = engine default
-	Cmd     []string
+	Image      string
+	Mounts     []Mount
+	Env        map[string]string
+	Workdir    string
+	Network    string   // empty = engine default
+	Privileged bool     // live-build needs mounts and loop devices
+	Devices    []string // host devices passed through, e.g. /dev/kvm
+	Cmd        []string
 }
 
 // Engine is a docker-compatible CLI ("docker" or "podman").
@@ -46,6 +48,12 @@ func (e Engine) RunArgs(s RunSpec) []string {
 	args := []string{"run", "--rm"}
 	if s.Network != "" {
 		args = append(args, "--network", s.Network)
+	}
+	if s.Privileged {
+		args = append(args, "--privileged")
+	}
+	for _, d := range s.Devices {
+		args = append(args, "--device", d)
 	}
 	for _, m := range s.Mounts {
 		v := m.Host + ":" + m.Container

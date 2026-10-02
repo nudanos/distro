@@ -1,0 +1,4 @@
+# Paths install-purge.sh may find left after purging nudanos-router: one
+# extended regex per line, then the reason it is documented state.
+^/config(/|$)      Vyatta configuration directory: user data, kept on purge by design
+^/opt/vyatta/etc/config(/|$)   compat path for /config

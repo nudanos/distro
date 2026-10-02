@@ -24,6 +24,7 @@ import (
 	"github.com/nudanos/distro/internal/control"
 	"github.com/nudanos/distro/internal/engine"
 	"github.com/nudanos/distro/internal/fetch"
+	"github.com/nudanos/distro/internal/installtest"
 	"github.com/nudanos/distro/internal/manifest"
 	"github.com/nudanos/distro/internal/plan"
 	"github.com/nudanos/distro/internal/updates"
@@ -263,6 +264,8 @@ func (a *app) run(ctx context.Context, cmd string, names []string) error {
 		return a.repo(ctx)
 	case "check-updates":
 		return a.checkUpdates(ctx)
+	case "test":
+		return a.test(ctx, names)
 	default:
 		return fmt.Errorf("unknown command %q", cmd)
 	}
@@ -326,6 +329,33 @@ func (a *app) run(ctx context.Context, cmd string, names []string) error {
 	return nil
 }
 
+// test runs the image test layers: "install" (layer 2) and "boot" (layer 3).
+func (a *app) test(ctx context.Context, args []string) error {
+	if len(args) != 1 {
+		return fmt.Errorf("usage: distro-build test install|boot")
+	}
+	repo := filepath.Join(a.work, "repo")
+	if _, err := os.Stat(filepath.Join(repo, "dists", "trixie", "InRelease")); err != nil {
+		return fmt.Errorf("test: no signed repo in %s; run 'distro-build repo' first", repo)
+	}
+	switch args[0] {
+	case "install":
+		tests, err := filepath.Abs(filepath.Join(filepath.Dir(a.manifest), "tests", "integration"))
+		if err != nil {
+			return err
+		}
+		return a.eng.Run(ctx, installtest.Spec(repo, tests), os.Stdout, os.Stderr)
+	case "boot":
+		return a.testBoot(ctx)
+	}
+	return fmt.Errorf("unknown test %q (want install or boot)", args[0])
+}
+
+// testBoot runs layer 3; Task 10 implements it.
+func (a *app) testBoot(ctx context.Context) error {
+	return fmt.Errorf("test boot: not implemented yet")
+}
+
 func (a *app) mirror(ctx context.Context, m *manifest.Manifest) error {
 	for _, e := range m.Ready(manifest.Apt) {
 		cached, err := aptmirror.Mirror(ctx, a.eng, a.image, e, a.outRoot(),
@@ -381,7 +411,7 @@ func main() {
 	flag.IntVar(&a.jobs, "jobs", 1, "packages built at once within a tier")
 	flag.Var(a.local, "local", "use a local checkout for a ready danos entry: name=dir (repeatable)")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "usage: distro-build [flags] builder|fetch|plan|build|repo|check-updates [name…]\n")
+		fmt.Fprintf(os.Stderr, "usage: distro-build [flags] builder|fetch|plan|build|repo|test install|test boot|check-updates [name…]\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
