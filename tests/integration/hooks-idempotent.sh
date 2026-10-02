@@ -19,4 +19,11 @@ $ENGINE run --rm -v "$WORK/repo":/repo:ro debian:trixie bash -euxc '
   apt-get purge -y -qq --allow-remove-essential base-files-vyatta >/dev/null
   test -z "$(dpkg-divert --list /etc/os-release)"
   grep -q "Debian" /etc/os-release
+  # live-build diverts /etc/os-release locally while it installs packages
+  # (bootstrap_debootstrap); base-files-vyatta must install under it.
+  rm -f /etc/os-release && cp /usr/lib/os-release /etc/os-release
+  dpkg-divert --quiet --local --add --no-rename --divert /etc/os-release.debootstrap /etc/os-release
+  apt-get install -y -qq --no-install-recommends base-files-vyatta >/dev/null
+  grep -q "NuDanOS" /etc/os-release
+  test "$(dpkg-divert --listpackage /etc/os-release)" = base-files-vyatta
   echo hooks-idempotent: OK'
