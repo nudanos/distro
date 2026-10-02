@@ -1,4 +1,27 @@
 # Paths install-purge.sh may find left after purging nudanos-router: one
 # extended regex per line, then the reason it is documented state.
+#
+# Configuration and runtime state of the Vyatta configuration system
 ^/config(/|$)      Vyatta configuration directory: user data, kept on purge by design
 ^/opt/vyatta/etc/config(/|$)   compat path for /config
+^/opt/vyatta$      parent of the configuration trees below
+^/opt/vyatta/config(/|$)   the configuration system's working tree (vyatta-cfg postinst creates it like /config)
+^/etc/commit(/|$)  commit hook directories: systemd-tmpfiles state (vyatta-system tmpfiles.d); Debian does not remove tmpfiles state on purge
+^/var/tmp/(configd|aaa-home)(/|$)   systemd-tmpfiles state (configd, vyatta-sssd-cfg tmpfiles.d)
+^/etc/network(/interfaces)?$   loopback stanza written by vyatta-system postinst; network configuration, kept like Debian's ifupdown keeps it
+# Debian packages that keep state or generated files on purge
+^/etc/aliases$     created by the MTA's postinst and kept (Debian MTA convention)
+^/etc/default/locale$  written by locales and the image's locale setup; kept
+^/etc/(shadow|gshadow)-$   backups written by useradd/groupadd
+^/etc/machine-id$  systemd machine identity
+^/etc/vconsole\.conf$  systemd console configuration
+^/etc/inetd\.conf$     created by the inetd tooling of telnetd; kept
+^/etc/pam\.d/common-[a-z-]+\.pam-old$  backups written by pam-auth-update
+^/etc/ssl/certs/[0-9a-f]{8}\.[0-9]$   hash links left by ca-certificates' rehash of certificates other packages added
+^/usr/lib/udev$    left when udev's generated hwdb is removed
+^/usr/share/info/dir\.old$  install-info backup
+^/var/lib/(machines|portables|private|tpm)$   state directories of systemd and tpm-udev
+^/var/lib/frr$     FRR's own packaging (FRRouting apt repository) keeps its state directory
+^/var/www(/html(/index\.lighttpd\.html)?)?$   lighttpd's postinst creates the default page and keeps it
+^/etc/lighttpd(/conf-enabled)?$   lighttpd's configuration directory, kept like its conffiles
+^/root/\.ssh$      created by OpenSSH tooling for root; kept
