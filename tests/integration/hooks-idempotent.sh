@@ -1,0 +1,22 @@
+#!/bin/bash
+# Install the packages that took over DANOS image hooks, run their maintainer
+# scripts a second time, and check nothing is duplicated; purge base-files-vyatta
+# and check the os-release diversion is gone.
+set -euo pipefail
+: "${WORK:?}"
+ENGINE=${ENGINE:-docker}
+$ENGINE run --rm -v "$WORK/repo":/repo:ro debian:trixie bash -euxc '
+  apt-get update -qq >/dev/null && apt-get install -y -qq ca-certificates gpg >/dev/null
+  gpg --dearmor < /repo/nudanos-archive-keyring.asc > /usr/share/keyrings/nudanos.gpg
+  echo "deb [signed-by=/usr/share/keyrings/nudanos.gpg] file:/repo trixie main" > /etc/apt/sources.list.d/nudanos.list
+  apt-get update -qq >/dev/null
+  apt-get install -y -qq --no-install-recommends vyatta-kernel-forwarding base-files-vyatta vyatta-system >/dev/null
+  grep -q "NuDanOS" /etc/os-release
+  dpkg-reconfigure base-files-vyatta vyatta-system
+  test "$(grep -c "^auto lo" /etc/network/interfaces)" = 1
+  test "$(dpkg-divert --list /etc/os-release | wc -l)" = 1
+  # base-files-vyatta is Essential: removing it takes an explicit override.
+  apt-get purge -y -qq --allow-remove-essential base-files-vyatta >/dev/null
+  test -z "$(dpkg-divert --list /etc/os-release)"
+  grep -q "Debian" /etc/os-release
+  echo hooks-idempotent: OK'
