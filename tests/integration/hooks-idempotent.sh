@@ -41,3 +41,15 @@ $ENGINE run --rm -v "$WORK/repo":/repo:ro debian:trixie bash -euxc '
   dpkg -i --force-depends vyatta-kernel-forwarding_*.deb
   apt-get install -y -qq -f >/dev/null
   echo kernel-forwarding-iptables: OK'
+# vyatta-password-renewal diverts pam-configs/unix and copies its own file in;
+# removing it must restore Debian's.
+$ENGINE run --rm -v "$WORK/repo":/repo:ro debian:trixie bash -euxc '
+  apt-get update -qq >/dev/null && apt-get install -y -qq ca-certificates gpg >/dev/null
+  gpg --dearmor < /repo/nudanos-archive-keyring.asc > /usr/share/keyrings/nudanos.gpg
+  echo "deb [signed-by=/usr/share/keyrings/nudanos.gpg] file:/repo trixie main" > /etc/apt/sources.list.d/nudanos.list
+  apt-get update -qq >/dev/null
+  apt-get install -y -qq --no-install-recommends vyatta-kernel-forwarding vyatta-password-renewal >/dev/null
+  apt-get remove -y -qq vyatta-password-renewal >/dev/null
+  test -z "$(dpkg-divert --list /usr/share/pam-configs/unix)"
+  dpkg --verify libpam-runtime
+  echo password-renewal-remove: OK'
