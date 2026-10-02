@@ -27,3 +27,17 @@ $ENGINE run --rm -v "$WORK/repo":/repo:ro debian:trixie bash -euxc '
   grep -q "NuDanOS" /etc/os-release
   test "$(dpkg-divert --listpackage /etc/os-release)" = base-files-vyatta
   echo hooks-idempotent: OK'
+# vyatta-kernel-forwarding selects the legacy iptables back end. In a large
+# transaction (the ISO build) dpkg can reach its postinst while iptables is
+# unpacked but not configured: the binaries exist, the alternatives do not.
+$ENGINE run --rm -v "$WORK/repo":/repo:ro debian:trixie bash -euxc '
+  apt-get update -qq >/dev/null && apt-get install -y -qq ca-certificates gpg >/dev/null
+  gpg --dearmor < /repo/nudanos-archive-keyring.asc > /usr/share/keyrings/nudanos.gpg
+  echo "deb [signed-by=/usr/share/keyrings/nudanos.gpg] file:/repo trixie main" > /etc/apt/sources.list.d/nudanos.list
+  apt-get update -qq >/dev/null
+  apt-get install -y -qq --no-install-recommends udev >/dev/null
+  cd /tmp && apt-get download -qq iptables vyatta-kernel-forwarding
+  dpkg --unpack --force-depends iptables_*.deb >/dev/null
+  dpkg -i --force-depends vyatta-kernel-forwarding_*.deb
+  apt-get install -y -qq -f >/dev/null
+  echo kernel-forwarding-iptables: OK'
