@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 jobs:
-  pilot:
+  build:
     runs-on: ubuntu-24.04
     # The signing key lives only in this environment, whose deployment rule
     # admits the main branch alone: no other repo, branch or PR can read it.
@@ -30,13 +30,60 @@ jobs:
             ${{ runner.temp }}/work/mirror-state.json
           key: work-nightly-${{ github.run_id }}
           restore-keys: work-nightly-
-      - name: Build all ready packages, sign, install the pilot set
+      - name: Build, sign, check the package set
         run: |
           go build -o distro-build ./cmd/distro-build
           ./distro-build -work "$RUNNER_TEMP/work" builder
           ./distro-build -work "$RUNNER_TEMP/work" -jobs 2 build
           WORK="$RUNNER_TEMP/work" KEY="$(cat keys/FINGERPRINT)" tests/integration/pilot.sh
+          tools/yangcheck.sh "$RUNNER_TEMP/work"
+          python3 tools/router_deps.py --check "$RUNNER_TEMP/work/src/nudanos-router/debian/control" \
+            "$RUNNER_TEMP/work/repo/dists/trixie/main/binary-amd64/Packages" docs/kernel-forwarding.md
       - uses: actions/upload-artifact@v7
         with:
           name: apt-repo
           path: ${{ runner.temp }}/work/repo/
+      - name: Image
+        run: ./distro-build -work "$RUNNER_TEMP/work" image
+      - name: Layer 2 (install, remove, purge)
+        run: |
+          ./distro-build -work "$RUNNER_TEMP/work" test install
+          WORK="$RUNNER_TEMP/work" tests/integration/hooks-idempotent.sh
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - name: Layer 3 (boot, configure, install, reboot)
+        run: ./distro-build -work "$RUNNER_TEMP/work" test boot
+      - name: UEFI smoke boot
+        run: ./distro-build -work "$RUNNER_TEMP/work" -firmware efi -smoke test boot
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: boot-transcript
+          path: ${{ runner.temp }}/work/boottest/serial.log
+      - uses: actions/upload-artifact@v7
+        with:
+          name: iso
+          path: ${{ runner.temp }}/work/image/*.iso
+          retention-days: 7
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: iso
+      - name: Publish the ISO
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          iso=$(ls nudanos-*-amd64.iso)
+          tag="nightly-$(date -u +%Y%m%d)"
+          sha256sum "$iso" > "$iso.sha256"
+          gh release create "$tag" "$iso" "$iso.sha256" -R "$GITHUB_REPOSITORY" \
+            --prerelease --title "NuDanOS nightly $(date -u +%Y-%m-%d)" \
+            --notes "Built from ${GITHUB_SHA}. Passed layers 1-3. Milestone 1: no firewall, NAT or QoS; not for internet-facing use."

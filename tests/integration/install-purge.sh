@@ -19,7 +19,8 @@ dpkg-query -W -f='${Package}\n' | sort > /tmp/pkgs-after
 comm -13 /tmp/pkgs-before /tmp/pkgs-after > /tmp/pkgs-added
 # The set includes Essential packages (base-files-vyatta; systemd and
 # systemd-sysv, which the base image lacks): purging them needs the override.
-DEBIAN_FRONTEND=noninteractive apt-get purge -y --allow-remove-essential $(cat /tmp/pkgs-added)
+# sudo refuses removal when no root password is set unless told otherwise.
+SUDO_FORCE_REMOVE=yes DEBIAN_FRONTEND=noninteractive apt-get purge -y --allow-remove-essential $(cat /tmp/pkgs-added)
 snapshot > /tmp/files-after
 comm -13 /tmp/files-before /tmp/files-after > /tmp/left
 grep -v -E -f <(grep -v '^#' /tests/install-allowlist.txt | awk 'NF{print $1}') /tmp/left > /tmp/unexplained || true
