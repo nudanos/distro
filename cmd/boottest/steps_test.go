@@ -6,6 +6,7 @@ import (
 	"net"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -88,5 +89,31 @@ func TestLoginRetriesUntilTheConfigurationHasLoaded(t *testing.T) {
 	}()
 	if err := login(c, "vyatta", "vyatta", regexp.MustCompile(`login: $`), time.Second); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A configuration command is done only when its own "[edit]" and prompt come
+// back; a prompt already in the buffer (type-ahead echoes, an earlier
+// command) must not count.
+func TestConfigureWaitsForEachCommandsOwnPrompt(t *testing.T) {
+	a, vm := net.Pipe()
+	defer a.Close()
+	defer vm.Close()
+	c := boottest.NewConsole(a, &bytes.Buffer{})
+	var answered atomic.Bool
+	go func() {
+		b := make([]byte, 256)
+		io.WriteString(vm, "[edit]\r\nvyatta@node# ") // stale prompt
+		n, _ := vm.Read(b)
+		time.Sleep(50 * time.Millisecond) // the commit takes a while
+		answered.Store(true)
+		io.WriteString(vm, string(b[:n])+"\n[edit]\r\nvyatta@node# ")
+	}()
+	time.Sleep(20 * time.Millisecond) // the stale prompt is in the buffer
+	if err := configure(c, "commit", time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if !answered.Load() {
+		t.Error("configure returned on a stale prompt, before the command answered")
 	}
 }

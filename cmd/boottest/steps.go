@@ -12,6 +12,8 @@ var (
 	passPrompt  = regexp.MustCompile(`Password: $`)
 	opPrompt    = regexp.MustCompile(`:~\$ $`)
 	cfgPrompt   = regexp.MustCompile(`# $`)
+	// a configuration command has finished when "[edit]" and the prompt follow
+	cfgDone = regexp.MustCompile(`\[edit\]\r?\n[^\r\n]*# $`)
 )
 
 // testPassword is the administrator password the test sets on install; it is
@@ -32,24 +34,35 @@ func liveSteps(c *boottest.Console, t func(time.Duration) time.Duration) error {
 		func() error { return c.Send("configure") },
 		func() error { _, err := c.Expect(cfgPrompt, t(time.Minute)); return err },
 		// Review Focus 3: a DPDK-only setting is refused with its reason.
-		func() error { return c.Send("set interfaces dataplane dp0s3 cpu-affinity 1") },
-		func() error { return c.Send("commit") },
+		func() error { return configure(c, "set interfaces dataplane dp0s3 cpu-affinity 1", t(time.Minute)) },
 		func() error {
-			_, err := c.Expect(regexp.MustCompile(`requires the DPDK dataplane`), t(2*time.Minute))
+			c.Discard()
+			if err := c.Send("commit"); err != nil {
+				return err
+			}
+			_, err := c.Expect(regexp.MustCompile(`requires the DPDK dataplane`), t(5*time.Minute))
 			return err
 		},
-		func() error { return c.Send("discard") },
-		func() error { _, err := c.Expect(cfgPrompt, t(time.Minute)); return err },
-		func() error { return c.Send("set interfaces dataplane dp0s3 address 192.0.2.1/24") },
-		func() error { return c.Send("set system host-name nudanos-test") },
+		func() error { _, err := c.Expect(cfgDone, t(5*time.Minute)); return err },
+		func() error { return configure(c, "discard", t(time.Minute)) },
 		func() error {
-			return c.Send("set system login user tester authentication plaintext-password " + testPassword)
+			return configure(c, "set interfaces dataplane dp0s3 address 192.0.2.1/24", t(time.Minute))
 		},
-		func() error { return c.Send("commit") },
-		func() error { _, err := c.Expect(cfgPrompt, t(5*time.Minute)); return err },
-		func() error { return c.Send("save") },
+		func() error { return configure(c, "set system host-name nudanos-test", t(time.Minute)) },
 		func() error {
-			_, err := c.Expect(regexp.MustCompile(`Saving configuration|Done`), t(2*time.Minute))
+			return configure(c, "set system login user tester authentication plaintext-password "+testPassword, t(time.Minute))
+		},
+		func() error { return configure(c, "set system login user tester level admin", t(time.Minute)) },
+		func() error { return configure(c, "commit", t(15*time.Minute)) },
+		func() error {
+			c.Discard()
+			if err := c.Send("save"); err != nil {
+				return err
+			}
+			if _, err := c.Expect(regexp.MustCompile(`Saving configuration|Done`), t(5*time.Minute)); err != nil {
+				return err
+			}
+			_, err := c.Expect(cfgDone, t(5*time.Minute))
 			return err
 		},
 		func() error { return c.Send("exit") },
@@ -174,6 +187,18 @@ func login(c *boottest.Console, user, password string, prompt *regexp.Regexp, to
 			return nil
 		}
 	}
+}
+
+// configure runs one configuration-mode command and waits for its own
+// "[edit]" prompt: output already read (type-ahead echoes, an earlier prompt)
+// is discarded first, so a stale prompt cannot end the wait.
+func configure(c *boottest.Console, cmd string, timeout time.Duration) error {
+	c.Discard()
+	if err := c.Send(cmd); err != nil {
+		return err
+	}
+	_, err := c.Expect(cfgDone, timeout)
+	return err
 }
 
 func run(steps []func() error) error {

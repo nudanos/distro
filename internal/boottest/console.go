@@ -102,6 +102,14 @@ func (c *Console) first(res []*regexp.Regexp, timeout time.Duration) (int, strin
 	}
 }
 
+// Discard consumes everything read so far, so the next Expect only sees
+// output that arrives after this call.
+func (c *Console) Discard() {
+	c.mu.Lock()
+	c.pos = len(c.buf)
+	c.mu.Unlock()
+}
+
 // Send types line followed by a carriage return.
 func (c *Console) Send(line string) error {
 	c.mu.Lock()
