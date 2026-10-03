@@ -170,3 +170,11 @@ func TestCommitRetriesWhileTheBootCommitRuns(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// configd saves on commit; "save" then says so (text from a layer 3 transcript).
+func TestSavedMatchesCommitSavesConfiguration(t *testing.T) {
+	out := "save\r\n\r\n  'commit' saves configuration.  This command has no effect\r\n\r\n[edit]\r\r\nvyatta@node# "
+	if !saved.MatchString(out) {
+		t.Errorf("saved does not match %q", out)
+	}
+}

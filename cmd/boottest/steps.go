@@ -14,6 +14,8 @@ var (
 	cfgPrompt   = regexp.MustCompile(`# $`)
 	// a configuration command has finished when "[edit]" and the prompt follow
 	cfgDone = regexp.MustCompile(`\[edit\]\r*\n[^\r\n]*# $`)
+	// "save" either saves or says that commit already saved
+	saved = regexp.MustCompile(`Saving configuration|Done|'commit' saves configuration`)
 )
 
 // testPassword is the administrator password the test sets on install; it is
@@ -53,7 +55,7 @@ func liveSteps(c *boottest.Console, t func(time.Duration) time.Duration) error {
 			if err := c.Send("save"); err != nil {
 				return err
 			}
-			if _, err := c.Expect(regexp.MustCompile(`Saving configuration|Done`), t(5*time.Minute)); err != nil {
+			if _, err := c.Expect(saved, t(5*time.Minute)); err != nil {
 				return err
 			}
 			_, err := c.Expect(cfgDone, t(5*time.Minute))
