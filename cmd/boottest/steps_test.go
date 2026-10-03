@@ -117,3 +117,27 @@ func TestConfigureWaitsForEachCommandsOwnPrompt(t *testing.T) {
 		t.Error("configure returned on a stale prompt, before the command answered")
 	}
 }
+
+// Applying the boot configuration restarts the getty: an attempt can end in
+// a fresh login prompt with neither a shell nor "Login incorrect".
+func TestLoginRetriesWhenTheGettyRestartsMidAttempt(t *testing.T) {
+	a, vm := net.Pipe()
+	defer a.Close()
+	defer vm.Close()
+	c := boottest.NewConsole(a, &bytes.Buffer{})
+	go func() {
+		b := make([]byte, 64)
+		io.WriteString(vm, "\r\nnode login: ")
+		vm.Read(b)
+		io.WriteString(vm, "vyatta\r\nPassword: ")
+		vm.Read(b)
+		io.WriteString(vm, "\r\n[  OK  ] Started serial-getty@ttyS0.service\r\nWelcome to NuDanOS - ttyS0\r\n\r\nnode login: ")
+		vm.Read(b)
+		io.WriteString(vm, "vyatta\r\nPassword: ")
+		vm.Read(b)
+		io.WriteString(vm, "\r\nvyatta@node:~$ ")
+	}()
+	if err := login(c, "vyatta", "vyatta", regexp.MustCompile(`login: $`), time.Second); err != nil {
+		t.Fatal(err)
+	}
+}

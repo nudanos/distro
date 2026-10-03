@@ -157,34 +157,48 @@ func halt(c *boottest.Console, t func(time.Duration) time.Duration) error {
 }
 
 // login logs in at the console. Until the boot configuration has loaded the
-// user does not exist: the console answers "Login incorrect" (and the getty
-// restarts once the configuration is applied), so it retries until total.
+// user does not exist, so the console answers "Login incorrect"; applying the
+// configuration also restarts the getty, which can end an attempt with a
+// fresh login prompt and no answer at all. Either way it tries again, until
+// total has passed.
 func login(c *boottest.Console, user, password string, prompt *regexp.Regexp, total time.Duration) error {
 	incorrect := regexp.MustCompile(`Login incorrect`)
 	deadline := time.Now().Add(total)
+	atPrompt := false
 	for {
 		left := time.Until(deadline)
 		if left <= 0 {
 			return errorf("could not log in as %s within %s", user, total)
 		}
-		if _, err := c.Expect(prompt, left); err != nil {
-			return err
+		if !atPrompt {
+			if _, err := c.Expect(prompt, left); err != nil {
+				return err
+			}
 		}
+		atPrompt = false
 		if err := c.Send(user); err != nil {
 			return err
 		}
-		if _, err := c.Expect(passPrompt, left); err != nil {
+		i, _, err := c.First([]*regexp.Regexp{passPrompt, prompt}, left)
+		if err != nil {
 			return err
+		}
+		if i == 1 { // the getty restarted before asking for the password
+			atPrompt = true
+			continue
 		}
 		if err := c.Send(password); err != nil {
 			return err
 		}
-		i, _, err := c.First([]*regexp.Regexp{opPrompt, incorrect}, left)
+		i, _, err = c.First([]*regexp.Regexp{opPrompt, incorrect, prompt}, left)
 		if err != nil {
 			return err
 		}
-		if i == 0 {
+		switch i {
+		case 0:
 			return nil
+		case 2: // the getty restarted: a fresh prompt is already here
+			atPrompt = true
 		}
 	}
 }
