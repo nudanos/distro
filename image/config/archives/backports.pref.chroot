@@ -1,3 +1,0 @@
-Package: linux-image-* linux-headers-* firmware-*
-Pin: release n=trixie-backports
-Pin-Priority: 900
