@@ -36,14 +36,8 @@ func liveSteps(c *boottest.Console, t func(time.Duration) time.Duration) error {
 		// Review Focus 3: a DPDK-only setting is refused with its reason.
 		func() error { return configure(c, "set interfaces dataplane dp0s3 cpu-affinity 1", t(time.Minute)) },
 		func() error {
-			c.Discard()
-			if err := c.Send("commit"); err != nil {
-				return err
-			}
-			_, err := c.Expect(regexp.MustCompile(`requires the DPDK dataplane`), t(5*time.Minute))
-			return err
+			return commit(c, regexp.MustCompile(`requires the DPDK dataplane`), 30*time.Second, t(20*time.Minute))
 		},
-		func() error { _, err := c.Expect(cfgDone, t(5*time.Minute)); return err },
 		func() error { return configure(c, "discard", t(time.Minute)) },
 		func() error {
 			return configure(c, "set interfaces dataplane dp0s3 address 192.0.2.1/24", t(time.Minute))
@@ -53,7 +47,7 @@ func liveSteps(c *boottest.Console, t func(time.Duration) time.Duration) error {
 			return configure(c, "set system login user tester authentication plaintext-password "+testPassword, t(time.Minute))
 		},
 		func() error { return configure(c, "set system login user tester level admin", t(time.Minute)) },
-		func() error { return configure(c, "commit", t(15*time.Minute)) },
+		func() error { return commit(c, nil, 30*time.Second, t(20*time.Minute)) },
 		func() error {
 			c.Discard()
 			if err := c.Send("save"); err != nil {
@@ -213,6 +207,50 @@ func configure(c *boottest.Console, cmd string, timeout time.Duration) error {
 	}
 	_, err := c.Expect(cfgDone, timeout)
 	return err
+}
+
+// commit commits in configuration mode. want, if set, is the expected outcome
+// (a refusal); otherwise the commit must succeed. The console accepts logins
+// while the boot configuration is still being committed, so "Commit already
+// in progress" means wait pause and try again, until timeout.
+func commit(c *boottest.Console, want *regexp.Regexp, pause, timeout time.Duration) error {
+	inProgress := regexp.MustCompile(`Commit already in progress`)
+	failed := regexp.MustCompile(`Commit failed`)
+	deadline := time.Now().Add(timeout)
+	for {
+		left := time.Until(deadline)
+		if left <= 0 {
+			return errorf("commit still in progress after %s", timeout)
+		}
+		c.Discard()
+		if err := c.Send("commit"); err != nil {
+			return err
+		}
+		res := []*regexp.Regexp{inProgress, failed, cfgDone}
+		if want != nil {
+			res = append(res, want)
+		}
+		i, _, err := c.First(res, left)
+		if err != nil {
+			return err
+		}
+		switch {
+		case i == 0: // the boot commit is still running
+			if _, err := c.Expect(cfgDone, left); err != nil {
+				return err
+			}
+			time.Sleep(pause)
+		case i == 3: // the expected refusal
+			_, err := c.Expect(cfgDone, left)
+			return err
+		case want != nil:
+			return errorf("commit: wanted %v, got another outcome:\n%s", want, c.Tail(15))
+		case i == 1:
+			return errorf("commit failed:\n%s", c.Tail(15))
+		default:
+			return nil
+		}
+	}
 }
 
 func run(steps []func() error) error {

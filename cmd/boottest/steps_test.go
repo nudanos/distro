@@ -150,3 +150,23 @@ func TestConfigDoneMatchesTheRealConsole(t *testing.T) {
 		t.Errorf("cfgDone does not match %q", out)
 	}
 }
+
+// The console accepts logins while the boot configuration is still being
+// committed: a commit then fails with "Commit already in progress" and must be
+// retried, not taken as the answer.
+func TestCommitRetriesWhileTheBootCommitRuns(t *testing.T) {
+	a, vm := net.Pipe()
+	defer a.Close()
+	defer vm.Close()
+	c := boottest.NewConsole(a, &bytes.Buffer{})
+	go func() {
+		b := make([]byte, 64)
+		vm.Read(b)
+		io.WriteString(vm, "commit\r\n[]\r\n\r\nCommit already in progress\r\n\r\nCommit failed!\r\n\r\n[edit]\r\r\nvyatta@node# ")
+		vm.Read(b)
+		io.WriteString(vm, "commit\r\ncpu-affinity requires the DPDK dataplane; this system forwards in the Linux kernel\r\nCommit failed!\r\n[edit]\r\r\nvyatta@node# ")
+	}()
+	if err := commit(c, regexp.MustCompile(`requires the DPDK dataplane`), 10*time.Millisecond, time.Second); err != nil {
+		t.Fatal(err)
+	}
+}
