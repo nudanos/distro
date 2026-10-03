@@ -85,6 +85,10 @@ Op commands that ask the DPDK process report failure under kernel forwarding:
 | Package | Why |
 |---|---|
 | vyatta-system-login-user-isolation-v1-yang | its postinst builds the user sandbox root with mmdebstrap, which needs the network at install time; install it on a running system (optional in DANOS too) |
+| pam-sandbox | user isolation's PAM module: enabled at install, it sandboxes every non-root login and fails the session when no sandbox root exists (the router leaves user isolation out) |
+| cli-sandbox | user isolation's sandbox service (see pam-sandbox) |
+| vyatta-sssd-cli-sandbox | SSSD support inside user isolation's sandbox (see pam-sandbox) |
+| python3-shared-storage | used only by cli-sandbox |
 | vyatta-cfg-default-minimal | alternative default configuration; the variants conflict (each ships /etc/vyatta/yang.conf) and the router installs vyatta-cfg-default-vr, as DANOS's VR image did |
 | vyatta-cfg-default-vcpe | alternative default configuration (see vyatta-cfg-default-minimal) |
 | vyatta-cfg-default-vdr | alternative default configuration (see vyatta-cfg-default-minimal) |
