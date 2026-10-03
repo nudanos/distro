@@ -1,0 +1,14 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+# install image copies /boot into the image directory, and grub boots
+# /boot/<image>/vmlinuz and /boot/<image>/initrd.img: link them to the
+# newest kernel (DANOS's kernel package installed unversioned names).
+set -e
+echo "I: running hook $(basename ${0})"
+cd /boot
+k=$(ls -1 vmlinuz-* 2>/dev/null | sort -V | tail -1)
+[ -n "$k" ] || { echo "E: no kernel in /boot" >&2; exit 1; }
+v=${k#vmlinuz-}
+ln -sf "$k" vmlinuz
+ln -sf "initrd.img-$v" initrd.img
+ls -l vmlinuz initrd.img
