@@ -178,3 +178,28 @@ func TestSavedMatchesCommitSavesConfiguration(t *testing.T) {
 		t.Errorf("saved does not match %q", out)
 	}
 }
+
+// "show interfaces" runs in a pager that reads the keyboard until the output
+// is complete; the next command must wait for the prompt, or the pager eats
+// its first keystrokes (layer 3 run 16: "-vbash: ow: command not found").
+func TestOpWaitsForThePromptBeforeReturning(t *testing.T) {
+	a, vm := net.Pipe()
+	defer a.Close()
+	defer vm.Close()
+	c := boottest.NewConsole(a, &bytes.Buffer{})
+	var prompted atomic.Bool
+	go func() {
+		b := make([]byte, 64)
+		vm.Read(b)
+		io.WriteString(vm, "show interfaces\r\nWaiting for data... (^X or interrupt to abort)dp0s3  192.0.2.1/24  u/u\r\n")
+		time.Sleep(50 * time.Millisecond)
+		prompted.Store(true)
+		io.WriteString(vm, "tester@nudanos-test:~$ ")
+	}()
+	if err := op(c, "show interfaces", regexp.MustCompile(`dp0s3\s+192\.0\.2\.1/24`), time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if !prompted.Load() {
+		t.Error("op returned before the prompt came back")
+	}
+}

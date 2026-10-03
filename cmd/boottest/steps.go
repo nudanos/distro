@@ -129,13 +129,10 @@ func diskSteps(c *boottest.Console, t func(time.Duration) time.Duration) error {
 		func() error {
 			return login(c, "tester", testPassword, regexp.MustCompile(`nudanos-test login: $`), t(30*time.Minute))
 		},
-		func() error { return c.Send("show interfaces") },
 		func() error {
-			_, err := c.Expect(regexp.MustCompile(`dp0s3\s+192\.0\.2\.1/24`), t(time.Minute))
-			return err
+			return op(c, "show interfaces", regexp.MustCompile(`dp0s3\s+192\.0\.2\.1/24`), t(time.Minute))
 		},
-		func() error { return c.Send("show version") },
-		func() error { _, err := c.Expect(regexp.MustCompile(`(?m)^Kernel:\s+\S+`), t(time.Minute)); return err },
+		func() error { return op(c, "show version", regexp.MustCompile(`(?m)^Kernel:\s+\S+`), t(time.Minute)) },
 	}
 	return run(steps)
 }
@@ -197,6 +194,20 @@ func login(c *boottest.Console, user, password string, prompt *regexp.Regexp, to
 			atPrompt = true
 		}
 	}
+}
+
+// op runs one operational command, waits for want in its output and then for
+// the prompt, so nothing typed next reaches a pager still reading the keyboard.
+func op(c *boottest.Console, cmd string, want *regexp.Regexp, timeout time.Duration) error {
+	c.Discard()
+	if err := c.Send(cmd); err != nil {
+		return err
+	}
+	if _, err := c.Expect(want, timeout); err != nil {
+		return err
+	}
+	_, err := c.Expect(opPrompt, timeout)
+	return err
 }
 
 // configure runs one configuration-mode command and waits for its own
