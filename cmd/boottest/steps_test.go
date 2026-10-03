@@ -141,3 +141,12 @@ func TestLoginRetriesWhenTheGettyRestartsMidAttempt(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// The real console ends "[edit]" with "\r\r\n" and wraps the prompt in
+// bracketed-paste escapes (bytes copied from a layer 3 transcript).
+func TestConfigDoneMatchesTheRealConsole(t *testing.T) {
+	out := "set interfaces dataplane dp0s3 cpu-affinity 1\r\n\x1b[?2004l\r\x1b[?2004h[edit]\r\r\nvyatta@node# "
+	if !cfgDone.MatchString(out) {
+		t.Errorf("cfgDone does not match %q", out)
+	}
+}

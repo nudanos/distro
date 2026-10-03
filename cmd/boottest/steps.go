@@ -13,7 +13,7 @@ var (
 	opPrompt    = regexp.MustCompile(`:~\$ $`)
 	cfgPrompt   = regexp.MustCompile(`# $`)
 	// a configuration command has finished when "[edit]" and the prompt follow
-	cfgDone = regexp.MustCompile(`\[edit\]\r?\n[^\r\n]*# $`)
+	cfgDone = regexp.MustCompile(`\[edit\]\r*\n[^\r\n]*# $`)
 )
 
 // testPassword is the administrator password the test sets on install; it is
@@ -95,7 +95,7 @@ func installSteps(c *boottest.Console, t func(time.Duration) time.Duration) erro
 	// then the test password twice.
 	pwPrompt := regexp.MustCompile(`(Enter|Retype) password for user '[^']+':$`)
 	// The installer ends with "Done."; partitioning prints "Done!" earlier.
-	done := regexp.MustCompile(`Done\.\r?\n`)
+	done := regexp.MustCompile(`Done\.\r*\n`)
 	for {
 		i, _, err := firstOf(c, append([]*regexp.Regexp{done, refusal, pwPrompt}, prompts(rules)...), t(30*time.Minute))
 		if err != nil {
