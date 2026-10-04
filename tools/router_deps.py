@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """nudanos-router's dependency list: every binary in the repo except development
 packages, debug symbols, the DPDK dataplane itself, and the packages
-docs/kernel-forwarding.md excludes (DPDK-only, deferred or optional), each
-with a reason.
+docs/kernel-forwarding.md excludes (DPDK-only, deferred, optional or
+platform-specific), each with a reason. A hardware platform's deviation
+module that the doc does not list is an error, not a dependency.
 
   router_deps.py PACKAGES_FILE KF_DOC              print the list
   router_deps.py --check CONTROL PACKAGES_FILE KF_DOC   exit 1 on drift
@@ -14,7 +15,10 @@ import sys
 
 ALWAYS_OUT = {"vyatta-dataplane", "nudanos-router"}
 SUFFIX_OUT = ("-dev", "-dbgsym", "-dbg", "-doc", "-tests", "-test")
-EXCLUDING_SECTIONS = ("## DPDK-only", "## Deferred", "## Optional")
+EXCLUDING_SECTIONS = ("## DPDK-only", "## Deferred", "## Optional", "## Platform-specific")
+# Deviation modules for a hardware platform (vyatta-...-deviation(s)-<platform>-v1-yang).
+# DANOS's own platform deviations and kernel forwarding's are the router's.
+PLATFORM_DEVIATION = re.compile(r"-deviations?-(?!danos-)[a-z0-9]+.*-v1-yang$")
 
 
 def excluded(doc: str) -> set[str]:
@@ -32,7 +36,12 @@ def excluded(doc: str) -> set[str]:
 def router_deps(packages: str, doc: str) -> list[str]:
     names = set(re.findall(r"^Package: (\S+)$", packages, re.M))
     skip = excluded(doc) | ALWAYS_OUT
-    return sorted(n for n in names if n not in skip and not n.endswith(SUFFIX_OUT))
+    deps = sorted(n for n in names if n not in skip and not n.endswith(SUFFIX_OUT))
+    undecided = [n for n in deps if PLATFORM_DEVIATION.search(n)]
+    if undecided:
+        raise ValueError("hardware platform deviation modules need a decision in "
+                         "docs/kernel-forwarding.md: " + ", ".join(undecided))
+    return deps
 
 
 def drift(control: str, packages: str, doc: str) -> tuple[list[str], list[str]]:

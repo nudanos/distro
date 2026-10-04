@@ -19,11 +19,19 @@ these out of `nudanos-router`.
 | `vyatta-interfaces.pl --set-dev-mtu/--set-mac` | works: kernel netdev |
 | `vplane-affinity` (cpu-affinity, receive-, transmit-cpu-affinity) | refused at commit (`vyatta-kernel-forwarding-deviations-v1-yang`) |
 | `breakout`, `breakout-reserved-for` | absent: a YANG feature only switch platforms enable |
-| `vyatta-intf-end`, `vyatta-update-vifs` | works |
+| `vyatta-intf-end`, `vyatta-update-vifs` | works for addresses, MTU and VIFs; its speed, duplex and pause settings go to the DPDK process (a no-op here), so they are refused at commit (see below) |
+| `speed`, `duplex` other than `auto` | refused at commit (`vyatta-kernel-forwarding-deviations-v1-yang`) |
+| `pause-frame` | absent: a YANG feature only the SIAD platform package enables |
+| `ip gratuitous-arp request/reply` (interface and VIF) | refused at commit; `vyatta-interfaces-garp` programs only the DPDK process |
+| `ip gratuitous-arp-count`, IPv6 redirects | accepted, no effect (defaulted leaves cannot be refused without refusing every configuration) |
 
-Op commands that ask the DPDK process report failure under kernel forwarding:
-`show dataplane …`, and, in `vyatta-op`, `reset ip arp …` and
-`show ipv6 neighbors` (`nbr-res-flush.pl`, `vplane-nd.pl`).
+Op commands backed by `vplane-config`'s scripts (`show dataplane …`,
+`monitor dataplane …`, `show arp` via `vplane-arp`, `reset ip arp` via
+`nbr-res-flush.pl`, `show ipv6 neighbors` via `vplane-nd.pl`, `show interfaces
+bonding … detail` via `vplane-ifconfig.pl`) print "requires the DPDK
+dataplane; this system forwards in the Linux kernel": `vyatta-kernel-forwarding`
+installs `dpdk-required` under those script names. Kernel-native `show arp` and
+`show ipv6 neighbors` are not in 1.0; `ip neigh` shows the same table.
 
 ## DPDK-only or hardware-specific binaries (left out of nudanos-router)
 
@@ -93,3 +101,19 @@ Op commands that ask the DPDK process report failure under kernel forwarding:
 | vyatta-cfg-default-vcpe | alternative default configuration (see vyatta-cfg-default-minimal) |
 | vyatta-cfg-default-vdr | alternative default configuration (see vyatta-cfg-default-minimal) |
 | vyatta-cfg-default-vdr-dp | alternative default configuration for the DPDK dataplane (see vyatta-cfg-default-minimal) |
+
+## Platform-specific (hardware deviations, left out of nudanos-router)
+
+Deviation modules that restrict the model to one switch platform's hardware.
+Installed on a general-purpose box they refuse valid configuration (a keyed GRE
+tunnel, pause frames on dp0s3). `tools/router_deps.py` fails on any hardware
+platform deviation module not listed in this document.
+
+| Package | Platform and effect |
+|---|---|
+| vyatta-interfaces-bonding-deviation-broadcom-stratadnx-v1-yang | Broadcom StrataDNX: at most 32 bonds |
+| vyatta-interfaces-dataplane-deviation-ufi-apollo-ncp1-1-v1-yang | UfiSpace Apollo NCP1-1 |
+| vyatta-interfaces-dataplane-pause-deviations-siad-v1-yang | SIAD: pause frames only on dp0xe/dp0ce |
+| vyatta-interfaces-dataplane-speed-deviations-siad-v1-yang | SIAD: speed validation script on every interfaces commit |
+| vyatta-interfaces-switch-deviations-siad-v1-yang | SIAD: switch MAC ignored |
+| vyatta-interfaces-tunnel-deviations-broadcom-dpp-v1-yang | Broadcom DPP: tunnel `parameters ip key` not supported |

@@ -54,6 +54,22 @@ class RouterDepsTest(unittest.TestCase):
         doc = DOC + "\n## Optional (installable, left out of nudanos-router)\n\n| Package | Why |\n|---|---|\n| vyatta-system | needs the network at install time |\n"
         self.assertEqual(rd.router_deps(PACKAGES, doc), ["vyatta-kernel-forwarding"])
 
+    def test_platform_section_is_left_out(self):
+        pkgs = PACKAGES + "\nPackage: vyatta-interfaces-switch-deviations-siad-v1-yang\n"
+        doc = DOC + "\n## Platform-specific (hardware deviations, left out of nudanos-router)\n\n| Package | Platform |\n|---|---|\n| vyatta-interfaces-switch-deviations-siad-v1-yang | SIAD |\n"
+        self.assertEqual(rd.router_deps(pkgs, doc), ["vyatta-kernel-forwarding", "vyatta-system"])
+
+    def test_undecided_platform_deviation_fails(self):
+        # A new hardware deviation module must not reach every box by default.
+        pkgs = PACKAGES + "\nPackage: vyatta-interfaces-tunnel-deviations-broadcom-dpp-v1-yang\n"
+        with self.assertRaises(ValueError):
+            rd.router_deps(pkgs, DOC)
+
+    def test_danos_and_kernel_forwarding_deviations_stay(self):
+        pkgs = PACKAGES + "\nPackage: vyatta-policy-route-deviation-danos-v1-yang\n\nPackage: vyatta-kernel-forwarding-deviations-v1-yang\n"
+        self.assertIn("vyatta-policy-route-deviation-danos-v1-yang", rd.router_deps(pkgs, DOC))
+        self.assertIn("vyatta-kernel-forwarding-deviations-v1-yang", rd.router_deps(pkgs, DOC))
+
 
 if __name__ == "__main__":
     unittest.main()
