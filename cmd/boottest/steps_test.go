@@ -323,9 +323,9 @@ func TestLoginRefusedFailsWhenTheLoginWorks(t *testing.T) {
 	}
 }
 
-// Bytes copied from layer 3 run 18.
+// Bytes copied from layer 3 run 19 (od -c of the serial transcript).
 func TestVersionLineMatchesTheRealConsole(t *testing.T) {
-	out := "\x1b[?2004hvyatta@node:~$ show version\r\n\x1b[?2004lVersion:      1.0-20261004.0334\x1b[m\r\nDescription:  NuDanOS 1.0~20261004\x1b[m\r\n"
+	out := "\x1b[?2004hvyatta@node:~$ show version\r\n\x1b[?2004l\r\rVersion:      1.0-20261004.0334\x1b[m\r\nDescription:  NuDanOS 1.0~20261004\x1b[m\r\n"
 	if !versionLine.MatchString(out) {
 		t.Errorf("versionLine does not match %q", out)
 	}

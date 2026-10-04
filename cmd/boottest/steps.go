@@ -16,9 +16,9 @@ var (
 	// a configuration command has finished when "[edit]" and the prompt follow
 	cfgDone = regexp.MustCompile(`\[edit\]\r*\n[^\r\n]*# $`)
 	// "save" either saves or says that commit already saved
-	// show version's first line follows the bracketed-paste escape, not a
-	// line start; the value is the image name 95-build.txt stamps
-	versionLine = regexp.MustCompile(`(?m)(?:^|\x1b\[\?2004l)Version:\s+1\.0-\d{8}\.\d{4}`)
+	// show version's first line follows the bracketed-paste escape and two
+	// carriage returns, not a bare line start; the value is the image name 95-build.txt stamps
+	versionLine = regexp.MustCompile(`(?m)^(?:\x1b\[\?2004l)?\r*Version:\s+1\.0-\d{8}\.\d{4}`)
 	saved       = regexp.MustCompile(`Saving configuration|Done|'commit' saves configuration`)
 )
 
