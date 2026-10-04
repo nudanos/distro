@@ -1,4 +1,9 @@
-# Go toolchain from trixie-backports (spec §4.2: Go 1.26).
-Package: golang-go golang-src golang-doc golang-1.26-go golang-1.26-src golang-1.26-doc
-Pin: release n=trixie-backports
+# Go toolchain from trixie (Go 1.24). Spec §4.2 names trixie-backports'
+# golang-go (1.26), but since 2026-10-03 backports' golang-go 2:1.26~1~bpo13+1
+# depends on golang-1.26-go, which backports no longer carries (mid-transition
+# to 1.27), so no package that build-depends on golang-go could build. Every
+# NuDanOS Go source builds with 1.24 (the one go.mod declares go 1.12). Return
+# to backports once its golang-go resolves again.
+Package: golang-go golang-src golang-doc golang-any golang-1.24-go golang-1.24-src golang-1.24-doc
+Pin: release n=trixie
 Pin-Priority: 990

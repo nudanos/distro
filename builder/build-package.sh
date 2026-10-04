@@ -47,7 +47,9 @@ main() {
     apt-get -y --no-install-recommends "${prof[@]}" build-dep ./
     chown -R builder:builder /build
     runuser -u builder -- env DEB_BUILD_OPTIONS="parallel=${JOBS:-1}" DEB_BUILD_PROFILES="${DEB_BUILD_PROFILES:-}" dpkg-buildpackage -us -uc -I -i "${prof[@]}"
-    if apt-cache show lintian-profile-vyatta >/dev/null 2>&1; then
+    # apt-cache show exits 0 for a name another package merely references
+    # (apt 3); madison lists only real, installable versions.
+    if [ -n "$(apt-cache madison lintian-profile-vyatta 2>/dev/null)" ]; then
         apt-get install -y --no-install-recommends lintian-profile-vyatta >/dev/null
         lintian --profile vyatta --fail-on error ../*.changes
     else

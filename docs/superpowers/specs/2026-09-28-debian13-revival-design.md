@@ -111,7 +111,7 @@ Versions at time of writing (checked 2026-09-28):
 |---|---|---|---|
 | FRR | 7.6 | 10.7.1 | deb.frrouting.org `trixie frr-stable` (`kind: apt`) |
 | Kernel | 5.10.69 | 7.1.x | trixie-backports `linux-image-amd64`. Fallback: Debian 6.12 or self-built 6.18 LTS |
-| Go | 1.15 | 1.26 | trixie-backports `golang-go` |
+| Go | 1.15 | 1.26 | trixie-backports `golang-go` (temporarily trixie's 1.24 since 2026-10-04: backports' `golang-go` names a `golang-1.26-go` it no longer carries; see builder/preferences) |
 | strongswan | 5.9.0 | 6.1.0 | upstream |
 | keepalived | 2.2.0 | 2.4.3 | upstream |
 | libteam | 1.11 | 1.32 | upstream |
