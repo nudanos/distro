@@ -73,6 +73,47 @@ func (c *Console) First(res []*regexp.Regexp, timeout time.Duration) (int, strin
 
 // first waits for the earliest match among res and returns its index.
 func (c *Console) first(res []*regexp.Regexp, timeout time.Duration) (int, string, error) {
+	i, m, timedOut, err := c.wait(res, timeout)
+	if timedOut {
+		return -1, "", c.timeoutError(res, timeout)
+	}
+	return i, m, err
+}
+
+// FirstNudging is First for a prompt that later output may bury: each time
+// quiet passes with no match it sends a bare carriage return, so the getty
+// or shell prints a fresh prompt ("node login: [  OK  ] Stopped ..." can
+// never match an end-anchored pattern again).
+func (c *Console) FirstNudging(res []*regexp.Regexp, quiet, timeout time.Duration) (int, string, error) {
+	deadline := time.Now().Add(timeout)
+	for {
+		wait := time.Until(deadline)
+		if wait <= 0 {
+			return -1, "", c.timeoutError(res, timeout)
+		}
+		if wait > quiet {
+			wait = quiet
+		}
+		i, m, timedOut, err := c.wait(res, wait)
+		if !timedOut {
+			return i, m, err
+		}
+		if time.Until(deadline) <= 0 {
+			return -1, "", c.timeoutError(res, timeout)
+		}
+		if err := c.Send(""); err != nil {
+			return -1, "", err
+		}
+	}
+}
+
+func (c *Console) timeoutError(res []*regexp.Regexp, timeout time.Duration) error {
+	return fmt.Errorf("timed out after %s waiting for %v\nlast output:\n%s", timeout, res, c.Tail(15))
+}
+
+// wait waits for the earliest match among res, consumes it and returns its
+// index; timedOut reports that timeout passed with no match.
+func (c *Console) wait(res []*regexp.Regexp, timeout time.Duration) (int, string, bool, error) {
 	deadline := time.NewTimer(timeout)
 	defer deadline.Stop()
 	for {
@@ -87,17 +128,17 @@ func (c *Console) first(res []*regexp.Regexp, timeout time.Duration) (int, strin
 			m := string(c.buf[c.pos+bestStart : c.pos+bestEnd])
 			c.pos += bestEnd
 			c.mu.Unlock()
-			return best, m, nil
+			return best, m, false, nil
 		}
 		err := c.err
 		c.mu.Unlock()
 		if err != nil {
-			return -1, "", fmt.Errorf("console closed while waiting for %v: %v\nlast output:\n%s", res, err, c.Tail(15))
+			return -1, "", false, fmt.Errorf("console closed while waiting for %v: %v\nlast output:\n%s", res, err, c.Tail(15))
 		}
 		select {
 		case <-c.changed:
 		case <-deadline.C:
-			return -1, "", fmt.Errorf("timed out after %s waiting for %v\nlast output:\n%s", timeout, res, c.Tail(15))
+			return -1, "", true, nil
 		}
 	}
 }

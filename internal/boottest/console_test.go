@@ -95,3 +95,21 @@ func TestDialogAnswersPromptsUntilDone(t *testing.T) {
 		t.Errorf("replies %q %q", a, b)
 	}
 }
+
+// Output after a prompt ("node login: [  OK  ] Stopped ...") means an
+// end-anchored pattern can never match it; after a quiet spell a bare
+// carriage return makes the getty or shell print a fresh prompt.
+func TestFirstNudgingSendsCarriageReturnWhenStalled(t *testing.T) {
+	c, vm, _ := pipe(t)
+	go func() {
+		io.WriteString(vm, "node login: [  OK  ] Stopped serial-getty@ttyS0.service.\r\n")
+		b := make([]byte, 16)
+		n, _ := vm.Read(b)
+		if string(b[:n]) == "\r" {
+			io.WriteString(vm, "\r\nnode login: ")
+		}
+	}()
+	if _, _, err := c.FirstNudging([]*regexp.Regexp{regexp.MustCompile(`login: $`)}, 50*time.Millisecond, time.Second); err != nil {
+		t.Fatal(err)
+	}
+}

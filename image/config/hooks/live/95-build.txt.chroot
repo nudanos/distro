@@ -1,20 +1,40 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-only
+# Stamp the NuDanOS version and build time into the files "show version",
+# the login banner and install image read. make-image.sh passes
+# NUDANOS_VERSION (1.0~YYYYMMDD) and SOURCE_DATE_EPOCH (the distro commit
+# time) through config/environment.chroot_hooks. ROOT is for tests.
+set -eu
+R=${ROOT:-}
+env=$R/live-build/config/environment.chroot_hooks
+[ -f "$env" ] && . "$env"
+[ -n "${NUDANOS_VERSION:-}" ] && [ -n "${SOURCE_DATE_EPOCH:-}" ] || exit 0
 
-[ -f /live-build/config/environment.chroot_hooks ] && . /live-build/config/environment.chroot_hooks
+echo "I: running hook $(basename "$0")"
 
-[ -z "${BUILD_TIME}" ] && exit 0
+# install image proposes Version: as the image name, which may not hold "~";
+# the commit time keeps two builds of one day apart.
+image=$(echo "$NUDANOS_VERSION" | tr '~' '-').$(date -u -d "@$SOURCE_DATE_EPOCH" +%H%M)
 
-echo "I: running hook $(basename ${0})"
+cat > "$R/opt/vyatta/etc/version" <<EOT
+Version:      $image
+Description:  NuDanOS $NUDANOS_VERSION
+EOT
 
-# Create build-on file used by "show version"
-cat << EOF > /opt/vyatta/etc/build.txt
-Built on:     $( date -u -d @$BUILD_TIME )
-EOF
+# show version reads os-release: Version: is VERSION_ID, Description: is
+# PRETTY_NAME VERSION, plus "(VYATTA_PROJECT_ID)" unless it ends in VERSION_ID.
+f=$R/etc/os-release.vyatta-version
+sed -i -e '/^VERSION=/d' -e '/^VERSION_ID=/d' -e '/^BUILD_ID=/d' \
+    -e '/^VYATTA_PROJECT_ID=/d' "$f"
+cat >> "$f" <<EOT
+VERSION="$NUDANOS_VERSION"
+VERSION_ID="$image"
+BUILD_ID="$image"
+VYATTA_PROJECT_ID="NuDanOS:$image"
+EOT
 
-# Updating motd and version file
-cur_time=$(date +%m%d%H%M -d @$BUILD_TIME)
-for file in /opt/vyatta/etc/motd /opt/vyatta/etc/version
-do
-    sed -i -e "s/00000000/$cur_time/g" $file
-done
+# build.txt is a link to iso-build.txt (00-mk_buildid)
+echo "Built on:     $(date -u -d "@$SOURCE_DATE_EPOCH")" > "$R/opt/vyatta/etc/build.txt"
+
+[ -f "$R/opt/vyatta/etc/motd" ] && sed -i -e "s/00000000/$NUDANOS_VERSION/g" "$R/opt/vyatta/etc/motd"
+exit 0

@@ -16,6 +16,8 @@ cp -a /image /tmp/lb && cd /tmp/lb
 rm -f make-image.sh
 cp /repo/nudanos-archive-keyring.asc config/archives/nudanos.key.chroot
 NUDANOS_VERSION="$NUDANOS_VERSION" lb config
+# Chroot hooks see config/ at /live-build/config (95-build.txt stamps the version).
+printf 'NUDANOS_VERSION=%s\nSOURCE_DATE_EPOCH=%s\n' "$NUDANOS_VERSION" "$SOURCE_DATE_EPOCH" > config/environment.chroot_hooks
 lb build
 iso=$(ls -1 /tmp/lb/*.hybrid.iso | head -1)
 cp "$iso" "/out/nudanos-${NUDANOS_VERSION}-amd64.iso"

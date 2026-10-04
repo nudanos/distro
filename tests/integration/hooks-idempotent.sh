@@ -15,6 +15,14 @@ $ENGINE run --rm -v "$WORK/repo":/repo:ro debian:trixie bash -euxc '
   dpkg-reconfigure base-files-vyatta vyatta-system
   test "$(grep -c "^auto lo" /etc/network/interfaces)" = 1
   test "$(dpkg-divert --list /etc/os-release | wc -l)" = 1
+  # Diversions are made in preinst; an upgrade runs the old postrm with
+  # "upgrade", which must not undo them. A reinstall is an upgrade.
+  apt-get install -y -qq --no-install-recommends vyatta-version >/dev/null
+  test "$(readlink /etc/os-release.vyatta)" = os-release.vyatta-version
+  apt-get install -y -qq --reinstall base-files-vyatta vyatta-version vyatta-system >/dev/null
+  test "$(dpkg-divert --list /etc/os-release | wc -l)" = 1
+  test "$(dpkg-divert --list /etc/os-release.vyatta | wc -l)" = 1
+  test "$(readlink /etc/os-release.vyatta)" = os-release.vyatta-version
   # base-files-vyatta is Essential: removing it takes an explicit override.
   apt-get purge -y -qq --allow-remove-essential base-files-vyatta >/dev/null
   test -z "$(dpkg-divert --list /etc/os-release)"
