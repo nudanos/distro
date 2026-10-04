@@ -16,7 +16,10 @@ var (
 	// a configuration command has finished when "[edit]" and the prompt follow
 	cfgDone = regexp.MustCompile(`\[edit\]\r*\n[^\r\n]*# $`)
 	// "save" either saves or says that commit already saved
-	saved = regexp.MustCompile(`Saving configuration|Done|'commit' saves configuration`)
+	// show version's first line follows the bracketed-paste escape, not a
+	// line start; the value is the image name 95-build.txt stamps
+	versionLine = regexp.MustCompile(`(?m)(?:^|\x1b\[\?2004l)Version:\s+1\.0-\d{8}\.\d{4}`)
+	saved       = regexp.MustCompile(`Saving configuration|Done|'commit' saves configuration`)
 )
 
 // testPassword is the administrator password the test sets on install; it is
@@ -32,10 +35,7 @@ func liveSteps(c *boottest.Console, t func(time.Duration) time.Duration) error {
 		func() error { return login(c, "vyatta", "vyatta", loginPrompt, t(30*time.Minute)) },
 		func() error { return c.Send("show version") },
 		// The image carries its NuDanOS version (95-build.txt), not UNKNOWN.
-		func() error {
-			_, err := c.Expect(regexp.MustCompile(`(?m)^Version:\s+1\.0-\d{8}\.\d{4}`), t(time.Minute))
-			return err
-		},
+		func() error { _, err := c.Expect(versionLine, t(time.Minute)); return err },
 		func() error {
 			_, err := c.Expect(regexp.MustCompile(`(?m)^Base:\s+Debian GNU/Linux 13`), t(time.Minute))
 			return err
