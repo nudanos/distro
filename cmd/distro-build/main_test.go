@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"github.com/nudanos/distro/internal/engine"
 	"github.com/nudanos/distro/internal/manifest"
 	"os"
 	"reflect"
@@ -75,5 +76,51 @@ func TestFetchFailuresBlockOnlyTheirClosure(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "dep") || !strings.Contains(err.Error(), "no branch trixie") ||
 		strings.Contains(err.Error(), "unrelated") {
 		t.Errorf("err = %v, want one naming dep and its fetch error only", err)
+	}
+}
+
+func TestScenarioSpecMounts(t *testing.T) {
+	r := scenarioRun{ISO: "/w/image/nudanos-1.0~20261005-amd64.iso", Tests: "/d/tests", Work: "/w/scenarios", Names: []string{"bgp"}}
+	spec, err := scenarioSpec(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mounts := map[string]engine.Mount{}
+	for _, m := range spec.Mounts {
+		mounts[m.Container] = m
+	}
+	if m := mounts["/iso"]; m.Host != "/w/image" || !m.ReadOnly {
+		t.Errorf("/iso mount = %+v", m)
+	}
+	if m := mounts["/tests"]; m.Host != "/d/tests" || !m.ReadOnly {
+		t.Errorf("/tests must be read-only without -capture: %+v", m)
+	}
+	if m := mounts["/work"]; m.Host != "/w/scenarios" || m.ReadOnly {
+		t.Errorf("/work mount = %+v", m)
+	}
+	cmd := strings.Join(spec.Cmd, " ")
+	for _, want := range []string{"/work/scenario", "-iso /iso/nudanos-1.0~20261005-amd64.iso", "-tests /tests", "-work /work", "-scenario bgp"} {
+		if !strings.Contains(cmd, want) {
+			t.Errorf("command %q lacks %q", cmd, want)
+		}
+	}
+	r.Reference, r.Capture, r.Names, r.All = true, true, nil, true
+	spec, err = scenarioSpec(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range spec.Mounts {
+		if m.Container == "/tests" && m.ReadOnly {
+			t.Error("/tests must be writable with -capture")
+		}
+	}
+	cmd = strings.Join(spec.Cmd, " ")
+	for _, want := range []string{"-reference", "-capture", "-all"} {
+		if !strings.Contains(cmd, want) {
+			t.Errorf("command %q lacks %q", cmd, want)
+		}
+	}
+	if _, err := scenarioSpec(scenarioRun{ISO: "/x.iso", Capture: true, All: true}); err == nil {
+		t.Error("-capture without -reference-iso must be an error")
 	}
 }

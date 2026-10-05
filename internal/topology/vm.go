@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"os/exec"
+	"sync"
 	"time"
 
 	"github.com/nudanos/distro/internal/boottest"
@@ -15,9 +16,14 @@ import (
 type VM struct {
 	Spec    VMSpec
 	Console *boottest.Console
-	conn    net.Conn
-	exited  chan struct{}
-	cancel  context.CancelFunc
+	stop    func(grace time.Duration)
+	once    sync.Once
+}
+
+// NewVM wraps a console and a stop function as a VM (for tests and for
+// routers started some other way).
+func NewVM(spec VMSpec, c *boottest.Console, stop func(grace time.Duration)) *VM {
+	return &VM{Spec: spec, Console: c, stop: stop}
 }
 
 // Start launches QEMU for spec and connects to its serial console. QEMU's
@@ -31,25 +37,37 @@ func Start(spec VMSpec, log io.Writer) (*VM, error) {
 		cancel()
 		return nil, fmt.Errorf("%s: qemu: %w", spec.Name, err)
 	}
-	vm := &VM{Spec: spec, exited: make(chan struct{}), cancel: cancel}
+	exited := make(chan struct{})
 	var waitErr error
-	go func() { waitErr = cmd.Wait(); close(vm.exited) }()
+	go func() { waitErr = cmd.Wait(); close(exited) }()
+	var conn net.Conn
+	stop := func(grace time.Duration) {
+		select {
+		case <-exited:
+		case <-time.After(grace):
+			cancel()
+			<-exited
+		}
+		cancel()
+		if conn != nil {
+			conn.Close()
+		}
+	}
 	deadline := time.Now().Add(30 * time.Second)
 	for {
 		select {
-		case <-vm.exited:
+		case <-exited:
 			cancel()
 			return nil, fmt.Errorf("%s: qemu exited before its console answered: %v", spec.Name, waitErr)
 		default:
 		}
-		conn, err := net.Dial("unix", spec.SerialSock)
+		c, err := net.Dial("unix", spec.SerialSock)
 		if err == nil {
-			vm.conn = conn
-			vm.Console = boottest.NewConsole(conn, log)
-			return vm, nil
+			conn = c
+			return NewVM(spec, boottest.NewConsole(c, log), stop), nil
 		}
 		if time.Now().After(deadline) {
-			vm.Stop(0)
+			stop(0)
 			return nil, fmt.Errorf("%s: serial console %s: %w", spec.Name, spec.SerialSock, err)
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -57,18 +75,13 @@ func Start(spec VMSpec, log io.Writer) (*VM, error) {
 }
 
 // Stop waits up to grace for QEMU to exit by itself (after a poweroff), then
-// kills it. It is safe to call more than once.
+// kills it. Only the first call does anything.
 func (vm *VM) Stop(grace time.Duration) {
-	select {
-	case <-vm.exited:
-	case <-time.After(grace):
-		vm.cancel()
-		<-vm.exited
-	}
-	vm.cancel()
-	if vm.conn != nil {
-		vm.conn.Close()
-	}
+	vm.once.Do(func() {
+		if vm.stop != nil {
+			vm.stop(grace)
+		}
+	})
 }
 
 // Overlay creates a copy-on-write disk at path backed by base.

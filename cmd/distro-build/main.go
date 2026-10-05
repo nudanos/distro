@@ -76,6 +76,8 @@ type app struct {
 	jobs                                          int
 	firmware                                      string
 	smoke                                         bool
+	referenceISO                                  string
+	capture                                       bool
 }
 
 func (a *app) outRoot() string { return filepath.Join(a.work, "out") }
@@ -369,8 +371,17 @@ func (a *app) buildImage(ctx context.Context) error {
 
 // test runs the image test layers: "install" (layer 2) and "boot" (layer 3).
 func (a *app) test(ctx context.Context, args []string) error {
-	if len(args) != 1 {
-		return fmt.Errorf("usage: distro-build test install|boot")
+	if len(args) < 1 {
+		return fmt.Errorf("usage: distro-build test install|boot|scenario <name>|scenarios")
+	}
+	switch args[0] {
+	case "scenario":
+		if len(args) != 2 {
+			return fmt.Errorf("usage: distro-build test scenario <name>")
+		}
+		return a.testScenarios(ctx, args[1:], false)
+	case "scenarios":
+		return a.testScenarios(ctx, nil, true)
 	}
 	repo := filepath.Join(a.work, "repo")
 	if _, err := os.Stat(filepath.Join(repo, "dists", "trixie", "InRelease")); err != nil {
@@ -386,7 +397,96 @@ func (a *app) test(ctx context.Context, args []string) error {
 	case "boot":
 		return a.testBoot(ctx)
 	}
-	return fmt.Errorf("unknown test %q (want install or boot)", args[0])
+	return fmt.Errorf("unknown test %q (want install, boot, scenario or scenarios)", args[0])
+}
+
+// scenarioRun is one invocation of the scenario runner (layer 4).
+type scenarioRun struct {
+	ISO, Tests, Work        string
+	Reference, Capture, KVM bool
+	Names                   []string
+	All                     bool
+}
+
+// scenarioSpec is the tester container that runs cmd/scenario: the ISO's
+// directory at /iso, distro's tests/ at /tests (writable only to capture
+// 2105 references), and the scratch directory, holding the runner, at /work.
+func scenarioSpec(r scenarioRun) (engine.RunSpec, error) {
+	if r.Capture && !r.Reference {
+		return engine.RunSpec{}, fmt.Errorf("-capture writes 2105 references and needs -reference-iso")
+	}
+	cmd := []string{"/work/scenario", "-iso", "/iso/" + filepath.Base(r.ISO), "-tests", "/tests", "-work", "/work"}
+	if r.Reference {
+		cmd = append(cmd, "-reference")
+	}
+	if r.Capture {
+		cmd = append(cmd, "-capture")
+	}
+	if r.KVM {
+		cmd = append(cmd, "-kvm")
+	}
+	if r.All {
+		cmd = append(cmd, "-all")
+	}
+	for _, n := range r.Names {
+		cmd = append(cmd, "-scenario", n)
+	}
+	spec := engine.RunSpec{Image: "nudanos/tester:trixie",
+		Mounts: []engine.Mount{
+			{Host: filepath.Dir(r.ISO), Container: "/iso", ReadOnly: true},
+			{Host: r.Tests, Container: "/tests", ReadOnly: !r.Capture},
+			{Host: r.Work, Container: "/work"},
+		},
+		Cmd: cmd}
+	if r.KVM {
+		spec.Devices = []string{"/dev/kvm"}
+	}
+	return spec, nil
+}
+
+// testScenarios cross-compiles cmd/scenario and runs it in the tester
+// container on the newest NuDanOS ISO, or on -reference-iso.
+func (a *app) testScenarios(ctx context.Context, names []string, all bool) error {
+	iso := a.referenceISO
+	if iso == "" {
+		isos, _ := filepath.Glob(filepath.Join(a.work, "image", "nudanos-*-amd64.iso"))
+		if len(isos) == 0 {
+			return fmt.Errorf("test scenario: no ISO in %s; run 'distro-build image' first", filepath.Join(a.work, "image"))
+		}
+		sort.Strings(isos)
+		iso = isos[len(isos)-1]
+	}
+	iso, err := filepath.Abs(iso)
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(a.manifest)
+	tests, err := filepath.Abs(filepath.Join(dir, "tests"))
+	if err != nil {
+		return err
+	}
+	work := filepath.Join(a.work, "scenarios")
+	if err := os.MkdirAll(work, 0o755); err != nil {
+		return err
+	}
+	build := exec.CommandContext(ctx, "go", "build", "-o", filepath.Join(work, "scenario"), "./cmd/scenario")
+	build.Dir, build.Env = dir, append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH=amd64")
+	build.Stdout, build.Stderr = os.Stderr, os.Stderr
+	if err := build.Run(); err != nil {
+		return fmt.Errorf("test scenario: building the runner: %w", err)
+	}
+	if err := a.eng.BuildImage(ctx, filepath.Join(dir, "tester"), "nudanos/tester:trixie", nil, os.Stderr, os.Stderr); err != nil {
+		return err
+	}
+	_, kvmErr := os.Stat("/dev/kvm")
+	spec, err := scenarioSpec(scenarioRun{ISO: iso, Tests: tests, Work: work, Reference: a.referenceISO != "",
+		Capture: a.capture, KVM: kvmErr == nil, Names: names, All: all})
+	if err != nil {
+		return err
+	}
+	err = a.eng.Run(ctx, spec, os.Stdout, os.Stderr)
+	fmt.Fprintf(os.Stderr, "transcripts: %s\n", work)
+	return err
 }
 
 // testBoot cross-compiles cmd/boottest, builds the tester image and boots the
@@ -485,9 +585,11 @@ func main() {
 	flag.IntVar(&a.jobs, "jobs", 1, "packages built at once within a tier")
 	flag.StringVar(&a.firmware, "firmware", "bios", "test boot: bios or efi")
 	flag.BoolVar(&a.smoke, "smoke", false, "test boot: only boot to the login prompt")
+	flag.StringVar(&a.referenceISO, "reference-iso", "", "test scenario(s): run on this DANOS 2105 ISO instead of the NuDanOS one")
+	flag.BoolVar(&a.capture, "capture", false, "test scenario(s): write the 2105 references (needs -reference-iso)")
 	flag.Var(a.local, "local", "use a local checkout for a ready danos entry: name=dir (repeatable)")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "usage: distro-build [flags] builder|fetch|plan|build|repo|image|test install|test boot|check-updates [name…]\n")
+		fmt.Fprintf(os.Stderr, "usage: distro-build [flags] builder|fetch|plan|build|repo|image|test install|boot|scenario <name>|scenarios|check-updates [name…]\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
