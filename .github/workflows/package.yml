@@ -21,7 +21,7 @@ jobs:
           path: pkg
       - uses: actions/setup-go@v7
         with:
-          go-version-file: distro/go.mod
+          go-version: "1.26"  # latest 1.26.x; distro/go.mod states the minimum (1.26.0)
       - uses: actions/cache@v6
         with:
           path: |
