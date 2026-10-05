@@ -196,3 +196,13 @@ func TestOpCheckRetriesUntilMatch(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// The local administrator differs per image (tmpuser on 2105, nudanos on
+// NuDanOS); scenario files name it as ${admin} / ${password}.
+func TestLoginCheckUsesAdminPlaceholders(t *testing.T) {
+	rs := routers(topology.Ports{SSH: sshServer(t)})
+	c := Check{Name: "local", Router: "R1", Timeout: 5 * time.Second, Login: &LoginCheck{User: "${admin}", Password: "${password}", Expect: "ok"}}
+	if err := RunCheck(context.Background(), c, rs); err != nil {
+		t.Fatal(err)
+	}
+}

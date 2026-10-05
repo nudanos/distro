@@ -211,7 +211,10 @@ func snmpOnce(r *Routers, c Check) error {
 }
 
 func loginOnce(r *Routers, c Check) error {
-	l := c.Login
+	l := *c.Login
+	for _, f := range []*string{&l.User, &l.Password} {
+		*f = strings.NewReplacer("${admin}", r.Admin, "${password}", r.Password).Replace(*f)
+	}
 	cfg := &ssh.ClientConfig{User: l.User, Auth: []ssh.AuthMethod{ssh.Password(l.Password)},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), Timeout: 30 * time.Second} // test routers' host keys are new every run
 	client, err := ssh.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", r.Ports[c.Router].SSH), cfg)
