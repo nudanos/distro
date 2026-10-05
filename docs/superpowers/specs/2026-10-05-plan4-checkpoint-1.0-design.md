@@ -42,7 +42,15 @@ plan 5.
   exist; the configuration is read with `show configuration` or a `save` to a
   file.
 - **The NuDanOS boot test** runs one VM at 2 GB and 2 CPUs. Four routers at
-  2 GB do not fit the Mac's 8 GB, so router memory is measured in task 1 (§5).
+  2 GB do not fit the Mac's 8 GB. **A NuDanOS router fits in 1 GB:** booted
+  emulated at 1 GB with OSPF and BGP committed, it used 574 MB with 414 MB
+  available.
+- **Known bug the scenarios will hit:** committing OSPF or BGP makes
+  `frr-reload.py` fail. `vyatta-protocols-frr` still writes `fpm address
+  127.0.0.1` and `no fpm use-next-hop-groups` into `frr.conf`, but plan 3 stopped
+  zebra loading `dplane_fpm_nl`, so zebra rejects those lines ("Unknown
+  command") and the reload reports failure. Plan 4 fixes it test-first before
+  the routing scenarios.
 - **Robot suites:** `nudanos/tests` holds BGP, MPLS-LDP and REST suites (plus
   firewall and IPsec, not 1.0). They assume a hand-built four-router lab,
   hand-edited test data and `vymgmt` (abandoned 2016). Robot Framework is not
@@ -221,10 +229,8 @@ more than four routers.
   and never blocks. One artifact holds every transcript, `show` dump and diff.
   Expected addition: 40–60 minutes (the nightly is about 50 minutes today;
   GitHub's job limit is 6 hours).
-- **Router memory is measured, not assumed.** Task 1 boots one NuDanOS router at
-  1 GB with BGP and OSPF configured and records memory in use and boot time.
-  1 GB if comfortable, else 1.5 GB; four routers fit the Mac's 8 GB either
-  way. 2105 VMs get 1.5 GB (measured use: 1.1 GB).
+- **Router memory:** NuDanOS routers get 1 GB (measured, §1); 2105 VMs get
+  1.5 GB (measured use: 1.1 GB). A four-router NuDanOS topology needs 4 GB.
 - **Testing the harness:** unit tests for topology QEMU arguments, scenario-file
   parsing, every check type against recorded output, `show` normalisation and
   diffing, and console replays copied from real transcripts (the layer 3
