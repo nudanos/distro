@@ -87,8 +87,10 @@ distro/
     reaches each router's SSH, HTTPS and SNMP on localhost. DHCP is a 1.1
     feature, so every router first gets a static base config over the
     console: the management interface at QEMU's fixed guest address
-    `10.0.2.15/24` with gateway `10.0.2.2` (the runner's side, where the
-    TACACS+ server listens), `service ssh`, and the scenario's own services
+    `10.0.2.15/24`, reached on-link from `10.0.2.2` (the runner's side, where
+    the TACACS+ server listens); no default route, which would send scenario
+    traffic into QEMU user networking; `service ssh`, and the scenario's own
+    services
   - a copy-on-write overlay of one **installed** disk: the runner installs the
     ISO to a base qcow2 once per image (the layer 3 install steps), and every
     scenario boots overlays of it, so routers start as installed systems
