@@ -52,7 +52,7 @@ func runAll(iso, disk string, kvm bool, firmware string, smoke bool, logPath str
 		return err
 	}
 	if smoke {
-		_, err := c.Expect(loginPrompt, t(20*time.Minute))
+		_, err := c.Expect(boottest.LoginPrompt, t(20*time.Minute))
 		stop(0)
 		return err
 	}
@@ -60,11 +60,11 @@ func runAll(iso, disk string, kvm bool, firmware string, smoke bool, logPath str
 		stop(0)
 		return fmt.Errorf("live: %w", err)
 	}
-	if err := installSteps(c, t); err != nil {
+	if err := boottest.InstallImage(c, adminUser, testPassword, t); err != nil {
 		stop(0)
 		return fmt.Errorf("install image: %w", err)
 	}
-	if err := halt(c, t); err != nil {
+	if err := boottest.Halt(c, t); err != nil {
 		stop(0)
 		return fmt.Errorf("poweroff after install: %w", err)
 	}
@@ -78,7 +78,7 @@ func runAll(iso, disk string, kvm bool, firmware string, smoke bool, logPath str
 		stop(0)
 		return fmt.Errorf("installed: %w", err)
 	}
-	halt(c, t)
+	boottest.Halt(c, t)
 	stop(t(5 * time.Minute))
 	return nil
 }
