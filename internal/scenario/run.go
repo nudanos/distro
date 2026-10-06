@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -128,6 +129,9 @@ func Run(ctx context.Context, o Options) (res Result, err error) {
 		if _, err := boottest.OpOutput(c, "export VYATTA_PAGER=cat; stty cols 250", t(time.Minute)); err != nil {
 			return res, fmt.Errorf("%s: %w", name, err)
 		}
+		if err := waitInterfaces(c, interfaces(specs, name), t(10*time.Minute)); err != nil {
+			return res, fmt.Errorf("%s: %w", name, err)
+		}
 		if err := ConfigureSession(c, append(BaseConfig(name), f.Routers[name].Config...), true, t); err != nil {
 			return res, fmt.Errorf("%s: configuring: %w", name, err)
 		}
@@ -213,6 +217,37 @@ func showStep(f *File, o Options, vms map[string]*topology.VM, outDir string, t 
 		res.Failed = append(res.Failed, err.Error())
 	}
 	return nil
+}
+
+// interfaces lists a router's NICs as the router names them.
+func interfaces(specs []topology.VMSpec, router string) []string {
+	names := []string{fmt.Sprintf("dp0s%d", topology.MgmtPCI)}
+	for _, s := range specs {
+		if s.Name == router {
+			for _, d := range s.Data {
+				names = append(names, fmt.Sprintf("dp0s%d", d.PCI))
+			}
+		}
+	}
+	return names
+}
+
+// waitInterfaces waits until show interfaces lists every name: a router
+// accepts logins before its NICs are all registered (2105's dataplane, the
+// udev renames on NuDanOS), and a commit before then fails on them.
+func waitInterfaces(c *boottest.Console, names []string, timeout time.Duration) error {
+	return retry(context.Background(), timeout, func() error {
+		out, err := boottest.OpOutput(c, "show interfaces", time.Minute)
+		if err != nil {
+			return err
+		}
+		for _, n := range names {
+			if !regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(n) + `\b`).MatchString(out) {
+				return fmt.Errorf("interface %s not listed yet:\n%s", n, out)
+			}
+		}
+		return nil
+	})
 }
 
 // slug turns a command into a file name: "show ip route" -> "show-ip-route".

@@ -72,6 +72,12 @@ func fakeStart(shows map[string]string, fail map[string]bool, stopped *sync.Map)
 			return nil, fmt.Errorf("%s: qemu exited before its console answered: exit status 1", s.Name)
 		}
 		a, b := net.Pipe()
+		if _, ok := shows["show interfaces"]; !ok {
+			if shows == nil {
+				shows = map[string]string{}
+			}
+			shows["show interfaces"] = "dp0s3  -\ndp0s4  -\ndp0s10  10.0.2.15/24\n"
+		}
 		go fakeRouter(b, s.Name, shows)
 		stopped.Store(s.Name, false)
 		return topology.NewVM(s, boottest.NewConsole(a, log), func(time.Duration) { stopped.Store(s.Name, true); a.Close() }), nil
@@ -193,5 +199,29 @@ func TestRunnerContinuesAfterFailedScenario(t *testing.T) {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("summary lacks %q:\n%s", want, out.String())
 		}
+	}
+}
+
+// 2105 accepts logins before its dataplane has registered every port, and a
+// commit then warns "device dp0s10 does not exist" (rest run 1). Run waits
+// until show interfaces lists the router's interfaces.
+func TestWaitInterfacesUntilListed(t *testing.T) {
+	opInterval = 10 * time.Millisecond
+	a, vm := net.Pipe()
+	defer a.Close()
+	defer vm.Close()
+	go func() {
+		b := make([]byte, 128)
+		for _, answer := range []string{"Interface  IP Address\nlo  127.0.0.1/8\n", "Interface  IP Address\ndp0s3  -\ndp0s10  -\n"} {
+			n, err := vm.Read(b)
+			if err != nil {
+				return
+			}
+			io.WriteString(vm, string(b[:n])+"\n"+strings.ReplaceAll(answer, "\n", "\r\n")+"vyatta@r1:~$ ")
+		}
+	}()
+	c := boottest.NewConsole(a, &bytes.Buffer{})
+	if err := waitInterfaces(c, []string{"dp0s3", "dp0s10"}, 5*time.Second); err != nil {
+		t.Fatal(err)
 	}
 }
