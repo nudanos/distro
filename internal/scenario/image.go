@@ -42,7 +42,7 @@ func NuDanOS(iso string) Image {
 }
 
 // Reference2105 boots the DANOS 2105 live ISO, which must be the one whose
-// SHA-256 is SHA2105.
+// SHA-256 is SHA2105. It needs 1792 MB.
 func Reference2105(iso string) (Image, error) {
 	sum, err := fileSHA256(iso)
 	if err != nil {
@@ -51,7 +51,9 @@ func Reference2105(iso string) (Image, error) {
 	if sum != SHA2105 {
 		return Image{}, fmt.Errorf("%s: SHA-256 %s is not the DANOS 2105 ISO (%s)", iso, sum, SHA2105)
 	}
-	return Image{Name: "2105", ISO: iso, MemMB: 1536, User: "tmpuser", Password: "tmppwd", Live: true}, nil
+	// Below about 1.75 GB the 2105 dataplane cannot reserve its memory and
+	// leaves the NICs as kernel devices (ens10), measured 2026-10-05.
+	return Image{Name: "2105", ISO: iso, MemMB: 1792, User: "tmpuser", Password: "tmppwd", Live: true}, nil
 }
 
 func fileSHA256(path string) (string, error) {
