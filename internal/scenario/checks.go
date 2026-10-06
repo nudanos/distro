@@ -186,7 +186,7 @@ func httpOnce(r *Routers, c Check) error {
 		}
 		if loc := resp.Header.Get("Location"); loc != "" {
 			if u, err := url.Parse(loc); err == nil {
-				location = u.Path
+				location = "/" + strings.TrimPrefix(u.Path, "/") // 2105 sends "rest/conf/ID"
 			}
 		}
 	}

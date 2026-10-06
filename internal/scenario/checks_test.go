@@ -206,3 +206,26 @@ func TestLoginCheckUsesAdminPlaceholders(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// 2105 answers with a Location that has no leading slash ("rest/conf/ID").
+func TestHTTPCheckRelativeLocation(t *testing.T) {
+	var seen []string
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.URL.Path)
+		if r.URL.Path == "/rest/conf" {
+			w.Header().Set("Location", "rest/conf/C605455D3A48BC3A")
+			w.WriteHeader(201)
+		}
+	}))
+	defer srv.Close()
+	c := Check{Name: "relative", Router: "R1", Timeout: 5 * time.Second, HTTP: &HTTPCheck{Steps: []HTTPCheck{
+		{Method: "POST", Path: "/rest/conf", Status: 201},
+		{Method: "POST", Path: "{location}/commit", Status: 200},
+	}}}
+	if err := RunCheck(context.Background(), c, routers(topology.Ports{HTTPS: port(t, srv.URL)})); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(seen, ",") != "/rest/conf,/rest/conf/C605455D3A48BC3A/commit" {
+		t.Errorf("requests = %v", seen)
+	}
+}
