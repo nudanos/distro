@@ -13,15 +13,17 @@ func init() {
 	RegisterGo("snmp-counter-moves", snmpCounterMoves)
 }
 
-// Numeric OIDs: Debian's snmp package ships no MIB files.
+// Numeric OIDs: Debian's snmp package ships no MIB files. The interface
+// name is in ifName (IF-MIB ifXTable); 2105 puts the hardware description
+// in ifDescr.
 const (
-	oidIfDescr    = ".1.3.6.1.2.1.2.2.1.2"
+	oidIfName     = ".1.3.6.1.2.1.31.1.1.1.1"
 	oidIfInOctets = ".1.3.6.1.2.1.2.2.1.10"
 )
 
 var (
-	ifDescrLine = regexp.MustCompile(`\.(\d+) = STRING: "?dp0s10"?`)
-	counter     = regexp.MustCompile(`= Counter(?:32|64): (\d+)`)
+	ifNameLine = regexp.MustCompile(`\.(\d+) = STRING: "?dp0s10"?`)
+	counter    = regexp.MustCompile(`= Counter(?:32|64): (\d+)`)
 )
 
 func snmpGet(r *Routers, router, oid string) (string, error) {
@@ -37,13 +39,13 @@ func snmpGet(r *Routers, router, oid string) (string, error) {
 // counter over SNMPv2c, makes traffic (an SSH login), and requires the
 // counter to have grown.
 func snmpCounterMoves(ctx context.Context, r *Routers) error {
-	descr, err := snmpGet(r, "R1", oidIfDescr)
+	names, err := snmpGet(r, "R1", oidIfName)
 	if err != nil {
 		return err
 	}
-	m := ifDescrLine.FindStringSubmatch(descr)
+	m := ifNameLine.FindStringSubmatch(names)
 	if m == nil {
-		return fmt.Errorf("ifDescr has no dp0s10:\n%s", descr)
+		return fmt.Errorf("ifName has no dp0s10:\n%s", names)
 	}
 	read := func() (uint64, error) {
 		out, err := snmpGet(r, "R1", oidIfInOctets+"."+m[1])

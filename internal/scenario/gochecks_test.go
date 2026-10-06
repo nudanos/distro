@@ -10,8 +10,9 @@ import (
 	"github.com/nudanos/distro/internal/topology"
 )
 
-// fakeSNMP answers ifDescr with dp0s10 at index 4 and ifInOctets.4 with a
-// value that grows by 1000 on every call.
+// fakeSNMP answers like 2105: ifDescr holds the hardware description and
+// ifName (ifXTable) the interface name, dp0s10 at index 4; ifInOctets.4
+// grows by 1000 on every call.
 func fakeSNMP(t *testing.T, grow bool) {
 	t.Helper()
 	bin := t.TempDir()
@@ -24,7 +25,8 @@ func fakeSNMP(t *testing.T, grow bool) {
 	script := `#!/bin/sh
 for a; do last="$a"; done
 case "$last" in
-  *1.3.6.1.2.1.2.2.1.2) echo 'iso.3.6.1.2.1.2.2.1.2.1 = STRING: "lo"'; echo 'iso.3.6.1.2.1.2.2.1.2.4 = STRING: "dp0s10"' ;;
+  *1.3.6.1.2.1.2.2.1.2) echo 'iso.3.6.1.2.1.2.2.1.2.1 = STRING: "lo"'; echo 'iso.3.6.1.2.1.2.2.1.2.4 = STRING: "Red Hat, Inc Virtio network device"' ;;
+  *1.3.6.1.2.1.31.1.1.1.1) echo 'iso.3.6.1.2.1.31.1.1.1.1.1 = STRING: "lo"'; echo 'iso.3.6.1.2.1.31.1.1.1.1.4 = STRING: "dp0s10"' ;;
   *1.3.6.1.2.1.2.2.1.10.4) n=$(cat ` + count + `); echo "iso.3.6.1.2.1.2.2.1.10.4 = Counter32: $n"; echo $((n + ` + step + `)) > ` + count + ` ;;
 esac
 `

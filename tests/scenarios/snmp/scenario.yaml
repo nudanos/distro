@@ -1,0 +1,23 @@
+# SNMP (new for NuDanOS; no DANOS suite). Numeric OIDs: Debian ships no MIB files.
+name: snmp
+gating: true
+routers:
+  R1:
+    config:
+      - set service snmp community nudanos-ro authorization ro
+      - set service snmp v3 user snmpv3 auth type sha
+      - set service snmp v3 user snmpv3 auth plaintext-key snmpv3-auth-1
+      - set service snmp v3 user snmpv3 privacy type aes
+      - set service snmp v3 user snmpv3 privacy plaintext-key snmpv3-priv-1
+      - set service snmp v3 user snmpv3 mode ro
+      - set interfaces dataplane dp0s10 description mgmt
+checks:
+  - name: SNMPv2c sysName
+    router: R1
+    timeout: 3m
+    snmp: {version: 2c, community: nudanos-ro, oid: .1.3.6.1.2.1.1.5.0, want: r1}
+  - name: SNMPv3 authPriv ifName lists dp0s10
+    router: R1
+    snmp: {version: "3", user: snmpv3, auth_key: snmpv3-auth-1, priv_key: snmpv3-priv-1, oid: .1.3.6.1.2.1.31.1.1.1.1, want: dp0s10}
+  - name: interface counters move
+    go: snmp-counter-moves
