@@ -122,11 +122,11 @@ checks:
 `
 
 func TestRunPassesAndCapturesShow(t *testing.T) {
-	// 2105 saves only beneath /config or the user's home ("save /tmp/x" is
-	// refused), so the capture saves a bare name, which lands in /config.
+	// The live 2105 ISO saves outside the login shell's view (/config does
+	// not exist there), so config.boot is captured from show configuration.
 	stopped := fakeRun(t, map[string]string{
-		"show ip route":            "C>* 10.0.12.0/24 is directly connected, dp0s3, 00:01:02\n",
-		"cat /config/capture.boot": "interfaces {\n    dataplane dp0s3 {\n    }\n}\n",
+		"show ip route":      "C>* 10.0.12.0/24 is directly connected, dp0s3, 00:01:02\n",
+		"show configuration": "interfaces {\n    dataplane dp0s3 {\n    }\n}\n",
 	}, nil)
 	tests := scenarioTree(t, "pair", pair)
 	work := t.TempDir()

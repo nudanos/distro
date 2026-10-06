@@ -173,12 +173,10 @@ func showStep(f *File, o Options, vms map[string]*topology.VM, outDir string, t 
 			if err := os.MkdirAll(filepath.Join(dir, "show"), 0o755); err != nil {
 				return err
 			}
-			// 2105 saves only beneath /config or the user's home; a bare name
-			// lands in /config on both images.
-			if err := ConfigureSession(c, []string{"save capture.boot"}, false, t); err != nil {
-				return fmt.Errorf("%s: saving the configuration: %w", name, err)
-			}
-			for file, cmd := range map[string]string{"config.boot": "cat /config/capture.boot", "commands.txt": "show configuration commands"} {
+			// The live 2105 ISO saves its configuration outside the login
+			// shell's view (/config does not exist there), so config.boot is
+			// the tree show configuration prints, without the version footer.
+			for file, cmd := range map[string]string{"config.boot": "show configuration", "commands.txt": "show configuration commands"} {
 				out, err := boottest.OpOutput(c, cmd, t(time.Minute))
 				if err != nil {
 					return fmt.Errorf("%s: %s: %w", name, cmd, err)
