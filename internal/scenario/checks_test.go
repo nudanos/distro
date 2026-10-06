@@ -261,3 +261,31 @@ func TestHTTPCheckPollsWhileAccepted(t *testing.T) {
 		t.Errorf("GET ran %d times, want 3 (two 202s, then 200)", gets)
 	}
 }
+
+// Right after boot NuDanOS answers "configure" with "Failed to set up config
+// session" until configd is ready; the session is retried.
+func TestConfigureSessionRetriesUntilConfigdIsReady(t *testing.T) {
+	opInterval = 10 * time.Millisecond
+	a, vm := net.Pipe()
+	defer a.Close()
+	defer vm.Close()
+	go func() {
+		b := make([]byte, 128)
+		answers := []string{
+			"configure\r\nFailed to set up config session\r\nnudanos@r1:~$ ",
+			"configure\r\n[edit]\r\nnudanos@r1# ",
+			"set system host-name r1\r\n[edit]\r\nnudanos@r1# ",
+			"exit discard\r\nnudanos@r1:~$ ",
+		}
+		for _, answer := range answers {
+			if _, err := vm.Read(b); err != nil {
+				return
+			}
+			io.WriteString(vm, answer)
+		}
+	}()
+	c := boottest.NewConsole(a, &bytes.Buffer{})
+	if err := ConfigureSession(c, []string{"set system host-name r1"}, false, func(d time.Duration) time.Duration { return d / 60 }); err != nil {
+		t.Fatal(err)
+	}
+}

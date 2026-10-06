@@ -28,6 +28,8 @@ type Routers struct {
 	T               func(time.Duration) time.Duration
 }
 
+var noSession = regexp.MustCompile(`Failed to set up config session`)
+
 // opInterval is how long a retrying check waits between attempts.
 var opInterval = 10 * time.Second
 
@@ -130,11 +132,24 @@ func opOnce(r *Routers, c Check) error {
 // ConfigureSession enters configuration mode, runs lines, commits when asked
 // and returns to operational mode.
 func ConfigureSession(con *boottest.Console, lines []string, commit bool, t func(time.Duration) time.Duration) error {
-	con.Discard()
-	if err := con.Send("configure"); err != nil {
-		return err
-	}
-	if _, err := con.Expect(boottest.CfgPrompt, t(time.Minute)); err != nil {
+	// Until configd is ready after boot, "configure" answers "Failed to set
+	// up config session" and returns to the shell: ask again.
+	err := retry(context.Background(), t(5*time.Minute), func() error {
+		con.Discard()
+		if err := con.Send("configure"); err != nil {
+			return err
+		}
+		i, _, err := con.First([]*regexp.Regexp{boottest.CfgPrompt, noSession}, t(time.Minute))
+		if err != nil {
+			return err
+		}
+		if i == 1 {
+			con.Expect(boottest.OpPrompt, t(time.Minute))
+			return fmt.Errorf("configure: failed to set up config session")
+		}
+		return nil
+	})
+	if err != nil {
 		return err
 	}
 	for _, l := range lines {
@@ -153,7 +168,7 @@ func ConfigureSession(con *boottest.Console, lines []string, commit bool, t func
 	if err := con.Send(exit); err != nil {
 		return err
 	}
-	_, err := con.Expect(boottest.OpPrompt, t(time.Minute))
+	_, err = con.Expect(boottest.OpPrompt, t(time.Minute))
 	return err
 }
 
