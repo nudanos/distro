@@ -11,10 +11,12 @@ import (
 	"github.com/nwaples/tacplus"
 )
 
-// User is a test account (not a secret: scenario files commit them).
+// User is a test account (not a secret: scenario files commit them). Level
+// is what DANOS's SSSD TACACS+ provider reads: operator, admin or superuser.
 type User struct {
 	Name, Password string
 	Priv           int
+	Level          string
 }
 
 type handler struct {
@@ -80,7 +82,11 @@ func (h handler) HandleAuthorRequest(ctx context.Context, a *tacplus.AuthorReque
 	if !ok {
 		return &tacplus.AuthorResponse{Status: tacplus.AuthorStatusFail}
 	}
-	return &tacplus.AuthorResponse{Status: tacplus.AuthorStatusPassAdd, Arg: []string{fmt.Sprintf("priv-lvl=%d", u.Priv)}}
+	args := []string{fmt.Sprintf("priv-lvl=%d", u.Priv)}
+	if u.Level != "" {
+		args = append(args, "level="+u.Level)
+	}
+	return &tacplus.AuthorResponse{Status: tacplus.AuthorStatusPassAdd, Arg: args}
 }
 
 func (h handler) HandleAcctRequest(ctx context.Context, a *tacplus.AcctRequest, s *tacplus.ServerSession) *tacplus.AcctReply {

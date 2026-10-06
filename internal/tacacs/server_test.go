@@ -21,7 +21,7 @@ func serve(t *testing.T) *tacplus.Client {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { l.Close() })
-	go Serve(l, secret, []User{{"tacadmin", "tac-admin-1", 15}, {"tacop", "tac-op-1", 1}})
+	go Serve(l, secret, []User{{"tacadmin", "tac-admin-1", 15, "admin"}, {"tacop", "tac-op-1", 1, "operator"}})
 	return &tacplus.Client{Addr: l.Addr().String(), ConnConfig: tacplus.ConnConfig{Secret: []byte(secret)}}
 }
 
@@ -50,8 +50,11 @@ func TestServeAuthenticatesKnownUser(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Status != tacplus.AuthorStatusPassAdd || !strings.Contains(strings.Join(r.Arg, " "), "priv-lvl=15") {
-		t.Errorf("author = %d %v, want pass-add with priv-lvl=15", r.Status, r.Arg)
+	// DANOS's SSSD TACACS+ provider reads "level" (operator, admin,
+	// superuser); "priv-lvl" is the generic TACACS+ attribute.
+	args := strings.Join(r.Arg, " ")
+	if r.Status != tacplus.AuthorStatusPassAdd || !strings.Contains(args, "priv-lvl=15") || !strings.Contains(args, "level=admin") {
+		t.Errorf("author = %d %v, want pass-add with priv-lvl=15 and level=admin", r.Status, r.Arg)
 	}
 }
 
@@ -103,7 +106,7 @@ func TestServeLogLogsEachRequest(t *testing.T) {
 	defer l.Close()
 	var mu sync.Mutex
 	var lines []string
-	go ServeLog(l, secret, []User{{"tacadmin", "tac-admin-1", 15}}, func(format string, a ...any) {
+	go ServeLog(l, secret, []User{{"tacadmin", "tac-admin-1", 15, "admin"}}, func(format string, a ...any) {
 		mu.Lock()
 		lines = append(lines, fmt.Sprintf(format, a...))
 		mu.Unlock()

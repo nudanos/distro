@@ -1,0 +1,35 @@
+# TACACS+ login (new for NuDanOS; no DANOS suite). The server runs in the
+# runner and routers reach it at 10.0.2.2. Test credentials, not secrets.
+name: tacacs
+gating: true
+tacacs:
+  secret: nudanos-tac-1
+  users:
+    - {name: tacadmin, password: tac-admin-1, priv: 15, level: admin}
+    - {name: tacop, password: tac-op-1, priv: 1, level: operator}
+routers:
+  R1:
+    config:
+      - set system login tacplus-server 10.0.2.2 secret nudanos-tac-1
+checks:
+  - name: TACACS+ administrator logs in as an admin
+    router: R1
+    timeout: 3m
+    login: {user: tacadmin, password: tac-admin-1, expect: ok, want: vyattaadm}
+  - name: TACACS+ operator logs in without admin rights
+    router: R1
+    login: {user: tacop, password: tac-op-1, expect: ok, not_want: vyattaadm}
+  - name: a wrong TACACS+ password is refused
+    router: R1
+    login: {user: tacadmin, password: wrong-password, expect: refused}
+  - name: point at an unreachable server
+    router: R1
+    action:
+      configure:
+        - delete system login tacplus-server 10.0.2.2
+        - set system login tacplus-server 10.0.2.99 secret nudanos-tac-1
+      commit: true
+  - name: local login falls back when the server is unreachable
+    router: R1
+    timeout: 3m
+    login: {user: "${admin}", password: "${password}", expect: ok}
