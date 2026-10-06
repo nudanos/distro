@@ -1,0 +1,21 @@
+Description: Check audit_setloginuid's result
+ Debian 13's libaudit declares it warn_unused_result, which fails the
+ -Werror build. A failure is logged; the mapping still proceeds.
+Author: NuDanOS Maintainers <jon@fernandez.tech>
+Forwarded: not-needed
+Last-Update: 2026-10-06
+---
+diff --git a/map_tacplus_user.c b/map_tacplus_user.c
+index 7911f29..26392e2 100644
+--- a/map_tacplus_user.c
++++ b/map_tacplus_user.c
+@@ -599,7 +599,8 @@ recheck:
+          * login, etc. because we need the info earlier than it is really
+          * possible via the normal pam auth/session sequencing.
+          */
+-        audit_setloginuid(islocal?luid:tuid); /* set auid */
++        if (audit_setloginuid(islocal?luid:tuid) < 0) /* set auid */
++            syslog(LOG_WARNING, "audit_setloginuid failed: %m");
+         /*
+          * if USERHOMEDIR is set, we'll save that flag, and libnss-tacplus
+          *  will return the login name in the pw_dir field replacing the

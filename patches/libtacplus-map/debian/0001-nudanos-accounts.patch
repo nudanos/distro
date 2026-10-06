@@ -1,0 +1,62 @@
+Description: NuDanOS: quilt source format; mapped accounts without NCLU groups
+ Creates tacacs0..tacacs15 (vbash shell) and leaves their groups to
+ vyatta-tacacs, which maps privilege 15 to the DANOS admin level and 0-14 to
+ operator. Drops the Cumulus NCLU groups and the blanket sudo for tacacs15.
+ Overrides lintian for a VyOS-era changelog entry signed root@<container>.
+Forwarded: not-needed
+
+diff --git a/debian/libtacplus-map-dev.lintian-overrides b/debian/libtacplus-map-dev.lintian-overrides
+new file mode 100644
+index 0000000..b8fc326
+--- /dev/null
++++ b/debian/libtacplus-map-dev.lintian-overrides
+@@ -0,0 +1,2 @@
++# A VyOS-era changelog entry is signed root@<build container>; history kept as is.
++libtacplus-map-dev: bogus-mail-host-in-debian-changelog root@3da22e72fb7c *
+diff --git a/debian/libtacplus-map1.lintian-overrides b/debian/libtacplus-map1.lintian-overrides
+new file mode 100644
+index 0000000..0c9383b
+--- /dev/null
++++ b/debian/libtacplus-map1.lintian-overrides
+@@ -0,0 +1,2 @@
++# A VyOS-era changelog entry is signed root@<build container>; history kept as is.
++libtacplus-map1: bogus-mail-host-in-debian-changelog root@3da22e72fb7c *
+diff --git a/debian/libtacplus-map1.postinst b/debian/libtacplus-map1.postinst
+index 3526c8a..89e8eb0 100644
+--- a/debian/libtacplus-map1.postinst
++++ b/debian/libtacplus-map1.postinst
+@@ -32,19 +32,19 @@ esac
+ 
+ (set +e
+ addgroup --quiet tacacs 2>&1 | grep -v 'already exists'
++# NuDanOS: create the mapped accounts only. Their groups (the DANOS admin
++# level for privilege 15, operator for 0-14) are set by vyatta-tacacs when a
++# TACACS+ server is configured, from /opt/vyatta/etc/level, which may not
++# exist yet when this runs. No NCLU groups, no blanket sudo.
++shell=/bin/vbash
++[ -x $shell ] || shell=/bin/bash
+ level=0
+-nclu_grp=netshow
+ while [ $level -lt 16 ]; do
+     adduser --quiet --firstuid 1000 --disabled-login --ingroup tacacs \
+-       --gecos "TACACS+ mapped user at privilege level ${level}" tacacs${level} 
+-    # regular tacacs users are allowed to run NCLU 'net show' commands
+-    # tacacs15 (tacacs privilege level 15) user is allowed to run NCLU
+-    # net configuration commands, also
+-    adduser --quiet tacacs${level} $nclu_grp
++       --shell $shell \
++       --gecos "TACACS+ mapped user at privilege level ${level}" tacacs${level}
+     level=$(( level+1 ))
+-    [ $level -eq 15 ] && nclu_grp=netedit
+ done 2>&1 | grep -v 'already exists'
+-adduser --quiet tacacs15 sudo 2>&1 | grep -v 'already exists'
+ exit 0
+ )
+ 
+diff --git a/debian/source/format b/debian/source/format
+index d3827e7..163aaf8 100644
+--- a/debian/source/format
++++ b/debian/source/format
+@@ -1 +1 @@
+-1.0
++3.0 (quilt)

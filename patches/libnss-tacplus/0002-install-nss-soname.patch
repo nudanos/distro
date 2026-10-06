@@ -1,0 +1,23 @@
+Description: Install the NSS module as libnss_tacplus.so.2 only
+ glibc 2.34 and later ship no libc-<version>.so, so the libc-versioned file
+ name came out as libnss_tacplus-.so. The module is installed under its NSS
+ soname directly.
+Author: NuDanOS Maintainers <jon@fernandez.tech>
+Forwarded: not-needed
+Last-Update: 2026-10-06
+---
+diff --git a/Makefile.am b/Makefile.am
+index 535578a..b1fa09f 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -53,8 +53,7 @@ install-data-hook:
+ 	rm -f $(DESTDIR)$(libdir)/libnss_tacplus.la
+ 	rm -f $(DESTDIR)$(libdir)/libnss_tacplus.so $(DESTDIR)$(libdir)/libnss_tacplus.so.2.0.0
+ 	$(mkinstalldirs) $(DESTDIR)$(libdir) $(DESTDIR)$(sysconfdir)
+-	cd .libs && $(INSTALL_PROGRAM) libnss_tacplus.so $(DESTDIR)$(libdir)/$(NSS_TACPLUS_LIBC_VERSIONED)
+-	$(STRIP) --keep-symbol=_nss_tacplus_getpwnam_r --keep-symbol=_nss_tacplus_getpwuid_r $(DESTDIR)$(libdir)/$(NSS_TACPLUS_LIBC_VERSIONED)
+-	cd $(DESTDIR)$(libdir); ln -sf $(NSS_TACPLUS_LIBC_VERSIONED) $(NSS_TACPLUS_NSS_VERSIONED)
++	cd .libs && $(INSTALL_PROGRAM) libnss_tacplus.so $(DESTDIR)$(libdir)/$(NSS_TACPLUS_NSS_VERSIONED)
++	$(STRIP) --keep-symbol=_nss_tacplus_getpwnam_r --keep-symbol=_nss_tacplus_getpwuid_r $(DESTDIR)$(libdir)/$(NSS_TACPLUS_NSS_VERSIONED)
+ 	${INSTALL} -m 644 tacplus_nss.conf $(DESTDIR)$(sysconfdir)
+ 

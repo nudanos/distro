@@ -1,0 +1,32 @@
+Description: Build against libtac from pam_tacplus 1.6.1
+ pam_tacplus 1.6.1 installs libtac.h under libtac/ and its tac_connect_single
+ takes a timeout where the Cumulus libtac takes a VRF name. Lookups use the
+ default routing instance.
+Author: NuDanOS Maintainers <jon@fernandez.tech>
+Forwarded: not-needed
+Last-Update: 2026-10-06
+---
+diff --git a/nss_tacplus.c b/nss_tacplus.c
+index e4e99de..f4796c6 100644
+--- a/nss_tacplus.c
++++ b/nss_tacplus.c
+@@ -42,7 +42,7 @@
+ #include <sys/socket.h>
+ #include <sys/stat.h>
+ 
+-#include <tacplus/libtac.h>
++#include <libtac/libtac.h>
+ #include <tacplus/map_tacplus_user.h>
+ 
+ #include "nss_tacplus.h"
+@@ -635,8 +635,9 @@ connect_tacacs(struct tac_attrib **attr, int srvr)
+ {
+     int fd;
+ 
++    /* NuDanOS: pam_tacplus 1.6.1's libtac takes a timeout, not a VRF name */
+     fd = tac_connect_single(tac_srv[srvr].addr, tac_srv[srvr].key, src_addr,
+-        vrfname[0]?vrfname:NULL);
++        tac_timeout);
+     if(fd >= 0) {
+         tac_add_attrib(attr, "service", tac_service);
+         if(tac_protocol[0])

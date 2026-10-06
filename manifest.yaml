@@ -622,6 +622,28 @@ packages:
       - {patch: "vyatta/twping-cycle-to-schedule.patch", verdict: dropped, note: "cycle-to scheduling is not used by vyatta-service-twamp"}
       - {patch: "vyatta/twping-end-delay.patch", verdict: dropped, note: "vyatta-service-twamp does not pass -E"}
       - {patch: "vyatta/twamp-dataplane-offload.patch", verdict: dropped, note: "needs the DPDK dataplane libraries (milestone 2); vyatta-service-twamp now tolerates the missing offload column"}
+  - name: "libtacplus-map"
+    kind: "upstream"
+    milestone: "1.0"
+    ready: true
+    upstream: "https://github.com/vyos/libtacplus-map"
+    track: "latest"
+    tag_pattern: "^v(\\d+\\.\\d+\\.\\d+)$"
+    version: "1.0.1"
+    tag: "8f35e7d96d521a42a0e5de836a2d6baddcb3e2e0"
+    packaging_dir: "debian"
+    hold: "VyOS publishes no tags; pinned to a rolling commit (2026-08-05). TACACS+ login on NuDanOS (plan 4): maps TACACS+ users to local accounts tacacs0..15"
+  - name: "libnss-tacplus"
+    kind: "upstream"
+    milestone: "1.0"
+    ready: true
+    upstream: "https://github.com/vyos/libnss-tacplus"
+    track: "latest"
+    tag_pattern: "^v(\\d+\\.\\d+\\.\\d+)$"
+    version: "1.0.4"
+    tag: "701b09bfbb18a72e84275a758c9f0947a47ea9ce"
+    packaging_dir: "debian"
+    hold: "VyOS publishes no tags; pinned to a rolling commit (2026-08-05). NSS lookup of TACACS+ users for login (plan 4); built against libtac from pam_tacplus 1.6.1"
   - name: "pam_tacplus"
     kind: "upstream"
     milestone: "1.0"

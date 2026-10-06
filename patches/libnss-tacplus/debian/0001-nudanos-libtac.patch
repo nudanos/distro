@@ -1,0 +1,66 @@
+Description: NuDanOS: quilt source format; libtac from pam_tacplus 1.6.1; /usr paths
+ NuDanOS builds libtac (libtac3, libtac-dev) from pam_tacplus 1.6.1, not the
+ Cumulus fork: no libpam-tacplus-dev, and the runtime libtac comes from
+ ${shlibs:Depends} instead of a pinned libtac2. The default prefix installs
+ under /usr (Debian 13 merged /usr); lintian overrides in current syntax.
+Forwarded: not-needed
+
+diff --git a/debian/control b/debian/control
+index 2926895..07ed3e1 100644
+--- a/debian/control
++++ b/debian/control
+@@ -2,7 +2,7 @@ Source: libnss-tacplus
+ Priority: optional
+ Maintainer: dev-support <dev-support@cumulusnetworks.com>
+ Build-Depends: debhelper (>= 9), autotools-dev, libtac-dev (>= 1.4.1~),
+-    libtacplus-map-dev, libaudit-dev, autoconf, libpam-tacplus-dev,
++    libtacplus-map-dev, libaudit-dev, autoconf,
+     dpkg-dev (>= 1.16.1), git
+ Section: libs
+ Standards-Version: 3.9.8
+@@ -13,8 +13,7 @@ XBCS-Vcs-Hash: cf2f734609a59da41248ed45e95807998a4a75f3
+ 
+ Package: libnss-tacplus
+ Architecture: any
+-Depends: ${shlibs:Depends}, ${misc:Depends}, libtac2 (>= 1.4.1~),
+-    libtacplus-map1, libaudit1
++Depends: ${shlibs:Depends}, ${misc:Depends}, libtacplus-map1, libaudit1
+ Description: NSS module for TACACS+ authentication without local passwd entry
+ 	Performs getpwname and getpwuid lookups via NSS for users logged in via
+ 	tacacs authentication, and mapping done with libtacplus_map
+diff --git a/debian/libnss-tacplus.lintian-overrides b/debian/libnss-tacplus.lintian-overrides
+index 4ac1cba..a1dbbb3 100644
+--- a/debian/libnss-tacplus.lintian-overrides
++++ b/debian/libnss-tacplus.lintian-overrides
+@@ -1,8 +1,4 @@
+-libnss-tacplus binary package-name-doesnt-match-sonames libnss-tacplus2
+-libnss-tacplus package-name-doesnt-match-sonames libnss-tacplus2
+-libnss-tacplus source native-package-with-dash-version
+-libnss-tacplus source diff-contains-git-control-dir .git
+-libnss-tacplus source unsupported-source-format 3.0 (git)
+-libnss-tacplus source changelog-should-mention-nmu
+-libnss-tacplus source source-nmu-has-incorrect-version-number 1.0.1-1
+-libnss-tacplus new-package-should-close-itp-bu
++# The NSS module's soname is libnss_tacplus.so.2; the package keeps its name.
++libnss-tacplus: package-name-doesnt-match-sonames libnss-tacplus2
++# A VyOS-era changelog entry is signed root@<build container>; history kept as is.
++libnss-tacplus: bogus-mail-host-in-debian-changelog root@3da22e72fb7c *
+diff --git a/debian/rules b/debian/rules
+index 733d6e8..94b5128 100755
+--- a/debian/rules
++++ b/debian/rules
+@@ -16,5 +16,5 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+ 
+ # this library installs into /lib, not /usr/lib; I don't see any other
+ # way to do this, although there must be a way...
+-override_dh_auto_configure:
+-	dh_auto_configure -- --prefix=""
++# NuDanOS: Debian 13 merges /lib into /usr/lib; the default prefix installs
++# the module under /usr/lib/<multiarch> and the config in /etc.
+diff --git a/debian/source/format b/debian/source/format
+index d3827e7..163aaf8 100644
+--- a/debian/source/format
++++ b/debian/source/format
+@@ -1 +1 @@
+-1.0
++3.0 (quilt)
