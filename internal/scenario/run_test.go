@@ -142,6 +142,10 @@ func TestRunPassesAndCapturesShow(t *testing.T) {
 	if err != nil || !strings.Contains(string(got), "10.0.12.0/24") {
 		t.Errorf("captured show = %q, %v", got, err)
 	}
+	// 2105 and NuDanOS runs of one scenario keep separate transcripts
+	if want := filepath.Join(work, "2105", "pair"); res.Transcripts != want {
+		t.Errorf("Transcripts = %q, want %q", res.Transcripts, want)
+	}
 	stopped.Range(func(k, v any) bool {
 		if v != true {
 			t.Errorf("%v was not stopped", k)

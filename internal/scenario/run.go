@@ -71,7 +71,7 @@ func Run(ctx context.Context, o Options) (res Result, err error) {
 			return res, err
 		}
 	}
-	outDir := filepath.Join(o.Work, o.Scenario)
+	outDir := filepath.Join(o.Work, img.Name, o.Scenario) // per image: runs may overlap
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return res, err
 	}
