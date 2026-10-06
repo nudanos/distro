@@ -1,0 +1,30 @@
+# REST API (translated from nudanos/tests Test_Automation/script/danos_restapi.robot)
+name: rest
+gating: true
+routers:
+  R1:
+    config:
+      - set service https
+checks:
+  - name: show version through REST
+    router: R1
+    timeout: 3m
+    http:
+      steps:
+        - {method: POST, path: /rest/op/show/version, status: 201, auth: true}
+        - {method: GET, path: "{location}", status: 200, want: "Version", auth: true}
+  - name: configure through a REST session
+    router: R1
+    timeout: 3m
+    http:
+      steps:
+        - {method: POST, path: /rest/conf, status: 201, auth: true}
+        - {method: PUT, path: "{location}/set/system/host-name/rest-test", status: 200, auth: true}
+        - {method: POST, path: "{location}/commit", status: 200, auth: true}
+        - {method: DELETE, path: "{location}", status: 200, auth: true}
+  - name: the REST commit changed the host name
+    router: R1
+    op: {command: show host name, want: rest-test}
+  - name: an unauthenticated request is refused
+    router: R1
+    http: {method: GET, path: /rest/op, status: 401}

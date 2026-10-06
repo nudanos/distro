@@ -122,3 +122,30 @@ func TestExpandRejectsPlaceholderWithoutLink(t *testing.T) {
 		t.Errorf("err = %v, want it to name R3", err)
 	}
 }
+
+// Every committed scenario parses, its links are a valid topology and its
+// interface placeholders resolve: a typo fails here, not after a VM run.
+func TestCommittedScenariosLoad(t *testing.T) {
+	files, _ := filepath.Glob("../../tests/scenarios/*/scenario.yaml")
+	if len(files) == 0 {
+		t.Fatal("no scenario files found")
+	}
+	for _, p := range files {
+		f, err := Load(p)
+		if err != nil {
+			t.Errorf("%s: %v", p, err)
+			continue
+		}
+		if f.Name != filepath.Base(filepath.Dir(p)) {
+			t.Errorf("%s: name %q does not match its directory", p, f.Name)
+		}
+		specs, err := topology.Plan(f.RouterOrder, f.Links, 1024, false, topology.AllocatePorts)
+		if err != nil {
+			t.Errorf("%s: %v", p, err)
+			continue
+		}
+		if err := f.Expand(specs); err != nil {
+			t.Errorf("%s: %v", p, err)
+		}
+	}
+}

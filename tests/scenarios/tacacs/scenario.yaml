@@ -12,6 +12,10 @@ routers:
     config:
       - set system login tacplus-server 10.0.2.2 secret nudanos-tac-1
 checks:
+  - name: the router resolves the TACACS+ user (NSS through SSSD)
+    router: R1
+    timeout: 3m
+    op: {command: "id tacadmin", want: "uid="}
   - name: TACACS+ administrator logs in as an admin
     router: R1
     timeout: 3m

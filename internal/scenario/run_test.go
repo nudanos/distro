@@ -122,12 +122,21 @@ checks:
 `
 
 func TestRunPassesAndCapturesShow(t *testing.T) {
-	stopped := fakeRun(t, map[string]string{"show ip route": "C>* 10.0.12.0/24 is directly connected, dp0s3, 00:01:02\n"}, nil)
+	// 2105 saves only beneath /config or the user's home ("save /tmp/x" is
+	// refused), so the capture saves a bare name, which lands in /config.
+	stopped := fakeRun(t, map[string]string{
+		"show ip route":            "C>* 10.0.12.0/24 is directly connected, dp0s3, 00:01:02\n",
+		"cat /config/capture.boot": "interfaces {\n    dataplane dp0s3 {\n    }\n}\n",
+	}, nil)
 	tests := scenarioTree(t, "pair", pair)
 	work := t.TempDir()
 	res, err := Run(context.Background(), Options{Scenario: "pair", ISO: "/iso/n.iso", Capture: true, Reference: true, refImage: &Image{Name: "2105", MemMB: 1536, User: "tmpuser", Password: "tmppwd", Live: true}, Work: work, Tests: tests})
 	if err != nil || !res.Passed {
 		t.Fatalf("Run = %+v, %v", res, err)
+	}
+	boot, err := os.ReadFile(filepath.Join(tests, "reference", "2105", "pair", "R1", "config.boot"))
+	if err != nil || !strings.Contains(string(boot), "dataplane dp0s3") {
+		t.Errorf("captured config.boot = %q, %v", boot, err)
 	}
 	got, err := os.ReadFile(filepath.Join(tests, "reference", "2105", "pair", "R1", "show", "show-ip-route.txt"))
 	if err != nil || !strings.Contains(string(got), "10.0.12.0/24") {
