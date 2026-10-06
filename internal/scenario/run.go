@@ -142,7 +142,7 @@ func Run(ctx context.Context, o Options) (res Result, err error) {
 			return res, fmt.Errorf("TACACS+ server: %w", err)
 		}
 		defer l.Close()
-		go tacacs.Serve(l, f.TACACS.Secret, f.TACACS.Users)
+		go tacacs.ServeLog(l, f.TACACS.Secret, f.TACACS.Users, func(format string, a ...any) { fmt.Fprintf(runLog, format+"\n", a...) })
 	}
 	routers := &Routers{VMs: vms, Ports: ports, Admin: img.User, Password: img.Password, T: t}
 	for _, c := range f.Checks {

@@ -2,8 +2,10 @@ package tacacs
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -90,5 +92,28 @@ func TestServeASCIILogin(t *testing.T) {
 		}
 		s.Close()
 		cancel()
+	}
+}
+
+func TestServeLogLogsEachRequest(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	var mu sync.Mutex
+	var lines []string
+	go ServeLog(l, secret, []User{{"tacadmin", "tac-admin-1", 15}}, func(format string, a ...any) {
+		mu.Lock()
+		lines = append(lines, fmt.Sprintf(format, a...))
+		mu.Unlock()
+	})
+	c := &tacplus.Client{Addr: l.Addr().String(), ConnConfig: tacplus.ConnConfig{Secret: []byte(secret)}}
+	pap(t, c, "tacadmin", "wrong")
+	mu.Lock()
+	defer mu.Unlock()
+	got := strings.Join(lines, "\n")
+	if !strings.Contains(got, "tacadmin") || !strings.Contains(got, "fail") {
+		t.Errorf("log = %q, want the user and the outcome", got)
 	}
 }

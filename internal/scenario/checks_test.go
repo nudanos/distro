@@ -229,3 +229,35 @@ func TestHTTPCheckRelativeLocation(t *testing.T) {
 		t.Errorf("requests = %v", seen)
 	}
 }
+
+// An operational command's result answers 202 while it still runs (2105).
+func TestHTTPCheckPollsWhileAccepted(t *testing.T) {
+	gets := 0
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			w.Header().Set("Location", "rest/op/CA88")
+			w.WriteHeader(201)
+			return
+		}
+		gets++
+		if gets < 3 {
+			w.WriteHeader(202)
+			return
+		}
+		fmt.Fprint(w, "Version: 2105")
+	}))
+	defer srv.Close()
+	old := pollInterval
+	pollInterval = 10 * time.Millisecond
+	defer func() { pollInterval = old }()
+	c := Check{Name: "op", Router: "R1", Timeout: 5 * time.Second, HTTP: &HTTPCheck{Steps: []HTTPCheck{
+		{Method: "POST", Path: "/rest/op/show/version", Status: 201},
+		{Method: "GET", Path: "{location}", Status: 200, Want: "Version"},
+	}}}
+	if err := RunCheck(context.Background(), c, routers(topology.Ports{HTTPS: port(t, srv.URL)})); err != nil {
+		t.Fatal(err)
+	}
+	if gets != 3 {
+		t.Errorf("GET ran %d times, want 3 (two 202s, then 200)", gets)
+	}
+}

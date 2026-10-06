@@ -31,6 +31,10 @@ type Routers struct {
 // opInterval is how long a retrying check waits between attempts.
 var opInterval = 10 * time.Second
 
+// pollInterval is how often an HTTP step re-asks while the router answers
+// 202 Accepted (an operational command still running).
+var pollInterval = 2 * time.Second
+
 var (
 	goMu     sync.Mutex
 	goChecks = map[string]func(ctx context.Context, r *Routers) error{}
@@ -172,12 +176,25 @@ func httpOnce(r *Routers, c Check) error {
 		if s.Auth {
 			req.SetBasicAuth(r.Admin, r.Password)
 		}
-		resp, err := insecure.Do(req)
-		if err != nil {
-			return fmt.Errorf("step %d %s %s: %w", i+1, s.Method, path, err)
+		var resp *http.Response
+		var body []byte
+		for polls := 0; ; polls++ {
+			if resp, err = insecure.Do(req); err != nil {
+				return fmt.Errorf("step %d %s %s: %w", i+1, s.Method, path, err)
+			}
+			body, _ = io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if resp.StatusCode != http.StatusAccepted || s.Status == http.StatusAccepted || polls >= 60 {
+				break
+			}
+			time.Sleep(pollInterval)
+			if req, err = http.NewRequest(s.Method, req.URL.String(), strings.NewReader(s.Body)); err != nil {
+				return err
+			}
+			if s.Auth {
+				req.SetBasicAuth(r.Admin, r.Password)
+			}
 		}
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
 		if s.Status != 0 && resp.StatusCode != s.Status {
 			return fmt.Errorf("step %d %s %s: status %d, want %d: %s", i+1, s.Method, path, resp.StatusCode, s.Status, body)
 		}
