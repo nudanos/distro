@@ -289,3 +289,32 @@ func TestConfigureSessionRetriesUntilConfigdIsReady(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// A retried check reports only its last error; the first failure (often
+// the informative one, before a non-idempotent step makes every retry
+// fail differently) goes to the run log.
+func TestRetriedCheckLogsEveryFailedAttempt(t *testing.T) {
+	opInterval = 10 * time.Millisecond
+	defer func() { opInterval = 10 * time.Second }()
+	tries := 0
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tries++
+		if tries == 1 {
+			w.WriteHeader(500)
+			fmt.Fprint(w, "first failure")
+			return
+		}
+		fmt.Fprint(w, "ok")
+	}))
+	defer srv.Close()
+	var log bytes.Buffer
+	r := routers(topology.Ports{HTTPS: port(t, srv.URL)})
+	r.Log = &log
+	c := Check{Name: "flaky", Router: "R1", Timeout: 5 * time.Second, HTTP: &HTTPCheck{Method: "GET", Path: "/rest/op", Status: 200}}
+	if err := RunCheck(context.Background(), c, r); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(log.String(), "first failure") {
+		t.Errorf("run log lacks the failed attempt:\n%s", log.String())
+	}
+}

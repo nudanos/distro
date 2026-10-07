@@ -144,7 +144,7 @@ func Run(ctx context.Context, o Options) (res Result, err error) {
 		defer l.Close()
 		go tacacs.ServeLog(l, f.TACACS.Secret, f.TACACS.Users, func(format string, a ...any) { fmt.Fprintf(runLog, format+"\n", a...) })
 	}
-	routers := &Routers{VMs: vms, Ports: ports, Admin: img.User, Password: img.Password, T: t}
+	routers := &Routers{VMs: vms, Ports: ports, Admin: img.User, Password: img.Password, T: t, Log: runLog}
 	for _, c := range f.Checks {
 		fmt.Fprintf(runLog, "check %q\n", c.Name)
 		if err := RunCheck(ctx, c, routers); err != nil {

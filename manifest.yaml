@@ -654,7 +654,7 @@ packages:
     tag_pattern: "^v(\\d+\\.\\d+\\.\\d+)$"
     track: "latest"
     packaging: "https://github.com/nudanos/pam_tacplus"
-    packaging_ref: "d6638d50073e32b85f0a1d9568bd4149ed655c71"
+    packaging_ref: "6ac9c036c3971a55cff0f2c086362cd049025beb"
     packaging_branch: "trixie"
     hold: "1.6.2 and later install a libtac.h that includes gnulib headers libtac-dev does not ship, so tacplusd cannot build against them; porting tacplusd to the gl_list API is plan 3"
   - name: "ppp"

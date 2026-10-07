@@ -26,6 +26,7 @@ type Routers struct {
 	Ports           map[string]topology.Ports
 	Admin, Password string
 	T               func(time.Duration) time.Duration
+	Log             io.Writer // failed attempts of retried checks (nil: none)
 }
 
 var noSession = regexp.MustCompile(`Failed to set up config session`)
@@ -53,9 +54,19 @@ func RegisterGo(name string, f func(ctx context.Context, r *Routers) error) {
 // pass or their (scaled) timeout passes; the error describes the last try.
 func RunCheck(ctx context.Context, c Check, r *Routers) error {
 	timeout := r.T(c.Timeout)
+	// a retry returns only its last error; earlier ones go to the run log
+	logged := func(try func() error) func() error {
+		return func() error {
+			err := try()
+			if err != nil && r.Log != nil {
+				fmt.Fprintf(r.Log, "  attempt failed: %v\n", err)
+			}
+			return err
+		}
+	}
 	switch {
 	case c.Op != nil:
-		return retry(ctx, timeout, func() error { return opOnce(r, c) })
+		return retry(ctx, timeout, logged(func() error { return opOnce(r, c) }))
 	case c.Action != nil:
 		vm, err := r.vm(c.Router)
 		if err != nil {
@@ -63,11 +74,11 @@ func RunCheck(ctx context.Context, c Check, r *Routers) error {
 		}
 		return ConfigureSession(vm.Console, c.Action.Configure, c.Action.Commit, r.T)
 	case c.HTTP != nil:
-		return retry(ctx, timeout, func() error { return httpOnce(r, c) })
+		return retry(ctx, timeout, logged(func() error { return httpOnce(r, c) }))
 	case c.SNMP != nil:
-		return retry(ctx, timeout, func() error { return snmpOnce(r, c) })
+		return retry(ctx, timeout, logged(func() error { return snmpOnce(r, c) }))
 	case c.Login != nil:
-		return retry(ctx, timeout, func() error { return loginOnce(r, c) })
+		return retry(ctx, timeout, logged(func() error { return loginOnce(r, c) }))
 	case c.Go != "":
 		goMu.Lock()
 		f := goChecks[c.Go]
