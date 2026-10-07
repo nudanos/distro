@@ -19,6 +19,7 @@ var (
 	tableVer    = regexp.MustCompile(`(BGP table version( is)?) \d+`)
 	anyNumber   = regexp.MustCompile(`\b\d+\b`)
 	trailingSpc = regexp.MustCompile(`[ \t]+\n`)
+	innerPad    = regexp.MustCompile(`(\S)[ \t]{2,}`)
 )
 
 // Normalize replaces the parts of a show command's output that change from
@@ -41,6 +42,9 @@ func Normalize(command, output string) string {
 	if !strings.HasSuffix(out, "\n") && out != "" {
 		out += "\n"
 	}
+	// column padding follows the width of values masked above; leading
+	// indentation (FRR's nesting) is kept
+	out = innerPad.ReplaceAllString(out, "$1 ")
 	return trailingSpc.ReplaceAllString(out, "\n")
 }
 

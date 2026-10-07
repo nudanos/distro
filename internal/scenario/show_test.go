@@ -97,8 +97,8 @@ func TestCheckAcceptedFailsOnNewDifference(t *testing.T) {
 // time since the last transition as 38s; they change from run to run.
 func TestNormalizeMasksCompactDurations(t *testing.T) {
 	cases := map[string]string{
-		"dp0s3             10     MASTER  no         no     38s         <none>\n":   "dp0s3             10     MASTER  no         no     <time>         <none>\n",
-		"10.255.0.2        1 Full/Backup     14m41s            33.080s 10.0.12.2\n": "10.255.0.2        1 Full/Backup     <time>            <time> 10.0.12.2\n",
+		"dp0s3             10     MASTER  no         no     38s         <none>\n":   "dp0s3 10 MASTER no no <time> <none>\n",
+		"10.255.0.2        1 Full/Backup     14m41s            33.080s 10.0.12.2\n": "10.255.0.2 1 Full/Backup <time> <time> 10.0.12.2\n",
 		"neighbor up 1h02m03s\n":       "neighbor up <time>\n",
 		"area 10 cost 100 via dp0s3\n": "area 10 cost 100 via dp0s3\n",
 	}
@@ -106,5 +106,18 @@ func TestNormalizeMasksCompactDurations(t *testing.T) {
 		if got := Normalize("show vrrp", in); got != want {
 			t.Errorf("Normalize(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// Column padding follows the width of values that are masked anyway
+// ("38s" vs "18m41s"), so runs of spaces compare as one.
+func TestNormalizeCollapsesPadding(t *testing.T) {
+	a := Normalize("show vrrp", "dp0s3             10     MASTER  no         no     38s         <none>\n")
+	b := Normalize("show vrrp", "dp0s3             10     MASTER  no         no     1m38s       <none>\n")
+	if a != b {
+		t.Errorf("padding differs:\n%q\n%q", a, b)
+	}
+	if want := "dp0s3 10 MASTER no no <time> <none>\n"; a != want {
+		t.Errorf("got %q, want %q", a, want)
 	}
 }
