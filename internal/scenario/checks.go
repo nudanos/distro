@@ -183,15 +183,21 @@ func ConfigureSession(con *boottest.Console, lines []string, commit bool, t func
 	return err
 }
 
-var insecure = &http.Client{Timeout: 60 * time.Second, Transport: &http.Transport{
+// httpTimeout bounds one HTTP request before scaling.
+var httpTimeout = 60 * time.Second
+
+var insecureTransport = &http.Transport{
 	TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // routers serve self-signed certificates
-}}
+}
 
 func httpOnce(r *Routers, c Check) error {
 	steps := c.HTTP.Steps
 	if len(steps) == 0 {
 		steps = []HTTPCheck{*c.HTTP}
 	}
+	// scaled: under emulation a commit can take minutes, and a request
+	// abandoned early may still succeed on the router
+	insecure := &http.Client{Timeout: r.T(httpTimeout), Transport: insecureTransport}
 	location := ""
 	for i, s := range steps {
 		path := strings.ReplaceAll(s.Path, "{location}", location)

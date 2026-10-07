@@ -318,3 +318,26 @@ func TestRetriedCheckLogsEveryFailedAttempt(t *testing.T) {
 		t.Errorf("run log lacks the failed attempt:\n%s", log.String())
 	}
 }
+
+// Under emulation a REST commit can outlast an unscaled client timeout,
+// succeed on the router anyway, and leave every retry failing ("Node
+// exists"). The HTTP client's timeout scales like every other timeout.
+func TestHTTPTimeoutScales(t *testing.T) {
+	old := httpTimeout
+	httpTimeout = 100 * time.Millisecond
+	defer func() { httpTimeout = old }()
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(250 * time.Millisecond)
+		fmt.Fprint(w, "ok")
+	}))
+	defer srv.Close()
+	r := routers(topology.Ports{HTTPS: port(t, srv.URL)})
+	c := Check{Name: "slow commit", Router: "R1", Timeout: time.Millisecond, HTTP: &HTTPCheck{Method: "POST", Path: "/rest/conf/X/commit", Status: 200}}
+	if err := RunCheck(context.Background(), c, r); err == nil {
+		t.Fatal("unscaled: a request slower than httpTimeout succeeded")
+	}
+	r.T = func(d time.Duration) time.Duration { return 6 * d }
+	if err := RunCheck(context.Background(), c, r); err != nil {
+		t.Fatalf("scaled x6: %v", err)
+	}
+}
