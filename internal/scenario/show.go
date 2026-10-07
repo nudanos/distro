@@ -12,7 +12,8 @@ var (
 		regexp.MustCompile(`\b\d+w\d+d\d+h\b`),
 		regexp.MustCompile(`\b\d+d\d+h\d+m\b`),
 		regexp.MustCompile(`\b\d{1,2}:\d{2}:\d{2}\b`),
-		regexp.MustCompile(`\b\d+\.\d+s\b`), // OSPF dead timer
+		regexp.MustCompile(`\b\d+\.\d+s\b`),          // OSPF dead timer
+		regexp.MustCompile(`\b(\d+h)?(\d+m)?\d+s\b`), // FRR uptime 14m41s, show vrrp 38s
 	}
 	memoryUse   = regexp.MustCompile(`using \d+ (bytes|KiB|MiB) of memory`)
 	tableVer    = regexp.MustCompile(`(BGP table version( is)?) \d+`)

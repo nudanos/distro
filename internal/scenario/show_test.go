@@ -92,3 +92,19 @@ func TestCheckAcceptedFailsOnNewDifference(t *testing.T) {
 		t.Errorf("err = %v, want the unaccepted diff", err)
 	}
 }
+
+// FRR prints neighbor uptimes as 14m41s or 1h02m03s, and show vrrp the
+// time since the last transition as 38s; they change from run to run.
+func TestNormalizeMasksCompactDurations(t *testing.T) {
+	cases := map[string]string{
+		"dp0s3             10     MASTER  no         no     38s         <none>\n":   "dp0s3             10     MASTER  no         no     <time>         <none>\n",
+		"10.255.0.2        1 Full/Backup     14m41s            33.080s 10.0.12.2\n": "10.255.0.2        1 Full/Backup     <time>            <time> 10.0.12.2\n",
+		"neighbor up 1h02m03s\n":       "neighbor up <time>\n",
+		"area 10 cost 100 via dp0s3\n": "area 10 cost 100 via dp0s3\n",
+	}
+	for in, want := range cases {
+		if got := Normalize("show vrrp", in); got != want {
+			t.Errorf("Normalize(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
