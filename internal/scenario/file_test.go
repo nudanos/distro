@@ -149,3 +149,10 @@ func TestCommittedScenariosLoad(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadRejectsSecondCaptureShow(t *testing.T) {
+	_, err := Load(write(t, ospfLike+"  - capture_show: true\n  - capture_show: true\n"))
+	if err == nil || !strings.Contains(err.Error(), "captured once") {
+		t.Errorf("err = %v, want 'captured once'", err)
+	}
+}

@@ -42,6 +42,8 @@ type Check struct {
 	SNMP    *SNMPCheck
 	Login   *LoginCheck
 	Go      string
+	// CaptureShow takes the show step here instead of after the last check
+	CaptureShow bool
 }
 
 // OpCheck: the command's output must match Want (or, with Absent, stop matching).
@@ -104,6 +106,7 @@ type rawCheck struct {
 	SNMP    *SNMPCheck  `yaml:"snmp"`
 	Login   *LoginCheck `yaml:"login"`
 	Go      string      `yaml:"go"`
+	Capture bool        `yaml:"capture_show"`
 }
 
 type rawFile struct {
@@ -147,9 +150,10 @@ func Load(path string) (*File, error) {
 		}
 		f.Links = append(f.Links, topology.Link{A: l[0], B: l[1]})
 	}
+	captures := 0
 	for i, rc := range raw.Checks {
 		c := Check{Name: rc.Name, Router: rc.Router, Timeout: defaultTimeout,
-			Op: rc.Op, Action: rc.Action, HTTP: rc.HTTP, SNMP: rc.SNMP, Login: rc.Login, Go: rc.Go}
+			Op: rc.Op, Action: rc.Action, HTTP: rc.HTTP, SNMP: rc.SNMP, Login: rc.Login, Go: rc.Go, CaptureShow: rc.Capture}
 		if c.Name == "" {
 			c.Name = fmt.Sprintf("check %d", i+1)
 		}
@@ -159,19 +163,25 @@ func Load(path string) (*File, error) {
 			}
 		}
 		kinds := 0
-		for _, set := range []bool{c.Op != nil, c.Action != nil, c.HTTP != nil, c.SNMP != nil, c.Login != nil, c.Go != ""} {
+		for _, set := range []bool{c.Op != nil, c.Action != nil, c.HTTP != nil, c.SNMP != nil, c.Login != nil, c.Go != "", c.CaptureShow} {
 			if set {
 				kinds++
 			}
 		}
 		if kinds != 1 {
-			return nil, fmt.Errorf("%s: %s: a check has exactly one of op, action, http, snmp, login, go (found %d)", path, c.Name, kinds)
+			return nil, fmt.Errorf("%s: %s: a check has exactly one of op, action, http, snmp, login, go, capture_show (found %d)", path, c.Name, kinds)
 		}
-		if c.Router == "" && c.Go == "" {
+		if c.Router == "" && c.Go == "" && !c.CaptureShow {
 			return nil, fmt.Errorf("%s: %s: no router", path, c.Name)
 		}
 		if _, ok := f.Routers[c.Router]; c.Router != "" && !ok {
 			return nil, fmt.Errorf("%s: %s: unknown router %s", path, c.Name, c.Router)
+		}
+		if c.CaptureShow && captures > 0 {
+			return nil, fmt.Errorf("%s: %s: show output is captured once (a second capture_show)", path, c.Name)
+		}
+		if c.CaptureShow {
+			captures++
 		}
 		f.Checks = append(f.Checks, c)
 	}

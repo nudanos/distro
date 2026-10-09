@@ -145,14 +145,24 @@ func Run(ctx context.Context, o Options) (res Result, err error) {
 		go tacacs.ServeLog(l, f.TACACS.Secret, f.TACACS.Users, func(format string, a ...any) { fmt.Fprintf(runLog, format+"\n", a...) })
 	}
 	routers := &Routers{VMs: vms, Ports: ports, Admin: img.User, Password: img.Password, T: t, Log: runLog}
+	shown := false
 	for _, c := range f.Checks {
 		fmt.Fprintf(runLog, "check %q\n", c.Name)
+		if c.CaptureShow {
+			if err := showStep(f, o, vms, outDir, t, &res); err != nil {
+				return res, err
+			}
+			shown = true
+			continue
+		}
 		if err := RunCheck(ctx, c, routers); err != nil {
 			res.Failed = append(res.Failed, c.Name+": "+err.Error())
 		}
 	}
-	if err := showStep(f, o, vms, outDir, t, &res); err != nil {
-		return res, err
+	if !shown {
+		if err := showStep(f, o, vms, outDir, t, &res); err != nil {
+			return res, err
+		}
 	}
 	for _, name := range f.RouterOrder {
 		if boottest.Halt(vms[name].Console, t) == nil {

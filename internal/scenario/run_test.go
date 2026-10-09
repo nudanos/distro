@@ -238,3 +238,47 @@ func TestWaitInterfacesUntilListed(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// A scenario whose later phases reshape the network (bgp's confederation)
+// captures its show output at a "capture_show" check instead of at the end;
+// the capture runs once, where it is placed.
+func TestRunCapturesShowWhereMarked(t *testing.T) {
+	fakeRun(t, map[string]string{
+		"show ip route":      "C>* 10.0.12.0/24 is directly connected, dp0s3\n",
+		"show version":       "Version: 1.0\n",
+		"show configuration": "interfaces {\n}\n",
+	}, nil)
+	body := `
+name: marked
+gating: true
+routers:
+  R1: {config: ["set interfaces dataplane ${R1:R2} address 10.0.12.1/24"]}
+  R2: {config: ["set interfaces dataplane ${R2:R1} address 10.0.12.2/24"]}
+links: [[R1, R2]]
+show: ["show ip route"]
+checks:
+  - name: capture here
+    capture_show: true
+  - name: a later phase
+    router: R1
+    timeout: 1s
+    op: {command: "show version", want: "Version"}
+`
+	tests := scenarioTree(t, "marked", body)
+	work := t.TempDir()
+	res, err := Run(context.Background(), Options{Scenario: "marked", ISO: "/iso/n.iso", Capture: true, Reference: true, refImage: &Image{Name: "2105", MemMB: 1536, User: "tmpuser", Password: "tmppwd", Live: true}, Work: work, Tests: tests})
+	if err != nil || !res.Passed {
+		t.Fatalf("Run = %+v, %v", res, err)
+	}
+	if _, err := os.Stat(filepath.Join(tests, "reference", "2105", "marked", "R1", "show", "show-ip-route.txt")); err != nil {
+		t.Errorf("show not captured: %v", err)
+	}
+	log, _ := os.ReadFile(filepath.Join(work, "2105", "marked", "R1.log"))
+	l := string(log)
+	if strings.Count(l, "<<show ip route>>") != 1 {
+		t.Errorf("show ip route ran %d times, want once", strings.Count(l, "<<show ip route>>"))
+	}
+	if i, j := strings.Index(l, "<<show ip route>>"), strings.Index(l, "<<show version>>"); i < 0 || j < 0 || i > j {
+		t.Errorf("show captured at %d, later phase at %d: want the capture first", i, j)
+	}
+}
