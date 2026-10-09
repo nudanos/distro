@@ -78,6 +78,9 @@ func fakeStart(shows map[string]string, fail map[string]bool, stopped *sync.Map)
 			}
 			shows["show interfaces"] = "dp0s3  -\ndp0s4  -\ndp0s10  10.0.2.15/24\n"
 		}
+		if _, ok := shows["systemctl is-system-running"]; !ok {
+			shows["systemctl is-system-running"] = "running\n"
+		}
 		go fakeRouter(b, s.Name, shows)
 		stopped.Store(s.Name, false)
 		return topology.NewVM(s, boottest.NewConsole(a, log), func(time.Duration) { stopped.Store(s.Name, true); a.Close() }), nil
@@ -280,5 +283,36 @@ checks:
 	}
 	if i, j := strings.Index(l, "<<show ip route>>"), strings.Index(l, "<<show version>>"); i < 0 || j < 0 || i > j {
 		t.Errorf("show captured at %d, later phase at %d: want the capture first", i, j)
+	}
+}
+
+// A router accepts logins before its boot configuration is committed
+// (system-configure runs after getty). Configuring then raced the boot
+// commit: "Commit already in progress", and on NuDanOS a session opened
+// mid-boot-commit never got the lock (mpls-ldp, two hours). The runner
+// waits until systemd reports the boot finished.
+func TestWaitBootedUntilSystemRunning(t *testing.T) {
+	opInterval = 10 * time.Millisecond
+	a, vm := net.Pipe()
+	defer a.Close()
+	defer vm.Close()
+	asked := 0
+	go func() {
+		b := make([]byte, 128)
+		for _, answer := range []string{"starting\n", "starting\n", "degraded\n"} {
+			n, err := vm.Read(b)
+			if err != nil {
+				return
+			}
+			asked++
+			io.WriteString(vm, string(b[:n])+"\n"+strings.ReplaceAll(answer, "\n", "\r\n")+"vyatta@r1:~$ ")
+		}
+	}()
+	c := boottest.NewConsole(a, &bytes.Buffer{})
+	if err := waitBooted(c, 5*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if asked != 3 {
+		t.Errorf("asked %d times, want 3 (until the boot finished)", asked)
 	}
 }
