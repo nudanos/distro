@@ -1,0 +1,199 @@
+Description: thread-safe group enumeration
+ glibc's getgrouplist() and initgroups() walk the module's group entries
+ with setgrent/getgrent_r/endgrent from whatever thread calls them. One
+ static FILE and fgetgrent()'s static buffer were shared by every thread:
+ configd, which calls getgrouplist() from many goroutines, died with SIGSEGV
+ and lost every configuration session. The stream and line buffer are now
+ per thread (fgetgrent_r), and configuration parsing, which rewrites the
+ server tables, is serialised. test/grent_threads (make check) runs eight
+ concurrent enumerations; it segfaulted before this change.
+Author: NuDanOS Maintainers <jon@fernandez.tech>
+Forwarded: no
+Last-Update: 2026-10-09
+---
+diff --git a/Makefile.am b/Makefile.am
+index b1fa09f..e4fc996 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -57,3 +57,10 @@ install-data-hook:
+ 	$(STRIP) --keep-symbol=_nss_tacplus_getpwnam_r --keep-symbol=_nss_tacplus_getpwuid_r $(DESTDIR)$(libdir)/$(NSS_TACPLUS_NSS_VERSIONED)
+ 	${INSTALL} -m 644 tacplus_nss.conf $(DESTDIR)$(sysconfdir)
+ 
++# NuDanOS: concurrent group enumeration (configd calls getgrouplist from
++# many threads)
++check_PROGRAMS = grent_threads
++grent_threads_SOURCES = test/grent_threads.c
++grent_threads_CFLAGS = $(libnss_tacplus_la_CFLAGS)
++grent_threads_LDADD = -ltacplus_map -ltac -laudit -lpthread
++TESTS = grent_threads
+diff --git a/nss_tacplus.c b/nss_tacplus.c
+index f4796c6..20c562d 100644
+--- a/nss_tacplus.c
++++ b/nss_tacplus.c
+@@ -46,6 +46,7 @@
+ #include <tacplus/map_tacplus_user.h>
+ 
+ #include "nss_tacplus.h"
++#include <pthread.h>
+ 
+ static const char *nssname = "nss_tacplus"; /* for syslogs */
+ static const char *config_file = "/etc/tacplus_nss.conf";
+@@ -342,13 +343,21 @@ static int nss_tacplus_config(int *errnop, const char *cfile, int top)
+ }
+ 
+ /* common get config code at each entry point */
++static pthread_mutex_t config_lock = PTHREAD_MUTEX_INITIALIZER;
++
+ static int
+ get_config(int *errp, int level)
+ {
+-    int result = nss_tacplus_config(errp, config_file, 1);
++    int result;
++
++    /* NuDanOS: the parser rewrites the server tables; callers may be
++     * multithreaded */
++    pthread_mutex_lock(&config_lock);
++    result = nss_tacplus_config(errp, config_file, 1);
+     conf_parsed = result == 0 ? 2 : 1;
+ 
+     get_remote_addr();
++    pthread_mutex_unlock(&config_lock);
+ 
+     /* no config file, no servers, etc.
+      * this is a debug because privileges may not allow access
+@@ -1133,7 +1142,14 @@ fixup_gr_mem(const char *grnam, const char **gr_in, char *buf,
+ * the password file.
+ */
+ 
+-static FILE *grent;
++/*
++ * NuDanOS: per thread. glibc's getgrouplist() and initgroups() call
++ * setgrent/getgrent_r/endgrent from whatever thread asks, and a
++ * multithreaded caller (configd) closed the stream under another thread.
++ */
++static __thread FILE *grent;
++static __thread char *grbuf;      /* fgetgrent_r's line buffer */
++static __thread size_t grbuflen;
+ 
+ __attribute__((visibility("default")))
+ enum nss_status _nss_tacplus_setgrent(void)
+@@ -1173,6 +1189,9 @@ enum nss_status _nss_tacplus_endgrent(void)
+         grent = NULL;
+         (void)fclose(f);
+     }
++    free(grbuf);
++    grbuf = NULL;
++    grbuflen = 0;
+     return NSS_STATUS_SUCCESS;
+ }
+ 
+@@ -1291,7 +1310,7 @@ enum nss_status _nss_tacplus_getgrent_r(struct group *gr_result,
+                                         int *errnop)
+ {
+     enum nss_status status = NSS_STATUS_NOTFOUND;
+-    struct group *ent;
++    struct group grtmp, *ent = NULL;
+     int ret = 1;
+     int localerr;
+ 
+@@ -1311,7 +1330,27 @@ enum nss_status _nss_tacplus_getgrent_r(struct group *gr_result,
+             return status;
+     }
+ 
+-    ent = fgetgrent(grent);
++    /* fgetgrent() returns static storage shared by every thread */
++    if (!grbuf) {
++        grbuflen = 4096;
++        if (!(grbuf = malloc(grbuflen))) {
++            if (errnop)
++                *errnop = ENOMEM;
++            return NSS_STATUS_TRYAGAIN;
++        }
++    }
++    while ((ret = fgetgrent_r(grent, &grtmp, grbuf, grbuflen, &ent)) == ERANGE) {
++        char *bigger = realloc(grbuf, grbuflen * 2);
++        if (!bigger) {
++            if (errnop)
++                *errnop = ENOMEM;
++            return NSS_STATUS_TRYAGAIN;
++        }
++        grbuf = bigger;
++        grbuflen *= 2;
++    }
++    if (ret)
++        ent = NULL;
+     if (!ent) {
+         int e = errno;
+         if (ferror(grent)) {
+diff --git a/test/grent_threads.c b/test/grent_threads.c
+new file mode 100644
+index 0000000..df1e5bd
+--- /dev/null
++++ b/test/grent_threads.c
+@@ -0,0 +1,66 @@
++/*
++ * NuDanOS: glibc's getgrouplist() and initgroups() walk an NSS module's
++ * group entries with setgrent/getgrent_r/endgrent, from whatever thread
++ * calls them. configd calls getgrouplist() from many goroutines at once;
++ * with one static FILE for every thread, one thread's endgrent closed the
++ * stream another was reading and configd died with SIGSEGV, taking every
++ * configuration session with it. Concurrent enumerations must be safe.
++ *
++ * Built from nss_tacplus.c itself so the test can point it at its own
++ * configuration file.
++ */
++#include "../nss_tacplus.c"
++
++#include <pthread.h>
++#include <stdlib.h>
++
++#define THREADS 8
++#define ROUNDS 3000
++
++static void *enumerate(void *arg)
++{
++    char buf[16384];
++    struct group gr;
++    int err, rounds = 0;
++    long seen = 0;
++
++    (void)arg;
++    for (rounds = 0; rounds < ROUNDS; rounds++) {
++        _nss_tacplus_setgrent();
++        while (_nss_tacplus_getgrent_r(&gr, buf, sizeof buf, &err) ==
++               NSS_STATUS_SUCCESS)
++            seen++;
++        _nss_tacplus_endgrent();
++    }
++    return (void *)seen;
++}
++
++int main(void)
++{
++    char conf[] = "/tmp/tacplus_nss_testXXXXXX";
++    pthread_t t[THREADS];
++    long total = 0;
++    int fd = mkstemp(conf), i;
++
++    if (fd < 0 || dprintf(fd, "secret=test\nserver=127.0.0.1\n") < 0) {
++        perror("config");
++        return 2;
++    }
++    close(fd);
++    config_file = conf;
++
++    for (i = 0; i < THREADS; i++)
++        pthread_create(&t[i], NULL, enumerate, NULL);
++    for (i = 0; i < THREADS; i++) {
++        void *seen;
++        pthread_join(t[i], &seen);
++        total += (long)seen;
++    }
++    unlink(conf);
++    if (total == 0) {
++        fprintf(stderr, "grent_threads: no group entries read\n");
++        return 1;
++    }
++    printf("grent_threads: OK, %ld entries in %d threads\n", total, THREADS);
++    return 0;
++}
