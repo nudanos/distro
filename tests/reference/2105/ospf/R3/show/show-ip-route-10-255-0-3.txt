@@ -1,0 +1,10 @@
+Routing entry for 10.255.0.3/32
+  Known via "ospf", distance 110, metric 0
+  Last update 00:02:43 ago
+    directly connected, lo, weight 1
+
+Routing entry for 10.255.0.3/32
+  Known via "connected", distance 0, metric 0, best
+  Last update 00:02:44 ago
+  * directly connected, lo
+

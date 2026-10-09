@@ -1,0 +1,5 @@
+Routing entry for 10.255.0.3/32
+  Known via "ospf", distance 110, metric 10, best
+  Last update 00:01:46 ago
+  * 10.0.23.3, via dp0s4, weight 1
+

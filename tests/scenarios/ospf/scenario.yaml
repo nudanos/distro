@@ -1,0 +1,55 @@
+# OSPF (new for NuDanOS; no DANOS suite). R2 is the area border router.
+name: ospf
+gating: true
+routers:
+  R1:
+    config:
+      - set interfaces loopback lo address 10.255.0.1/32
+      - set interfaces dataplane ${R1:R2} address 10.0.12.1/24
+      - set protocols ospf area 0 network 10.0.12.0/24
+      - set protocols ospf area 0 network 10.255.0.1/32
+  R2:
+    config:
+      - set interfaces loopback lo address 10.255.0.2/32
+      - set interfaces dataplane ${R2:R1} address 10.0.12.2/24
+      - set interfaces dataplane ${R2:R3} address 10.0.23.2/24
+      - set protocols ospf area 0 network 10.0.12.0/24
+      - set protocols ospf area 0 network 10.255.0.2/32
+      - set protocols ospf area 1 network 10.0.23.0/24
+  R3:
+    config:
+      - set interfaces loopback lo address 10.255.0.3/32
+      - set interfaces dataplane ${R3:R2} address 10.0.23.3/24
+      - set protocols ospf area 1 network 10.0.23.0/24
+      - set protocols ospf area 1 network 10.255.0.3/32
+links:
+  - [R1, R2]
+  - [R2, R3]
+show:
+  - show protocols ospf neighbor
+  - show ip route 10.255.0.3
+checks:
+  - name: R1 adjacency to R2 is Full
+    router: R1
+    timeout: 3m
+    op: {command: show protocols ospf neighbor, want: "Full"}
+  - name: R3 adjacency to R2 is Full
+    router: R3
+    timeout: 3m
+    op: {command: show protocols ospf neighbor, want: "Full"}
+  - name: R1 reaches R3's loopback through R2 (inter-area)
+    router: R1
+    timeout: 3m
+    op: {command: show ip route 10.255.0.3, want: "Known via \"ospf\"[\\s\\S]*10\\.0\\.12\\.2, via "}
+  - name: loopback to loopback ping across R2
+    router: R1
+    op: {command: "ping 10.255.0.3 count 3 interface 10.255.0.1", want: " 0% packet loss"}
+  - name: raise R1's cost toward R2
+    router: R1
+    action:
+      configure: ["set interfaces dataplane ${R1:R2} ip ospf cost 100"]
+      commit: true
+  - name: the route's metric includes the new cost
+    router: R1
+    timeout: 3m
+    op: {command: show ip route 10.255.0.3, want: "metric 1[0-9][0-9]\\b"}

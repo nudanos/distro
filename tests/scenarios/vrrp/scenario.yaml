@@ -1,0 +1,47 @@
+# VRRP (new for NuDanOS; no DANOS suite). R1 has the higher priority.
+name: vrrp
+gating: true
+routers:
+  R1:
+    config:
+      - set interfaces dataplane ${R1:R2} address 10.0.0.1/24
+      - set interfaces dataplane ${R1:R2} vrrp vrrp-group 10 virtual-address 10.0.0.254/24
+      - set interfaces dataplane ${R1:R2} vrrp vrrp-group 10 priority 200
+      - set interfaces dataplane ${R1:R2} vrrp vrrp-group 10 preempt true
+  R2:
+    config:
+      - set interfaces dataplane ${R2:R1} address 10.0.0.2/24
+      - set interfaces dataplane ${R2:R1} vrrp vrrp-group 10 virtual-address 10.0.0.254/24
+      - set interfaces dataplane ${R2:R1} vrrp vrrp-group 10 priority 100
+      - set interfaces dataplane ${R2:R1} vrrp vrrp-group 10 preempt true
+links:
+  - [R1, R2]
+show:
+  - show vrrp
+checks:
+  - name: R1 is master
+    router: R1
+    timeout: 3m
+    op: {command: show vrrp, want: "MASTER"}
+  - name: R2 is backup
+    router: R2
+    timeout: 3m
+    op: {command: show vrrp, want: "BACKUP"}
+  - name: take R1's interface down
+    router: R1
+    action:
+      configure: ["set interfaces dataplane ${R1:R2} disable"]
+      commit: true
+  - name: R2 takes over
+    router: R2
+    timeout: 3m
+    op: {command: show vrrp, want: "MASTER"}
+  - name: bring R1's interface back
+    router: R1
+    action:
+      configure: ["delete interfaces dataplane ${R1:R2} disable"]
+      commit: true
+  - name: R1 preempts back to master
+    router: R1
+    timeout: 3m
+    op: {command: show vrrp, want: "MASTER"}
