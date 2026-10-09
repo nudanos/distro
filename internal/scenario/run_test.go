@@ -78,8 +78,8 @@ func fakeStart(shows map[string]string, fail map[string]bool, stopped *sync.Map)
 			}
 			shows["show interfaces"] = "dp0s3  -\ndp0s4  -\ndp0s10  10.0.2.15/24\n"
 		}
-		if _, ok := shows["systemctl is-system-running"]; !ok {
-			shows["systemctl is-system-running"] = "running\n"
+		if _, ok := shows["systemctl show -p ActiveState --value system-configure.service"]; !ok {
+			shows["systemctl show -p ActiveState --value system-configure.service"] = "inactive\n"
 		}
 		go fakeRouter(b, s.Name, shows)
 		stopped.Store(s.Name, false)
@@ -288,31 +288,64 @@ checks:
 
 // A router accepts logins before its boot configuration is committed
 // (system-configure runs after getty). Configuring then raced the boot
-// commit: "Commit already in progress", and on NuDanOS a session opened
-// mid-boot-commit never got the lock (mpls-ldp, two hours). The runner
-// waits until systemd reports the boot finished.
-func TestWaitBootedUntilSystemRunning(t *testing.T) {
+// commit: "Commit already in progress", and a configd session opened
+// mid-boot-commit never got the lock (mpls-ldp, two hours). The boot
+// commit also ends the admin's console session on NuDanOS. The runner
+// waits for system-configure, logging in again when the session ends.
+func bootConsole(t *testing.T, answers []string) (*boottest.Console, *int) {
+	t.Helper()
 	opInterval = 10 * time.Millisecond
 	a, vm := net.Pipe()
-	defer a.Close()
-	defer vm.Close()
+	t.Cleanup(func() { a.Close(); vm.Close() })
 	asked := 0
 	go func() {
-		b := make([]byte, 128)
-		for _, answer := range []string{"starting\n", "starting\n", "degraded\n"} {
+		b := make([]byte, 256)
+		for _, answer := range answers {
 			n, err := vm.Read(b)
 			if err != nil {
 				return
 			}
 			asked++
-			io.WriteString(vm, string(b[:n])+"\n"+strings.ReplaceAll(answer, "\n", "\r\n")+"vyatta@r1:~$ ")
+			io.WriteString(vm, string(b[:n])+"\n"+strings.ReplaceAll(answer, "\n", "\r\n"))
 		}
 	}()
-	c := boottest.NewConsole(a, &bytes.Buffer{})
-	if err := waitBooted(c, 5*time.Second); err != nil {
+	return boottest.NewConsole(a, &bytes.Buffer{}), &asked
+}
+
+func TestWaitBootedUntilSystemConfigureDone(t *testing.T) {
+	c, asked := bootConsole(t, []string{"activating\nvyatta@r1:~$ ", "activating\nvyatta@r1:~$ ", "inactive\nvyatta@r1:~$ "})
+	if err := waitBooted(c, "vyatta", "pw", 5*time.Second); err != nil {
 		t.Fatal(err)
 	}
-	if asked != 3 {
-		t.Errorf("asked %d times, want 3 (until the boot finished)", asked)
+	if *asked != 3 {
+		t.Errorf("asked %d times, want 3 (until system-configure finished)", *asked)
+	}
+}
+
+func TestWaitBootedLogsInAgainWhenSessionEnds(t *testing.T) {
+	// the boot commit ends the session: the next command lands at a login prompt
+	c, asked := bootConsole(t, []string{
+		"\nnode login: ",          // the command was typed after the session ended
+		"\nnode login: ",          // Login nudges for a fresh prompt
+		"Password: ",              // user name
+		"\nvyatta@r1:~$ ",         // password
+		"inactive\nvyatta@r1:~$ ", // asked again in the new session
+	})
+	if err := waitBooted(c, "vyatta", "pw", 5*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if *asked < 4 {
+		t.Errorf("console exchanges = %d; want a fresh login and a second question", *asked)
+	}
+}
+
+func TestWaitBootedWithoutSystemctl(t *testing.T) {
+	// 2105's admin shell is vbash-sandbox, which has no systemctl
+	c, asked := bootConsole(t, []string{"vbash-sandbox: systemctl: command not found\ntmpuser@r1:~$ "})
+	if err := waitBooted(c, "tmpuser", "pw", 5*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if *asked != 1 {
+		t.Errorf("asked %d times, want 1", *asked)
 	}
 }

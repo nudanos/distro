@@ -129,7 +129,7 @@ func Run(ctx context.Context, o Options) (res Result, err error) {
 		if _, err := boottest.OpOutput(c, "export VYATTA_PAGER=cat; stty cols 250", t(time.Minute)); err != nil {
 			return res, fmt.Errorf("%s: %w", name, err)
 		}
-		if err := waitBooted(c, t(20*time.Minute)); err != nil {
+		if err := waitBooted(c, img.User, img.Password, t(20*time.Minute)); err != nil {
 			return res, fmt.Errorf("%s: %w", name, err)
 		}
 		if err := waitInterfaces(c, interfaces(specs, name), t(10*time.Minute)); err != nil {
@@ -263,21 +263,39 @@ func waitInterfaces(c *boottest.Console, names []string, timeout time.Duration) 
 	})
 }
 
-var booted = regexp.MustCompile(`(?m)^(running|degraded)\s*$`)
+var stillBooting = regexp.MustCompile(`(?m)^activating\s*$`)
 
-// waitBooted waits until systemd reports the boot finished. A router
-// accepts logins before its boot configuration is committed
-// (system-configure runs after getty); configuring then races the boot
-// commit ("Commit already in progress"). A failed unit leaves the system
-// "degraded", which still counts as booted.
-func waitBooted(c *boottest.Console, timeout time.Duration) error {
+// output through the next shell or login prompt (First returns the match)
+var (
+	throughOpPrompt    = regexp.MustCompile(`(?s)^.*?:~\$ $`)
+	throughLoginPrompt = regexp.MustCompile(`(?s)^.*?login: $`)
+)
+
+// waitBooted waits until system-configure, which commits the boot
+// configuration after getty has started, is no longer running: configuring
+// before then races the boot commit ("Commit already in progress"). The
+// boot commit ends the admin's session on NuDanOS; a login prompt where the
+// shell was means log in again. 2105's admin shell has no systemctl, and
+// that counts as booted.
+func waitBooted(c *boottest.Console, user, password string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
 	return retry(context.Background(), timeout, func() error {
-		out, err := boottest.OpOutput(c, "systemctl is-system-running", time.Minute)
+		c.Discard()
+		if err := c.Send("systemctl show -p ActiveState --value system-configure.service"); err != nil {
+			return err
+		}
+		i, out, err := c.First([]*regexp.Regexp{throughOpPrompt, throughLoginPrompt}, time.Minute)
 		if err != nil {
 			return err
 		}
-		if !booted.MatchString(out) {
-			return fmt.Errorf("boot not finished: systemctl is-system-running: %s", strings.TrimSpace(out))
+		if i == 1 {
+			if err := boottest.Login(c, user, password, boottest.LoginPrompt, time.Until(deadline)); err != nil {
+				return err
+			}
+			return fmt.Errorf("the boot commit ended the session; logged in again")
+		}
+		if stillBooting.MatchString(out) {
+			return fmt.Errorf("boot configuration still being committed (system-configure activating)")
 		}
 		return nil
 	})
