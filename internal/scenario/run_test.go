@@ -313,7 +313,8 @@ func bootConsole(t *testing.T, answers []string) (*boottest.Console, *int) {
 }
 
 func TestWaitBootedUntilSystemConfigureDone(t *testing.T) {
-	c, asked := bootConsole(t, []string{"activating\nvyatta@r1:~$ ", "activating\nvyatta@r1:~$ ", "inactive\nvyatta@r1:~$ "})
+	// systemctl ends its answer with a terminal escape on the console
+	c, asked := bootConsole(t, []string{"activating\x1b[m\nvyatta@r1:~$ ", "activating\nvyatta@r1:~$ ", "inactive\x1b[m\nvyatta@r1:~$ "})
 	if err := waitBooted(c, "vyatta", "pw", 5*time.Second); err != nil {
 		t.Fatal(err)
 	}

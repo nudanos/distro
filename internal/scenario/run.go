@@ -263,7 +263,7 @@ func waitInterfaces(c *boottest.Console, names []string, timeout time.Duration) 
 	})
 }
 
-var stillBooting = regexp.MustCompile(`(?m)^activating\s*$`)
+var stillBooting = regexp.MustCompile(`\bactivating\b`) // the console may append escape sequences
 
 // output through the next shell or login prompt (First returns the match)
 var (
