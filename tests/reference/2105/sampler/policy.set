@@ -1,0 +1,5 @@
+# policy: a prefix list and a route map
+set policy route prefix-list SAMPLER-PL rule 10 action permit
+set policy route prefix-list SAMPLER-PL rule 10 prefix 10.0.0.0/8
+set policy route route-map SAMPLER-RM rule 10 action permit
+set policy route route-map SAMPLER-RM rule 10 match ip address prefix-list SAMPLER-PL

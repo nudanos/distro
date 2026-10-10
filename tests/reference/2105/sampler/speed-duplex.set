@@ -1,0 +1,4 @@
+# speed-duplex (DPDK-only unless auto): fixed speed and duplex
+set interfaces dataplane dp0s3 address 192.0.2.1/24
+set interfaces dataplane dp0s3 speed 100m
+set interfaces dataplane dp0s3 duplex full

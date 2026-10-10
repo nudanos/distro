@@ -1,0 +1,3 @@
+# gratuitous-arp (DPDK-only): drop gratuitous ARP requests
+set interfaces dataplane dp0s3 address 192.0.2.1/24
+set interfaces dataplane dp0s3 ip gratuitous-arp request drop

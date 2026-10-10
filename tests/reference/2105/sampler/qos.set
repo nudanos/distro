@@ -1,0 +1,3 @@
+# qos (DPDK-only): a shaper policy on an interface
+set policy qos name SAMPLER shaper bandwidth 100Mbit
+set interfaces dataplane dp0s3 policy qos SAMPLER

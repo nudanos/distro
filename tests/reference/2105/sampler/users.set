@@ -1,0 +1,4 @@
+# users: an operator account (test password)
+set system login user sampler authentication plaintext-password 'sampler-pass-1'
+set system login user sampler level operator
+set system login user sampler full-name 'Sampler User'

@@ -1,0 +1,4 @@
+# bonding: an LACP bond with a data interface as member
+set interfaces bonding dp0bond0 address 198.51.100.65/26
+set interfaces bonding dp0bond0 mode lacp
+set interfaces dataplane dp0s4 bond-group dp0bond0

@@ -1,0 +1,5 @@
+# interfaces: addresses, description and MTU on a data interface
+set interfaces dataplane dp0s3 address 192.0.2.1/24
+set interfaces dataplane dp0s3 address 2001:db8:1::1/64
+set interfaces dataplane dp0s3 description 'sampler uplink'
+set interfaces dataplane dp0s3 mtu 1400

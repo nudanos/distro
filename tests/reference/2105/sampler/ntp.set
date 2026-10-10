@@ -1,0 +1,2 @@
+# ntp: an NTP server
+set system ntp server 192.0.2.123

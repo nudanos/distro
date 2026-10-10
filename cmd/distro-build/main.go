@@ -372,7 +372,7 @@ func (a *app) buildImage(ctx context.Context) error {
 // test runs the image test layers: "install" (layer 2) and "boot" (layer 3).
 func (a *app) test(ctx context.Context, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: distro-build test install|boot|scenario <name>|scenarios")
+		return fmt.Errorf("usage: distro-build test install|boot|scenario <name>|scenarios|fixtures")
 	}
 	switch args[0] {
 	case "scenario":
@@ -382,6 +382,8 @@ func (a *app) test(ctx context.Context, args []string) error {
 		return a.testScenarios(ctx, args[1:], false)
 	case "scenarios":
 		return a.testScenarios(ctx, nil, true)
+	case "fixtures":
+		return a.testFixtures(ctx)
 	}
 	repo := filepath.Join(a.work, "repo")
 	if _, err := os.Stat(filepath.Join(repo, "dists", "trixie", "InRelease")); err != nil {
@@ -397,7 +399,7 @@ func (a *app) test(ctx context.Context, args []string) error {
 	case "boot":
 		return a.testBoot(ctx)
 	}
-	return fmt.Errorf("unknown test %q (want install, boot, scenario or scenarios)", args[0])
+	return fmt.Errorf("unknown test %q (want install, boot, scenario, scenarios or fixtures)", args[0])
 }
 
 // scenarioRun is one invocation of the scenario runner (layer 4).
@@ -406,6 +408,7 @@ type scenarioRun struct {
 	Reference, Capture, KVM bool
 	Names                   []string
 	All                     bool
+	Fixtures                bool
 }
 
 // scenarioSpec is the tester container that runs cmd/scenario: the ISO's
@@ -428,6 +431,9 @@ func scenarioSpec(r scenarioRun) (engine.RunSpec, error) {
 	if r.All {
 		cmd = append(cmd, "-all")
 	}
+	if r.Fixtures {
+		cmd = append(cmd, "-fixtures")
+	}
 	for _, n := range r.Names {
 		cmd = append(cmd, "-scenario", n)
 	}
@@ -447,6 +453,21 @@ func scenarioSpec(r scenarioRun) (engine.RunSpec, error) {
 // testScenarios cross-compiles cmd/scenario and runs it in the tester
 // container on the newest NuDanOS ISO, or on -reference-iso.
 func (a *app) testScenarios(ctx context.Context, names []string, all bool) error {
+	return a.runScenarioContainer(ctx, scenarioRun{Names: names, All: all})
+}
+
+// testFixtures loads every captured 2105 configuration on one NuDanOS
+// router, then boots one with a DPDK-only setting (plan 4).
+func (a *app) testFixtures(ctx context.Context) error {
+	if a.referenceISO != "" {
+		return fmt.Errorf("test fixtures runs on NuDanOS; drop -reference-iso")
+	}
+	return a.runScenarioContainer(ctx, scenarioRun{Fixtures: true})
+}
+
+// runScenarioContainer cross-compiles cmd/scenario and runs it in the tester
+// container on the newest NuDanOS ISO, or on -reference-iso.
+func (a *app) runScenarioContainer(ctx context.Context, r scenarioRun) error {
 	iso := a.referenceISO
 	if iso == "" {
 		isos, _ := filepath.Glob(filepath.Join(a.work, "image", "nudanos-*-amd64.iso"))
@@ -479,8 +500,8 @@ func (a *app) testScenarios(ctx context.Context, names []string, all bool) error
 		return err
 	}
 	_, kvmErr := os.Stat("/dev/kvm")
-	spec, err := scenarioSpec(scenarioRun{ISO: iso, Tests: tests, Work: work, Reference: a.referenceISO != "",
-		Capture: a.capture, KVM: kvmErr == nil, Names: names, All: all})
+	r.ISO, r.Tests, r.Work, r.Reference, r.Capture, r.KVM = iso, tests, work, a.referenceISO != "", a.capture, kvmErr == nil
+	spec, err := scenarioSpec(r)
 	if err != nil {
 		return err
 	}
@@ -589,7 +610,7 @@ func main() {
 	flag.BoolVar(&a.capture, "capture", false, "test scenario(s): write the 2105 references (needs -reference-iso)")
 	flag.Var(a.local, "local", "use a local checkout for a ready danos entry: name=dir (repeatable)")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "usage: distro-build [flags] builder|fetch|plan|build|repo|image|test install|boot|scenario <name>|scenarios|check-updates [name…]\n")
+		fmt.Fprintf(os.Stderr, "usage: distro-build [flags] builder|fetch|plan|build|repo|image|test install|boot|scenario <name>|scenarios|fixtures|check-updates [name…]\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()

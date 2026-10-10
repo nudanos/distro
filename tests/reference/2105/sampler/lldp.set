@@ -1,0 +1,3 @@
+# lldp: LLDP with legacy CDP and a management address
+set service lldp legacy-protocols cdp
+set service lldp management-address 10.0.2.15

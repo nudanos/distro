@@ -1,0 +1,5 @@
+# vrrp: a VRRP group with priority and preemption
+set interfaces dataplane dp0s3 address 192.0.2.1/24
+set interfaces dataplane dp0s3 vrrp vrrp-group 1 virtual-address 192.0.2.100/24
+set interfaces dataplane dp0s3 vrrp vrrp-group 1 priority 150
+set interfaces dataplane dp0s3 vrrp vrrp-group 1 preempt true

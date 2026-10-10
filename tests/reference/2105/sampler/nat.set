@@ -1,0 +1,4 @@
+# nat (DPDK-only): source NAT masquerade
+set service nat source rule 10 outbound-interface dp0s3
+set service nat source rule 10 source address 10.0.0.0/8
+set service nat source rule 10 translation address masquerade

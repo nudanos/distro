@@ -1,0 +1,7 @@
+# bgp-options: router id and a described neighbor with timers
+set protocols bgp 65000 parameters router-id 192.0.2.1
+set protocols bgp 65000 neighbor 192.0.2.2 remote-as 65001
+set protocols bgp 65000 neighbor 192.0.2.2 description 'sampler peer'
+set protocols bgp 65000 neighbor 192.0.2.2 timers keepalive 10
+set protocols bgp 65000 neighbor 192.0.2.2 timers holdtime 30
+set protocols bgp 65000 neighbor 192.0.2.2 address-family ipv4-unicast

@@ -1,0 +1,2 @@
+# syslog: a remote syslog host
+set system syslog host 192.0.2.60 facility all level err

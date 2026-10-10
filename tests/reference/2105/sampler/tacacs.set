@@ -1,0 +1,2 @@
+# tacacs: a TACACS+ server (test secret)
+set system login tacplus-server 192.0.2.50 secret sampler-secret

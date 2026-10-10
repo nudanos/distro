@@ -1,0 +1,6 @@
+# firewall (DPDK-only): a rule set applied to an interface
+set security firewall name SAMPLER default-action drop
+set security firewall name SAMPLER rule 10 action accept
+set security firewall name SAMPLER rule 10 protocol tcp
+set security firewall name SAMPLER rule 10 destination port 22
+set interfaces dataplane dp0s3 firewall in SAMPLER

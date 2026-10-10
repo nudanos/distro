@@ -1,0 +1,4 @@
+# snmp: a community, contact and location (test values)
+set service snmp community sampler-ro authorization ro
+set service snmp contact 'noc@example.net'
+set service snmp location 'sampler rack'

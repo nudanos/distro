@@ -1,0 +1,3 @@
+# bridge: a bridge with a data interface as member
+set interfaces bridge br0 address 198.51.100.1/24
+set interfaces dataplane dp0s4 bridge-group bridge br0

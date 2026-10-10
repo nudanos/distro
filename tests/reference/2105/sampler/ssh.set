@@ -1,0 +1,2 @@
+# ssh: a non-default port
+set service ssh port 2200

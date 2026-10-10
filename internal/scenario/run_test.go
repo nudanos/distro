@@ -286,67 +286,33 @@ checks:
 	}
 }
 
-// A router accepts logins before its boot configuration is committed
-// (system-configure runs after getty). Configuring then raced the boot
-// commit: "Commit already in progress", and a configd session opened
-// mid-boot-commit never got the lock (mpls-ldp, two hours). The boot
-// commit also ends the admin's console session on NuDanOS. The runner
-// waits for system-configure, logging in again when the session ends.
-func bootConsole(t *testing.T, answers []string) (*boottest.Console, *int) {
-	t.Helper()
-	opInterval = 10 * time.Millisecond
-	a, vm := net.Pipe()
-	t.Cleanup(func() { a.Close(); vm.Close() })
-	asked := 0
-	go func() {
-		b := make([]byte, 256)
-		for _, answer := range answers {
-			n, err := vm.Read(b)
-			if err != nil {
-				return
-			}
-			asked++
-			io.WriteString(vm, string(b[:n])+"\n"+strings.ReplaceAll(answer, "\n", "\r\n"))
-		}
-	}()
-	return boottest.NewConsole(a, &bytes.Buffer{}), &asked
-}
-
-func TestWaitBootedUntilSystemConfigureDone(t *testing.T) {
-	// systemctl ends its answer with a terminal escape on the console
-	c, asked := bootConsole(t, []string{"activating\x1b[m\nvyatta@r1:~$ ", "activating\nvyatta@r1:~$ ", "inactive\x1b[m\nvyatta@r1:~$ "})
-	if err := waitBooted(c, "vyatta", "pw", 5*time.Second); err != nil {
-		t.Fatal(err)
+// The sampler commits each <feature>.set on one 2105 router and captures it
+// under sampler/<feature>/, returning to the base configuration in between.
+func TestSamplerCapturesEachFeature(t *testing.T) {
+	fakeRun(t, map[string]string{
+		"show interfaces":             "dp0s3  -\ndp0s4  -\ndp0s5  -\ndp0s10  10.0.2.15/24\n",
+		"show configuration":          "system {\n\ttime-zone US/Pacific\n}\n",
+		"show configuration commands": "set system time-zone 'US/Pacific'\n",
+	}, nil)
+	tests := t.TempDir()
+	dir := filepath.Join(tests, "reference", "2105", "sampler")
+	os.MkdirAll(dir, 0o755)
+	os.WriteFile(filepath.Join(dir, "time-zone.set"), []byte("# time-zone\nset system time-zone US/Pacific\n"), 0o644)
+	work := t.TempDir()
+	res, err := Run(context.Background(), Options{Scenario: "sampler", ISO: "/iso/2105.iso", Capture: true, Reference: true,
+		refImage: &Image{Name: "2105", MemMB: 1792, User: "tmpuser", Password: "tmppwd", Live: true}, Work: work, Tests: tests})
+	if err != nil || !res.Passed {
+		t.Fatalf("Run = %+v, %v", res, err)
 	}
-	if *asked != 3 {
-		t.Errorf("asked %d times, want 3 (until system-configure finished)", *asked)
+	got, err := os.ReadFile(filepath.Join(dir, "time-zone", "commands.txt"))
+	if err != nil || !strings.Contains(string(got), "US/Pacific") {
+		t.Errorf("commands.txt = %q, %v", got, err)
 	}
-}
-
-func TestWaitBootedLogsInAgainWhenSessionEnds(t *testing.T) {
-	// the boot commit ends the session: the next command lands at a login prompt
-	c, asked := bootConsole(t, []string{
-		"\nnode login: ",          // the command was typed after the session ended
-		"\nnode login: ",          // Login nudges for a fresh prompt
-		"Password: ",              // user name
-		"\nvyatta@r1:~$ ",         // password
-		"inactive\nvyatta@r1:~$ ", // asked again in the new session
-	})
-	if err := waitBooted(c, "vyatta", "pw", 5*time.Second); err != nil {
-		t.Fatal(err)
+	if _, err := os.Stat(filepath.Join(dir, "time-zone", "config.boot")); err != nil {
+		t.Errorf("config.boot not captured: %v", err)
 	}
-	if *asked < 4 {
-		t.Errorf("console exchanges = %d; want a fresh login and a second question", *asked)
-	}
-}
-
-func TestWaitBootedWithoutSystemctl(t *testing.T) {
-	// 2105's admin shell is vbash-sandbox, which has no systemctl
-	c, asked := bootConsole(t, []string{"vbash-sandbox: systemctl: command not found\ntmpuser@r1:~$ "})
-	if err := waitBooted(c, "tmpuser", "pw", 5*time.Second); err != nil {
-		t.Fatal(err)
-	}
-	if *asked != 1 {
-		t.Errorf("asked %d times, want 1", *asked)
+	log, _ := os.ReadFile(filepath.Join(work, "2105", "sampler", "R1.log"))
+	if !strings.Contains(string(log), "<<load sampler-base.boot>>") {
+		t.Error("did not return to the base configuration")
 	}
 }

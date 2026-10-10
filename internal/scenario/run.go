@@ -51,6 +51,9 @@ type Result struct {
 // order (a failed check is recorded and the next still runs), captures or
 // compares its show output, and always stops every router.
 func Run(ctx context.Context, o Options) (res Result, err error) {
+	if o.Scenario == "sampler" {
+		return runSampler(ctx, o)
+	}
 	begin := time.Now()
 	defer func() { res.Duration = time.Since(begin) }()
 	f, err := Load(filepath.Join(o.Tests, "scenarios", o.Scenario, "scenario.yaml"))
@@ -129,7 +132,7 @@ func Run(ctx context.Context, o Options) (res Result, err error) {
 		if _, err := boottest.OpOutput(c, "export VYATTA_PAGER=cat; stty cols 250", t(time.Minute)); err != nil {
 			return res, fmt.Errorf("%s: %w", name, err)
 		}
-		if err := waitBooted(c, img.User, img.Password, t(20*time.Minute)); err != nil {
+		if err := boottest.WaitBooted(c, img.User, img.Password, t(20*time.Minute)); err != nil {
 			return res, fmt.Errorf("%s: %w", name, err)
 		}
 		if err := waitInterfaces(c, interfaces(specs, name), t(10*time.Minute)); err != nil {
@@ -258,44 +261,6 @@ func waitInterfaces(c *boottest.Console, names []string, timeout time.Duration) 
 			if !regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(n) + `\b`).MatchString(out) {
 				return fmt.Errorf("interface %s not listed yet:\n%s", n, out)
 			}
-		}
-		return nil
-	})
-}
-
-var stillBooting = regexp.MustCompile(`\bactivating\b`) // the console may append escape sequences
-
-// output through the next shell or login prompt (First returns the match)
-var (
-	throughOpPrompt    = regexp.MustCompile(`(?s)^.*?:~\$ $`)
-	throughLoginPrompt = regexp.MustCompile(`(?s)^.*?login: $`)
-)
-
-// waitBooted waits until system-configure, which commits the boot
-// configuration after getty has started, is no longer running: configuring
-// before then races the boot commit ("Commit already in progress"). The
-// boot commit ends the admin's session on NuDanOS; a login prompt where the
-// shell was means log in again. 2105's admin shell has no systemctl, and
-// that counts as booted.
-func waitBooted(c *boottest.Console, user, password string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	return retry(context.Background(), timeout, func() error {
-		c.Discard()
-		if err := c.Send("systemctl show -p ActiveState --value system-configure.service"); err != nil {
-			return err
-		}
-		i, out, err := c.First([]*regexp.Regexp{throughOpPrompt, throughLoginPrompt}, time.Minute)
-		if err != nil {
-			return err
-		}
-		if i == 1 {
-			if err := boottest.Login(c, user, password, boottest.LoginPrompt, time.Until(deadline)); err != nil {
-				return err
-			}
-			return fmt.Errorf("the boot commit ended the session; logged in again")
-		}
-		if stillBooting.MatchString(out) {
-			return fmt.Errorf("boot configuration still being committed (system-configure activating)")
 		}
 		return nil
 	})

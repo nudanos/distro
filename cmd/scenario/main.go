@@ -30,7 +30,14 @@ func main() {
 	flag.BoolVar(&o.KVM, "kvm", false, "use KVM (otherwise emulation)")
 	flag.StringVar(&o.Work, "work", "/work", "scratch directory")
 	flag.StringVar(&o.Tests, "tests", "/tests", "distro's tests/ directory")
+	fix := flag.Bool("fixtures", false, "load every captured 2105 configuration on one router, then the reboot test")
 	flag.Parse()
+	if *fix {
+		if !scenario.RunFixtures(context.Background(), o, os.Stdout) {
+			os.Exit(1)
+		}
+		return
+	}
 	list := []string(only)
 	if *all {
 		dirs, _ := filepath.Glob(filepath.Join(o.Tests, "scenarios", "*", "scenario.yaml"))
