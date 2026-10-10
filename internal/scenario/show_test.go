@@ -131,3 +131,12 @@ func TestNormalizeMasksDANOSBGPSummaryCounters(t *testing.T) {
 		t.Errorf("counters not masked:\n%q\n%q", a, b)
 	}
 }
+
+// A wrapped console line carries " \b" (space, backspace) where the
+// terminal redrew it: "Sta \bte/PfxRcd" displays as "State/PfxRcd".
+func TestNormalizeAppliesBackspaces(t *testing.T) {
+	got := Normalize("show protocols bgp all summary", "Up/Down Sta \bte/PfxRcd PfxSnt\n")
+	if want := "Up/Down State/PfxRcd PfxSnt\n"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}

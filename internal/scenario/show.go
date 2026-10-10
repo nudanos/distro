@@ -20,6 +20,7 @@ var (
 	anyNumber   = regexp.MustCompile(`\b\d+\b`)
 	trailingSpc = regexp.MustCompile(`[ \t]+\n`)
 	innerPad    = regexp.MustCompile(`(\S)[ \t]{2,}`)
+	backspaced  = regexp.MustCompile(`[^\n\x08]\x08`)
 )
 
 // Normalize replaces the parts of a show command's output that change from
@@ -28,6 +29,11 @@ var (
 // states) alone.
 func Normalize(command, output string) string {
 	out := output
+	// a wrapped console line carries "x\b" where the terminal redrew it
+	for strings.Contains(out, "\b") {
+		out = backspaced.ReplaceAllString(out, "")
+		out = strings.Replace(out, "\b", "", -1) // a backspace at line start
+	}
 	for _, re := range timeFields {
 		out = re.ReplaceAllString(out, "<time>")
 	}
