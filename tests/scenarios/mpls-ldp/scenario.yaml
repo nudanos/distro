@@ -1,0 +1,58 @@
+# MPLS LDP (new for NuDanOS; no DANOS suite). Reported, not gating.
+# OSPF area 0 gives loopback reachability; LDP runs over both links with
+# the loopbacks as transport addresses.
+name: mpls-ldp
+gating: false
+routers:
+  R1:
+    config:
+      - set interfaces loopback lo address 10.255.0.1/32
+      - set interfaces dataplane ${R1:R2} address 10.0.12.1/24
+      - set protocols ospf area 0 network 10.0.12.0/24
+      - set protocols ospf area 0 network 10.255.0.1/32
+      - set protocols mpls-ldp lsr-id 10.255.0.1
+      - set protocols mpls-ldp address-family ipv4 transport-address 10.255.0.1
+      - set protocols mpls-ldp address-family ipv4 discovery interfaces interface ${R1:R2}
+      - set protocols mpls-ldp address-family ipv4 label-policy allocate host-routes
+  R2:
+    config:
+      - set interfaces loopback lo address 10.255.0.2/32
+      - set interfaces dataplane ${R2:R1} address 10.0.12.2/24
+      - set interfaces dataplane ${R2:R3} address 10.0.23.2/24
+      - set protocols ospf area 0 network 10.0.12.0/24
+      - set protocols ospf area 0 network 10.0.23.0/24
+      - set protocols ospf area 0 network 10.255.0.2/32
+      - set protocols mpls-ldp lsr-id 10.255.0.2
+      - set protocols mpls-ldp address-family ipv4 transport-address 10.255.0.2
+      - set protocols mpls-ldp address-family ipv4 discovery interfaces interface ${R2:R1}
+      - set protocols mpls-ldp address-family ipv4 discovery interfaces interface ${R2:R3}
+      - set protocols mpls-ldp address-family ipv4 label-policy allocate host-routes
+  R3:
+    config:
+      - set interfaces loopback lo address 10.255.0.3/32
+      - set interfaces dataplane ${R3:R2} address 10.0.23.3/24
+      - set protocols ospf area 0 network 10.0.23.0/24
+      - set protocols ospf area 0 network 10.255.0.3/32
+      - set protocols mpls-ldp lsr-id 10.255.0.3
+      - set protocols mpls-ldp address-family ipv4 transport-address 10.255.0.3
+      - set protocols mpls-ldp address-family ipv4 discovery interfaces interface ${R3:R2}
+      - set protocols mpls-ldp address-family ipv4 label-policy allocate host-routes
+links:
+  - [R1, R2]
+  - [R2, R3]
+show:
+  - show protocols mpls-ldp neighbor
+  - show protocols mpls-ldp ipv4 binding
+checks:
+  - name: R2 has two operational LDP sessions
+    router: R2
+    timeout: 5m
+    op: {command: show protocols mpls-ldp neighbor, want: "OPERATIONAL[\\s\\S]*OPERATIONAL"}
+  - name: R1 holds a label from R2 for R3's loopback
+    router: R1
+    timeout: 5m
+    op: {command: show protocols mpls-ldp ipv4 binding, want: "10\\.255\\.0\\.3/32\\s+10\\.255\\.0\\.2\\s+\\S+\\s+(\\d+|imp-null)"}
+  - name: loopback to loopback ping over the LSP
+    router: R1
+    timeout: 3m
+    op: {command: "ping 10.255.0.3 count 3 interface 10.255.0.1", want: " 0% packet loss"}

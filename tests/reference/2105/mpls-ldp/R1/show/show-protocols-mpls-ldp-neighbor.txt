@@ -1,0 +1,2 @@
+AF   ID              State       Remote Address    Uptime
+ipv4 10.255.0.2      OPERATIONAL 10.255.0.2      00:03:10

@@ -1,0 +1,8 @@
+AF   Destination          Nexthop         Local Label Remote Label  In Use
+ipv4 10.255.0.1/32        10.255.0.1      16          imp-null         yes
+ipv4 10.255.0.1/32        10.255.0.3      16          16                no
+ipv4 10.255.0.2/32        10.255.0.1      imp-null    16                no
+ipv4 10.255.0.2/32        10.255.0.3      imp-null    17                no
+ipv4 10.255.0.3/32        10.255.0.1      17          17                no
+ipv4 10.255.0.3/32        10.255.0.3      17          imp-null         yes
+
