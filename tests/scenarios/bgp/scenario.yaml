@@ -310,6 +310,9 @@ checks:
     action:
       configure: ["set protocols bgp 200 parameters default local-pref 300"]
       commit: true
+  - name: "phase 8: reset R2's sessions so its peers get the new default (as the suite does; 2105's FRR does not re-advertise on its own)"
+    router: R2
+    op: {command: reset protocols bgp all neighbor, want: ""}
   - name: "local preference: R3's path from R2 carries localpref 300"
     router: R3
     timeout: 5m
