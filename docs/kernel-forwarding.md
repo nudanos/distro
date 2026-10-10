@@ -73,6 +73,35 @@ installs `dpdk-required` under those script names. Kernel-native `show arp` and
 | vyatta-op-stop-gnss-v1-yang | UfiSpace switch hardware |
 | vyatta-gnss-plugins-ublox | UfiSpace switch hardware |
 
+## 2105 configs at boot
+
+A DANOS 2105 configuration can hold settings only the DPDK dataplane
+implements (above, and the deviations in
+`vyatta-kernel-forwarding-deviations-v1`). One such node makes the whole
+boot configuration fail to load, so `vyatta-kernel-forwarding` sets them
+aside first:
+
+- `vyatta-boot-config-loader` (vyatta-cfg) runs every executable in
+  `/opt/vyatta/etc/boot-config.d/` as `<hook> <boot file>` before loading,
+  and logs `boot-config hook <name>: ok|failed (<status>)`. A failing hook
+  never stops the boot.
+- `50-dpdk-set-aside` removes the nodes listed in
+  `/usr/share/vyatta-kernel-forwarding/dpdk-only-paths` (one path per line,
+  `*` for a list key, a trailing `!auto` for "only when the value is not
+  auto", e.g. `interfaces dataplane * speed !auto`). When it removes
+  anything it keeps the untouched file once as `config.boot.2105-original`,
+  writes the removed nodes in config syntax to `config.boot.dpdk-only`, and
+  logs each path with tag `dpdk-set-aside`. With nothing to remove the boot
+  file keeps its bytes and its modification time.
+- While `/config/config.boot.dpdk-only` exists, `/etc/update-motd.d/60-dpdk-set-aside`
+  prints a login notice naming it.
+
+The path list is checked by `tests/set-aside-consistency.t` in the port:
+every deviation must be covered, and every package in the DPDK-only table
+above that ships a configuration YANG module needs a `# <package>` block in
+the list (run with `NUDANOS_KF_DOC` pointing at this file). Add a package
+here and its paths there together.
+
 ## Deferred to a later milestone
 
 | Package | Milestone | Why |
