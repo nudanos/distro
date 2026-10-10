@@ -19,6 +19,9 @@ import (
 // passwords) so the router can be logged into afterwards.
 func RebootTest(ctx context.Context, vm *topology.VM, ref Ref, user, password string, t func(time.Duration) time.Duration) error {
 	c := vm.Console
+	if err := restoreAdmin(c, user, password, t); err != nil {
+		return fmt.Errorf("restoring the administrator: %w", err)
+	}
 	sudo := "echo '" + password + "' | sudo -S "
 	if err := copyFile(c, "/tmp/reboot.boot", mergeBoot(ref.ConfigBoot, adminBoot(user, password)), t); err != nil {
 		return fmt.Errorf("copying config.boot: %w", err)
@@ -77,6 +80,42 @@ func RebootTest(ctx context.Context, vm *topology.VM, ref Ref, user, password st
 		return fmt.Errorf("%s", strings.Join(problems, "\n"))
 	}
 	return nil
+}
+
+// restoreAdmin configures user as an administrator again (the load check
+// replaced the configuration with 2105's, which does not have it, and took
+// it out of sudoers) and logs in anew, since groups apply to a new login.
+func restoreAdmin(c *boottest.Console, user, password string, t func(time.Duration) time.Duration) error {
+	c.Discard()
+	if err := c.Send("configure"); err != nil {
+		return err
+	}
+	if _, err := c.Expect(boottest.CfgDone, t(time.Minute)); err != nil {
+		return fmt.Errorf("configure: %w", err)
+	}
+	for _, l := range []string{
+		"set system login user " + user + " authentication plaintext-password '" + password + "'",
+		"set system login user " + user + " level admin",
+	} {
+		if err := boottest.Configure(c, l, t(time.Minute)); err != nil {
+			return fmt.Errorf("%q: %w", l, err)
+		}
+	}
+	if err := boottest.Commit(c, nil, 30*time.Second, t(20*time.Minute)); err != nil {
+		return err
+	}
+	c.Discard()
+	if err := c.Send("exit"); err != nil {
+		return err
+	}
+	if _, err := c.Expect(boottest.OpPrompt, t(time.Minute)); err != nil {
+		return err
+	}
+	c.Discard()
+	if err := c.Send("exit"); err != nil { // log out
+		return err
+	}
+	return boottest.Login(c, user, password, boottest.LoginPrompt, t(5*time.Minute))
 }
 
 var throughShell = regexp.MustCompile(`(?s)^.*?:~\$ $`)

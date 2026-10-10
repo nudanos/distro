@@ -227,10 +227,22 @@ func lines(s string, drop func(string) bool) map[string]bool {
 	return m
 }
 
+// parentOf reports whether line is a node above one of the set-aside lines:
+// setting aside every child of a node leaves the node itself.
+func parentOf(line string, aside map[string]bool) bool {
+	for a := range aside {
+		if strings.HasPrefix(a, line+" ") {
+			return true
+		}
+	}
+	return false
+}
+
 // compare reports what NuDanOS shows differently from 2105: lines missing
 // (other than the set-aside ones) and lines 2105 did not have.
 func compare(want, got string, pats []pattern) string {
 	w := lines(want, func(l string) bool { return setAside(l, pats) })
+	aside := lines(want, func(l string) bool { return !setAside(l, pats) })
 	g := lines(got, func(string) bool { return false })
 	var missing, extra []string
 	for l := range w {
@@ -239,7 +251,7 @@ func compare(want, got string, pats []pattern) string {
 		}
 	}
 	for l := range g {
-		if !w[l] {
+		if !w[l] && !parentOf(l, aside) {
 			extra = append(extra, l)
 		}
 	}

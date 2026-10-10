@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -25,6 +26,19 @@ const paths = "# comment\nsecurity firewall\ninterfaces dataplane * speed !auto\
 // and "show configuration commands" from show.
 func fakeRouter(t *testing.T, show string) *topology.VM {
 	t.Helper()
+	return fakeRouterPaths(t, show, paths)
+}
+
+var (
+	mu   sync.Mutex
+	seen []string // lines the fake router received
+)
+
+func fakeRouterPaths(t *testing.T, show, paths string) *topology.VM {
+	t.Helper()
+	mu.Lock()
+	seen = nil
+	mu.Unlock()
 	a, b := net.Pipe()
 	t.Cleanup(func() { a.Close(); b.Close() })
 	go func() {
@@ -73,9 +87,21 @@ func fakeRouter(t *testing.T, show string) *topology.VM {
 					reply += op
 				case mode == "cfg":
 					reply += cfg
+				case mode == "op" && line == "exit": // logout
+					mode = "user"
+					reply += "\r\nnode login: "
+				case mode == "user":
+					mode = "pass"
+					reply += "\r\nPassword: "
+				case mode == "pass":
+					mode = "op"
+					reply = "" + op
 				default:
 					reply += op
 				}
+				mu.Lock()
+				seen = append(seen, line)
+				mu.Unlock()
 				io.WriteString(b, reply)
 			}
 		}
@@ -146,5 +172,32 @@ func TestMergeBootAddsAdministrator(t *testing.T) {
 	want := "interfaces {\n\tdataplane dp0s3 {\n\t\tcpu-affinity 1\n\t}\n}\nsystem {\n\thost-name r1\n\tlogin {\n\t\tuser tmpuser {\n\t\t\tlevel admin\n\t\t}\n\t\tuser nudanos {\n\t\t\tauthentication {\n\t\t\t\tplaintext-password \"pw\"\n\t\t\t}\n\t\t\tlevel admin\n\t\t}\n\t}\n}\n"
 	if got != want {
 		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// Setting aside every child of a node leaves the node itself: NuDanOS shows
+// a bare "set interfaces dataplane dp0s3" where 2105 had only a qos policy.
+func TestCheckAcceptsParentOfSetAsideLines(t *testing.T) {
+	r := Ref{Name: "sampler/qos", ConfigBoot: "x\n", Commands: "set interfaces dataplane dp0s3 policy qos 'SAMPLER'\nset policy qos name SAMPLER shaper bandwidth '100Mbit'\nset system time-zone 'UTC'\n"}
+	vm := fakeRouterPaths(t, "set interfaces dataplane dp0s3\nset system time-zone 'UTC'\n", "interfaces * * policy\npolicy qos\n")
+	if f := Check(context.Background(), vm, []Ref{r}, identity); len(f) != 0 {
+		t.Fatalf("failures: %+v", f)
+	}
+}
+
+// After the load check the administrator is no longer configured (and no
+// longer in sudoers): the reboot test configures it again and logs in anew,
+// since groups apply to a new login.
+func TestRestoreAdminConfiguresAndLogsInAgain(t *testing.T) {
+	vm := fakeRouter(t, "")
+	if err := restoreAdmin(vm.Console, "nudanos", "pw", identity); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	got := strings.Join(seen, "|")
+	mu.Unlock()
+	want := "configure|set system login user nudanos authentication plaintext-password 'pw'|set system login user nudanos level admin|commit|exit|exit|nudanos|pw"
+	if got != want {
+		t.Errorf("console:\n%s\nwant:\n%s", got, want)
 	}
 }
