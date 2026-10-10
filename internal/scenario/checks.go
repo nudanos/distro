@@ -163,24 +163,30 @@ func ConfigureSession(con *boottest.Console, lines []string, commit bool, t func
 	if err != nil {
 		return err
 	}
-	for _, l := range lines {
-		if err := boottest.Configure(con, l, t(time.Minute)); err != nil {
-			return fmt.Errorf("%q: %w", l, err)
-		}
-	}
-	exit := "exit discard"
-	if commit {
-		if err := boottest.Commit(con, nil, 30*time.Second, t(20*time.Minute)); err != nil {
+	// a failure leaves the changes pending: discard them, or every later
+	// step fails ("Cannot load: configuration modified")
+	leave := func(exit string, cause error) error {
+		con.Discard()
+		if err := con.Send(exit); err != nil {
 			return err
 		}
-		exit = "exit"
+		if _, err := con.Expect(boottest.OpPrompt, t(time.Minute)); err != nil && cause == nil {
+			return err
+		}
+		return cause
 	}
-	con.Discard()
-	if err := con.Send(exit); err != nil {
-		return err
+	for _, l := range lines {
+		if err := boottest.Configure(con, l, t(time.Minute)); err != nil {
+			return leave("exit discard", fmt.Errorf("%q: %w", l, err))
+		}
 	}
-	_, err = con.Expect(boottest.OpPrompt, t(time.Minute))
-	return err
+	if !commit {
+		return leave("exit discard", nil)
+	}
+	if err := boottest.Commit(con, nil, 30*time.Second, t(20*time.Minute)); err != nil {
+		return leave("exit discard", err)
+	}
+	return leave("exit", nil)
 }
 
 // httpTimeout bounds one HTTP request before scaling.

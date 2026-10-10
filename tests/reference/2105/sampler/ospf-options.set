@@ -1,4 +1,5 @@
 # ospf-options: router id, a network, a passive interface and an interface cost
+set interfaces dataplane dp0s4 address 198.51.100.1/24
 set protocols ospf parameters router-id 192.0.2.1
 set protocols ospf area 0 network 192.0.2.0/24
 set protocols ospf passive-interface dp0s4

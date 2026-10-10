@@ -341,3 +341,38 @@ func TestHTTPTimeoutScales(t *testing.T) {
 		t.Fatalf("scaled x6: %v", err)
 	}
 }
+
+// A failed commit leaves the router in configuration mode with the changes
+// pending; ConfigureSession discards them and returns to operational mode,
+// or every later step fails ("Cannot load: configuration modified").
+func TestConfigureSessionDiscardsAfterFailedCommit(t *testing.T) {
+	a, vm := net.Pipe()
+	defer a.Close()
+	defer vm.Close()
+	var sent []string
+	go func() {
+		b := make([]byte, 256)
+		answers := []string{
+			"configure\r\n[edit]\r\nnudanos@r1# ",
+			"set protocols ospf passive-interface dp0s4\r\n[edit]\r\nnudanos@r1# ",
+			"commit\r\nInvalid interface name\r\nCommit failed!\r\n[edit]\r\nnudanos@r1# ",
+			"exit discard\r\nnudanos@r1:~$ ",
+		}
+		for _, answer := range answers {
+			n, err := vm.Read(b)
+			if err != nil {
+				return
+			}
+			sent = append(sent, strings.TrimSpace(string(b[:n])))
+			io.WriteString(vm, answer)
+		}
+	}()
+	c := boottest.NewConsole(a, &bytes.Buffer{})
+	err := ConfigureSession(c, []string{"set protocols ospf passive-interface dp0s4"}, true, func(d time.Duration) time.Duration { return d / 60 })
+	if err == nil {
+		t.Fatal("a failed commit returned no error")
+	}
+	if len(sent) != 4 || sent[3] != "exit discard" {
+		t.Errorf("sent %q; want the changes discarded with exit discard", sent)
+	}
+}
