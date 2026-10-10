@@ -1,3 +1,5 @@
-# qos (DPDK-only): a shaper policy on an interface
+# qos (DPDK-only): a shaper policy with a default profile on an interface
+set policy qos name SAMPLER shaper default SAMPLER-PROFILE
+set policy qos name SAMPLER shaper profile SAMPLER-PROFILE bandwidth 50Mbit
 set policy qos name SAMPLER shaper bandwidth 100Mbit
 set interfaces dataplane dp0s3 policy qos SAMPLER

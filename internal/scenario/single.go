@@ -148,6 +148,10 @@ func runSampler(ctx context.Context, o Options) (res Result, err error) {
 			return res, ctx.Err()
 		}
 		feature := strings.TrimSuffix(filepath.Base(in), ".set")
+		if _, err := os.Stat(filepath.Join(dir, feature, "config.boot")); err == nil {
+			fmt.Fprintf(r.log, "feature %s: already captured (delete its directory to recapture)\n", feature)
+			continue
+		}
 		fmt.Fprintf(r.log, "feature %s\n", feature)
 		lines, err := setLines(in)
 		if err != nil {

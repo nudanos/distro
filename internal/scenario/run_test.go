@@ -316,3 +316,35 @@ func TestSamplerCapturesEachFeature(t *testing.T) {
 		t.Error("did not return to the base configuration")
 	}
 }
+
+// A feature already captured is not committed again (delete its directory
+// to recapture), so fixing one input does not re-run all of them.
+func TestSamplerSkipsCapturedFeatures(t *testing.T) {
+	fakeRun(t, map[string]string{
+		"show interfaces":             "dp0s3  -\ndp0s4  -\ndp0s5  -\ndp0s10  10.0.2.15/24\n",
+		"show configuration":          "system {\n}\n",
+		"show configuration commands": "set system ntp server '192.0.2.123'\n",
+	}, nil)
+	tests := t.TempDir()
+	dir := filepath.Join(tests, "reference", "2105", "sampler")
+	os.MkdirAll(filepath.Join(dir, "dns"), 0o755)
+	os.WriteFile(filepath.Join(dir, "dns", "config.boot"), []byte("kept\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "dns.set"), []byte("set system domain-name example.net\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "ntp.set"), []byte("set system ntp server 192.0.2.123\n"), 0o644)
+	work := t.TempDir()
+	res, err := Run(context.Background(), Options{Scenario: "sampler", ISO: "/iso/2105.iso", Capture: true, Reference: true,
+		refImage: &Image{Name: "2105", MemMB: 1792, User: "tmpuser", Password: "tmppwd", Live: true}, Work: work, Tests: tests})
+	if err != nil || !res.Passed {
+		t.Fatalf("Run = %+v, %v", res, err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "dns", "config.boot")); string(b) != "kept\n" {
+		t.Errorf("dns recaptured: %q", b)
+	}
+	log, _ := os.ReadFile(filepath.Join(work, "2105", "sampler", "R1.log"))
+	if strings.Contains(string(log), "example.net") {
+		t.Error("dns was committed again")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "ntp", "commands.txt")); err != nil {
+		t.Errorf("ntp not captured: %v", err)
+	}
+}
