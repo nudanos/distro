@@ -121,3 +121,13 @@ func TestNormalizeCollapsesPadding(t *testing.T) {
 		t.Errorf("got %q, want %q", a, want)
 	}
 }
+
+// DANOS's own form of the BGP summary ("show protocols bgp all summary")
+// carries the same run-to-run counters as "show ip bgp summary".
+func TestNormalizeMasksDANOSBGPSummaryCounters(t *testing.T) {
+	a := Normalize("show protocols bgp all summary", "201.1.1.4 4 200 18 20 0 0 0 00:05:01 0 1\n")
+	b := Normalize("show protocols bgp all summary", "201.1.1.4 4 200 16 17 7 0 0 00:04:12 0 1\n")
+	if a != b {
+		t.Errorf("counters not masked:\n%q\n%q", a, b)
+	}
+}

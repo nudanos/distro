@@ -34,7 +34,8 @@ func Normalize(command, output string) string {
 	out = memoryUse.ReplaceAllString(out, "using <n> of memory")
 	out = tableVer.ReplaceAllString(out, "$1 <n>")
 	switch {
-	case strings.HasPrefix(command, "show ip bgp summary"), strings.HasPrefix(command, "show bgp summary"):
+	case strings.HasPrefix(command, "show ip bgp summary"), strings.HasPrefix(command, "show bgp summary"),
+		strings.HasPrefix(command, "show protocols bgp") && strings.HasSuffix(command, "summary"):
 		out = maskBGPCounters(out)
 	case strings.HasPrefix(command, "show dataplane"), strings.Contains(command, "counters"), strings.Contains(command, "statistics"):
 		out = maskCounters(out)
