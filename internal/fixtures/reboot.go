@@ -82,7 +82,7 @@ func RebootTest(ctx context.Context, vm *topology.VM, ref Ref, user, password st
 	return nil
 }
 
-// restoreAdmin configures user as an administrator again (the load check
+// restoreAdmin configures user as a superuser again (the load check
 // replaced the configuration with 2105's, which does not have it, and took
 // it out of sudoers) and logs in anew, since groups apply to a new login.
 func restoreAdmin(c *boottest.Console, user, password string, t func(time.Duration) time.Duration) error {
@@ -95,7 +95,7 @@ func restoreAdmin(c *boottest.Console, user, password string, t func(time.Durati
 	}
 	for _, l := range []string{
 		"set system login user " + user + " authentication plaintext-password '" + password + "'",
-		"set system login user " + user + " level admin",
+		"set system login user " + user + " level superuser", // only vyattasu may sudo (sudoers.d/0vyatta)
 	} {
 		if err := boottest.Configure(c, l, t(time.Minute)); err != nil {
 			return fmt.Errorf("%q: %w", l, err)
