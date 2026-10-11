@@ -46,7 +46,9 @@ func Normalize(command, output string) string {
 	case strings.HasPrefix(command, "show dataplane"), strings.Contains(command, "counters"), strings.Contains(command, "statistics"):
 		out = maskCounters(out)
 	}
-	if !strings.HasSuffix(out, "\n") && out != "" {
+	// blank lines around the output are console noise
+	out = strings.Trim(out, "\n")
+	if out != "" {
 		out += "\n"
 	}
 	// column padding follows the width of values masked above; leading

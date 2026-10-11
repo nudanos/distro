@@ -140,3 +140,12 @@ func TestNormalizeAppliesBackspaces(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+// A blank line before or after the output is console noise, not a difference.
+func TestNormalizeIgnoresSurroundingBlankLines(t *testing.T) {
+	a := Normalize("show vrrp", "\nInterface Group State\ndp0s3 10 MASTER\n\n")
+	b := Normalize("show vrrp", "Interface Group State\ndp0s3 10 MASTER\n")
+	if a != b {
+		t.Errorf("blank lines differ:\n%q\n%q", a, b)
+	}
+}

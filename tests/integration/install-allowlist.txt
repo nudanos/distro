@@ -13,6 +13,8 @@
 ^/etc/aliases$     created by the MTA's postinst and kept (Debian MTA convention)
 ^/etc/default/locale$  written by locales and the image's locale setup; kept
 ^/etc/(shadow|gshadow)-$   backups written by useradd/groupadd
+^/etc/(subuid|subgid)-$   backups written by adduser/useradd, like shadow-
+^/home/tacacs([0-9]|1[0-5])(/\.(bash_logout|bashrc|profile))?$   homes of the TACACS+ mapped accounts libtacplus-map1 creates; Debian keeps user accounts and their homes on purge
 ^/etc/machine-id$  systemd machine identity
 ^/etc/vconsole\.conf$  systemd console configuration
 ^/etc/inetd\.conf$     created by the inetd tooling of telnetd; kept
