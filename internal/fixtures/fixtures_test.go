@@ -196,7 +196,7 @@ func TestRestoreAdminConfiguresAndLogsInAgain(t *testing.T) {
 	mu.Lock()
 	got := strings.Join(seen, "|")
 	mu.Unlock()
-	want := "configure|set system login user nudanos authentication plaintext-password 'pw'|set system login user nudanos level superuser|commit|exit|exit|nudanos|pw"
+	want := "configure|set system login user nudanos authentication plaintext-password 'pw'|set system login user nudanos level superuser|commit|exit|exit|nudanos|pw|export VYATTA_PAGER=cat; stty cols 250"
 	if got != want {
 		t.Errorf("console:\n%s\nwant:\n%s", got, want)
 	}

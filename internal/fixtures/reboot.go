@@ -51,6 +51,9 @@ func RebootTest(ctx context.Context, vm *topology.VM, ref Ref, user, password st
 	if err != nil {
 		return err
 	}
+	if err := shellSetup(c, t); err != nil {
+		return err
+	}
 	list, err := boottest.OpOutput(c, "cat "+pathsFile, t(time.Minute))
 	if err != nil {
 		return err
@@ -115,7 +118,18 @@ func restoreAdmin(c *boottest.Console, user, password string, t func(time.Durati
 	if err := c.Send("exit"); err != nil { // log out
 		return err
 	}
-	return boottest.Login(c, user, password, boottest.LoginPrompt, t(5*time.Minute))
+	if err := boottest.Login(c, user, password, boottest.LoginPrompt, t(5*time.Minute)); err != nil {
+		return err
+	}
+	return shellSetup(c, t)
+}
+
+// shellSetup makes a new login's show output unpaged and unwrapped, as the
+// runner's first login does; a paged "show configuration commands" waits
+// for a key for ever.
+func shellSetup(c *boottest.Console, t func(time.Duration) time.Duration) error {
+	_, err := boottest.OpOutput(c, "export VYATTA_PAGER=cat; stty cols 250", t(time.Minute))
+	return err
 }
 
 var throughShell = regexp.MustCompile(`(?s)^.*?:~\$ $`)
