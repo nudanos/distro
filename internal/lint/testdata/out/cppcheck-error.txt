@@ -1,0 +1,1 @@
+syntax.c:1:syntaxError:Unmatched '{'. Configuration: ''.

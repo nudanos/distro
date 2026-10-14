@@ -1,0 +1,2 @@
+************* Module syntax
+syntax.py:1: [E0001(syntax-error), ] Parsing failed: 'invalid syntax (syntax, line 1)'

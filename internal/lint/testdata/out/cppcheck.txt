@@ -1,0 +1,4 @@
+bad.c:1:arrayIndexOutOfBounds:Array 'a[2]' accessed at index 2, which is out of bounds.
+bad.c:1:constVariable:Variable 'a' can be declared as const array
+bad.c:1:uninitvar:Uninitialized variable: a
+bad.c:1:unassignedVariable:Variable 'a' is not assigned a value.

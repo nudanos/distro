@@ -1,0 +1,7 @@
+************* Module bad
+bad.py:2: [C0103(invalid-name), ] Constant name "x" doesn't conform to UPPER_CASE naming style
+bad.py:1: [W0611(unused-import), ] Unused import os
+
+-----------------------------------
+Your code has been rated at 0.00/10
+

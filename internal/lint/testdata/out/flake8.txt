@@ -1,0 +1,2 @@
+bad.py:1:1: F401 'os' imported but unused
+bad.py:2:2: E225 missing whitespace around operator
