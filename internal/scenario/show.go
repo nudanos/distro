@@ -43,6 +43,8 @@ func Normalize(command, output string) string {
 	case strings.HasPrefix(command, "show ip bgp summary"), strings.HasPrefix(command, "show bgp summary"),
 		strings.HasPrefix(command, "show protocols bgp") && strings.HasSuffix(command, "summary"):
 		out = maskBGPCounters(out)
+	case strings.HasPrefix(command, "show protocols ospf neighbor"), strings.HasPrefix(command, "show ip ospf neighbor"):
+		out = maskOSPFNeighbors(out)
 	case strings.HasPrefix(command, "show dataplane"), strings.Contains(command, "counters"), strings.Contains(command, "statistics"):
 		out = maskCounters(out)
 	}
@@ -67,6 +69,23 @@ func maskBGPCounters(out string) string {
 			f[3], f[4], f[5] = "<n>", "<n>", "<n>"
 			lines[i] = strings.Join(f, " ")
 		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// maskOSPFNeighbors masks the three queue lengths (RXmtL RqstL DBsmL) that
+// end each neighbor line: they are momentary. The DR/BDR role is a fact the
+// scenario checks and stays (scenarios fix it with interface priorities).
+func maskOSPFNeighbors(out string) string {
+	lines := strings.Split(out, "\n")
+	for i, l := range lines {
+		f := strings.Fields(l)
+		if len(f) < 6 || net.ParseIP(f[0]) == nil {
+			continue
+		}
+		n := len(f)
+		f[n-3], f[n-2], f[n-1] = "<n>", "<n>", "<n>"
+		lines[i] = strings.Join(f, " ")
 	}
 	return strings.Join(lines, "\n")
 }

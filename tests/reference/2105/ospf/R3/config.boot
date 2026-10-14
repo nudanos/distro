@@ -1,6 +1,11 @@
 interfaces {
 	dataplane dp0s3 {
 		address 10.0.23.3/24
+		ip {
+			ospf {
+				priority 0
+			}
+		}
 	}
 	dataplane dp0s10 {
 		address 10.0.2.15/24

@@ -1,4 +1,5 @@
 set interfaces dataplane dp0s3 address 10.0.23.3/24
+set interfaces dataplane dp0s3 ip ospf priority 0
 set interfaces dataplane dp0s10 address 10.0.2.15/24
 set interfaces loopback lo address 10.255.0.3/32
 set protocols ospf area 1 network 10.0.23.0/24

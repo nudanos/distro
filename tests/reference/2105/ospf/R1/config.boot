@@ -4,6 +4,7 @@ interfaces {
 		ip {
 			ospf {
 				cost 100
+				priority 0
 			}
 		}
 	}

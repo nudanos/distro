@@ -132,6 +132,22 @@ func TestNormalizeMasksDANOSBGPSummaryCounters(t *testing.T) {
 	}
 }
 
+// The retransmit/request/DB-summary queue lengths that end an OSPF neighbor
+// line are momentary (RXmtL was 1 on a KVM run, 0 on 2105); the role
+// (Full/DR) is a routing fact and is kept (TestNormalizeKeepsRoutingFacts).
+func TestNormalizeMasksOSPFNeighborQueues(t *testing.T) {
+	cmd := "show protocols ospf neighbor"
+	a := Normalize(cmd, "10.255.0.2 1 Full/DR 00:01:02 00:00:35 10.0.12.2 dp0s3:10.0.12.1 0 0 0\n")
+	b := Normalize(cmd, "10.255.0.2 1 Full/DR 00:00:41 00:00:38 10.0.12.2 dp0s3:10.0.12.1 1 0 0\n")
+	if a != b {
+		t.Errorf("queues not masked:\n%q\n%q", a, b)
+	}
+	c := Normalize(cmd, "10.255.0.2 1 Full/Backup 00:00:41 00:00:38 10.0.12.2 dp0s3:10.0.12.1 0 0 0\n")
+	if a == c {
+		t.Errorf("the DR/BDR role was masked: %q", a)
+	}
+}
+
 // A wrapped console line carries " \b" (space, backspace) where the
 // terminal redrew it: "Sta \bte/PfxRcd" displays as "State/PfxRcd".
 func TestNormalizeAppliesBackspaces(t *testing.T) {
