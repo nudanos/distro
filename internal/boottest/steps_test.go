@@ -20,8 +20,10 @@ const (
 
 // installer replays vyatta-install-image's prompts in the order a live-ISO
 // install asks them (layer 3 transcript, 2026-10-03) and records what the
-// test typed after each.
-func installer(t *testing.T, vm net.Conn, got chan<- []string) {
+// test typed after each. With split, a prompt ending in "]: " arrives in two
+// writes, "...]" and then ": ", as the installer's output reached the console
+// under KVM (scenario base install, 2026-10-14).
+func installer(t *testing.T, vm net.Conn, got chan<- []string, split bool) {
 	t.Helper()
 	var replies []string
 	read := func() string {
@@ -30,6 +32,11 @@ func installer(t *testing.T, vm net.Conn, got chan<- []string) {
 		return strings.TrimSuffix(string(b[:n]), "\r")
 	}
 	ask := func(prompt string) {
+		if head, ok := strings.CutSuffix(prompt, ": "); split && ok && strings.HasSuffix(head, "]") {
+			io.WriteString(vm, head)
+			time.Sleep(20 * time.Millisecond)
+			prompt = ": "
+		}
 		io.WriteString(vm, prompt)
 		replies = append(replies, read())
 	}
@@ -76,12 +83,23 @@ func installer(t *testing.T, vm net.Conn, got chan<- []string) {
 }
 
 func TestInstallStepsAnswersTheRealInstaller(t *testing.T) {
+	testInstallSteps(t, false)
+}
+
+// Under KVM the default-answer rule saw "Continue (Yes/No) [No]" before its
+// ": " arrived, answered the default (No) and the install never wrote the
+// disk; the overwrite confirmation must still get "Yes".
+func TestInstallStepsAnswersPromptsSplitBeforeTheColon(t *testing.T) {
+	testInstallSteps(t, true)
+}
+
+func testInstallSteps(t *testing.T, split bool) {
 	a, vm := net.Pipe()
 	defer a.Close()
 	defer vm.Close()
 	c := NewConsole(a, &bytes.Buffer{})
 	got := make(chan []string, 1)
-	go installer(t, vm, got)
+	go installer(t, vm, got, split)
 	if err := InstallImage(c, adminUser, testPassword, func(d time.Duration) time.Duration { return d / 600 }); err != nil {
 		t.Fatal(err)
 	}

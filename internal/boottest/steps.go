@@ -37,9 +37,12 @@ func InstallImage(c *Console, admin, password string, t func(time.Duration) time
 	// keeps its default. A blanket "Yes" would also accept "set up a grub
 	// password?". A default is accepted only after "?", ")" or the console
 	// questions' last word: progress lines end in brackets too ("Creating new
-	// disk_label on [vda]: ", a kernel timestamp "[  300.1]").
+	// disk_label on [vda]: ", a kernel timestamp "[  300.1]"). The ": " after
+	// a bracket can arrive in a later read (seen under KVM), so the Continue
+	// rule must match without it; it starts earlier in the line than the
+	// default rule's ")", so the earliest match is still "Yes".
 	rules := []Rule{
-		{Prompt: regexp.MustCompile(`Continue[^\r\n]*\(Yes/No\) \[No\]: ?$`), Reply: "Yes"},
+		{Prompt: regexp.MustCompile(`Continue[^\r\n]*\(Yes/No\) \[No\]:? ?$`), Reply: "Yes"},
 		{Prompt: regexp.MustCompile(`Enter username for administrator account: $`), Reply: admin},
 		{Prompt: regexp.MustCompile(`(?:\?|\)|console|speed) \[[^\]\r\n]*\]:? ?$`), Reply: ""}, // accept the default
 	}
