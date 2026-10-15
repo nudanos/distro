@@ -26,6 +26,7 @@ import (
 	"github.com/nudanos/distro/internal/fetch"
 	"github.com/nudanos/distro/internal/imagebuild"
 	"github.com/nudanos/distro/internal/installtest"
+	"github.com/nudanos/distro/internal/lint"
 	"github.com/nudanos/distro/internal/manifest"
 	"github.com/nudanos/distro/internal/plan"
 	"github.com/nudanos/distro/internal/updates"
@@ -197,25 +198,61 @@ func graph(dirs map[string]string) (*plan.Graph, [][]string, error) {
 const lintProfile = "lintian-profile-vyatta"
 
 // packageLog opens work/logs/<name>.log (truncated) for one package's build.
-func packageLog(work, name string) (io.WriteCloser, error) {
+// With lintFlags (an in-scope port, built with -Wall -Wextra) the log starts
+// with lint.FlagsMarker, so lint can tell it from a log that predates them.
+func packageLog(work, name string, lintFlags bool) (io.WriteCloser, error) {
 	dir := filepath.Join(work, "logs")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
-	return os.Create(filepath.Join(dir, name+".log"))
+	f, err := os.Create(filepath.Join(dir, name+".log"))
+	if err != nil || !lintFlags {
+		return f, err
+	}
+	if _, err := fmt.Fprintln(f, lint.FlagsMarker); err != nil {
+		f.Close()
+		return nil, err
+	}
+	return f, nil
 }
 
 // buildEnv is the environment for one package build.
-func buildEnv(name string, uid, gid, jobs int, profiles []string) map[string]string {
+// lintFlags adds the code-quality compiler warnings (spec 2026-10-14 §3)
+// for an in-scope port.
+func buildEnv(name string, uid, gid, jobs int, profiles []string, lintFlags bool) map[string]string {
 	env := map[string]string{"PKG": name, "HOST_UID": strconv.Itoa(uid), "HOST_GID": strconv.Itoa(gid),
 		"JOBS": strconv.Itoa(jobs)}
 	if len(profiles) > 0 {
 		env["DEB_BUILD_PROFILES"] = strings.Join(profiles, " ")
 	}
+	if lintFlags {
+		env["DEB_CFLAGS_MAINT_APPEND"] = warningFlags
+		env["DEB_CXXFLAGS_MAINT_APPEND"] = warningFlags
+	}
 	return env
 }
 
+// warningFlags are added to the compiler flags of in-scope ports.
+const warningFlags = "-Wall -Wextra"
+
+// inScope lists the ports the code-quality work covers (spec 2026-10-14 §1):
+// ready danos entries of milestone 1.0, sorted.
+func inScope(m *manifest.Manifest) []string {
+	var out []string
+	for _, e := range m.Packages {
+		if e.Kind == manifest.Danos && e.Milestone == "1.0" && e.Ready {
+			out = append(out, e.Name)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 func (a *app) containerBuild(m *manifest.Manifest) build.Func {
+	scope := map[string]bool{}
+	for _, n := range inScope(m) {
+		scope[n] = true
+	}
 	profiles := map[string][]string{}
 	for _, e := range m.Packages {
 		if len(e.Profiles) > 0 {
@@ -224,7 +261,7 @@ func (a *app) containerBuild(m *manifest.Manifest) build.Func {
 	}
 	return func(ctx context.Context, name, src, outDir string) error {
 		u, g := a.eng.OwnerIDs(os.Getuid(), os.Getgid())
-		lf, err := packageLog(a.work, name)
+		lf, err := packageLog(a.work, name, scope[name])
 		if err != nil {
 			return err
 		}
@@ -237,7 +274,7 @@ func (a *app) containerBuild(m *manifest.Manifest) build.Func {
 				{Host: a.outRoot(), Container: "/pool", ReadOnly: true},
 				{Host: outDir, Container: "/out"},
 			},
-			Env: buildEnv(name, u, g, max(1, runtime.NumCPU()/max(1, a.jobs)), profiles[name]),
+			Env: buildEnv(name, u, g, max(1, runtime.NumCPU()/max(1, a.jobs)), profiles[name], scope[name]),
 			Cmd: []string{"/usr/local/bin/build-package"},
 		}, out, out)
 	}
@@ -745,6 +782,12 @@ func keyExtras(m *manifest.Manifest) map[string]string {
 			sort.Strings(p)
 			out[e.Name] = "profiles=" + strings.Join(p, ",")
 		}
+	}
+	for _, n := range inScope(m) {
+		if out[n] != "" {
+			out[n] += ";"
+		}
+		out[n] += "flags=wall-wextra"
 	}
 	return out
 }

@@ -21,3 +21,36 @@
 
    Commit each fix separately, with the reason in the message.
 5. **Record, then push.** Commit and push `ready: true` in `manifest.yaml` **first**: each push triggers the package CI, which rejects `-local` for an entry that isn't ready yet. Then push `trixie` and add `.github/workflows/package.yml` (the caller: `uses: nudanos/distro/.github/workflows/package.yml@main`, `with: package: <repo>`).
+
+## Code quality: lint and staticcheck
+
+`distro-build lint` checks every ready 1.0 port
+(`docs/superpowers/specs/2026-10-14-code-quality-design.md`). Two of its checks
+come from the package build log (`work/logs/<name>.log`), not from the lint
+image:
+
+- **C and C++** ports are built with `-Wall -Wextra` added
+  (`DEB_CFLAGS_MAINT_APPEND`, `DEB_CXXFLAGS_MAINT_APPEND`). Every `warning:` in
+  the port's own files is a finding.
+- **Go** ports run staticcheck in their build, next to `go vet`, because it
+  needs the build's dependencies. Add `go-staticcheck <!nocheck>` to
+  Build-Depends and this target, run after `vet` in `override_dh_auto_build`,
+  using the same package list and `GOPATH` as the port's `vet` target:
+
+  ```make
+  override_dh_auto_build: vet staticcheck
+  	dh_auto_build
+
+  staticcheck:
+  	GOPATH=$(GO_PATH) staticcheck <packages> 2>&1 | sed 's/^/nudanos-staticcheck: /' || true
+  	@echo 'nudanos-staticcheck: done'
+  ```
+
+  The build does not fail on staticcheck findings; lint counts them. A Go
+  port whose log lacks `nudanos-staticcheck: done` has the finding
+  `staticcheck-not-run`.
+
+A finding is silenced only inline, in the tool's own syntax, with
+`reason: <why>` on the same line; lint fails on a suppression without one. A
+port's only other exception is `nudanos-lint.yaml` with a `skip:` list of
+paths (generated files, test data).
