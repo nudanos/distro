@@ -1,0 +1,2 @@
+# NuDanOS shared perltidy profile: perltidy defaults, 100-column lines.
+--maximum-line-length=100

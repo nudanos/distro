@@ -1,0 +1,4 @@
+# NuDanOS: pylint defaults without docstring and naming-convention checks;
+# import-error because ports' Python dependencies are not installed here.
+[MESSAGES CONTROL]
+disable=missing-module-docstring,missing-class-docstring,missing-function-docstring,invalid-name,import-error

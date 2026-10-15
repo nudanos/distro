@@ -1,0 +1,2 @@
+# NuDanOS: perlcritic at severity 3 ("harsh"); severity 1 is mostly POD and version noise.
+severity = 3
