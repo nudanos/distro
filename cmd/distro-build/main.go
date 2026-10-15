@@ -79,6 +79,7 @@ type app struct {
 	smoke                                         bool
 	referenceISO                                  string
 	capture                                       bool
+	initBaseline, updateBaseline                  bool
 }
 
 func (a *app) outRoot() string { return filepath.Join(a.work, "out") }
@@ -308,6 +309,8 @@ func (a *app) run(ctx context.Context, cmd string, names []string) error {
 		return a.checkUpdates(ctx)
 	case "image":
 		return a.buildImage(ctx)
+	case "lint":
+		return a.lintCmd(ctx, names)
 	case "test":
 		return a.test(ctx, names)
 	default:
@@ -646,8 +649,10 @@ func main() {
 	flag.StringVar(&a.referenceISO, "reference-iso", "", "test scenario(s): run on this DANOS 2105 ISO instead of the NuDanOS one")
 	flag.BoolVar(&a.capture, "capture", false, "test scenario(s): write the 2105 references (needs -reference-iso)")
 	flag.Var(a.local, "local", "use a local checkout for a ready danos entry: name=dir (repeatable)")
+	flag.BoolVar(&a.initBaseline, "init-baseline", false, "lint: write lint-baseline.json from today's counts (refuses if it exists)")
+	flag.BoolVar(&a.updateBaseline, "update-baseline", false, "lint: lower the linted ports in lint-baseline.json to their counts")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "usage: distro-build [flags] builder|fetch|plan|build|repo|image|test install|boot|scenario <name>|scenarios|fixtures|check-updates [name…]\n")
+		fmt.Fprintf(os.Stderr, "usage: distro-build [flags] builder|fetch|plan|build|repo|image|lint|test install|boot|scenario <name>|scenarios|fixtures|check-updates [name…]\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()

@@ -184,3 +184,37 @@ func TestPackageLogWritesFlagsLine(t *testing.T) {
 		}
 	}
 }
+
+// The port is mounted read-only and the analyzers get no network.
+func TestLintSpecMounts(t *testing.T) {
+	spec := lintSpec("vyatta-cfg", "/w/src/vyatta-cfg", "/tmp/bin")
+	mounts := map[string]engine.Mount{}
+	for _, m := range spec.Mounts {
+		mounts[m.Container] = m
+	}
+	if m := mounts["/src"]; m.Host != "/w/src/vyatta-cfg" || !m.ReadOnly {
+		t.Errorf("/src mount = %+v", m)
+	}
+	if m := mounts["/usr/local/bin/lint"]; m.Host != "/tmp/bin/lint" || !m.ReadOnly {
+		t.Errorf("binary mount = %+v", m)
+	}
+	if spec.Image != "nudanos/lint:trixie" || spec.Network != "none" {
+		t.Errorf("image %q network %q", spec.Image, spec.Network)
+	}
+	if got := strings.Join(spec.Cmd, " "); got != "lint -port vyatta-cfg /src" {
+		t.Errorf("cmd %q", got)
+	}
+}
+
+func TestLintNamedOutOfScopeIsAnError(t *testing.T) {
+	m := lintScopeManifest()
+	if got, err := lintTargets(m, nil); err != nil || !reflect.DeepEqual(got, []string{"dp", "vyatta-cfg"}) {
+		t.Errorf("all: %v %v", got, err)
+	}
+	if got, err := lintTargets(m, []string{"vyatta-cfg"}); err != nil || !reflect.DeepEqual(got, []string{"vyatta-cfg"}) {
+		t.Errorf("named: %v %v", got, err)
+	}
+	if _, err := lintTargets(m, []string{"frr"}); err == nil || !strings.Contains(err.Error(), "frr") {
+		t.Errorf("out of scope accepted: %v", err)
+	}
+}
