@@ -147,7 +147,10 @@ func TestInScopeIsReadyDanos10(t *testing.T) {
 
 func TestBuildEnvAddsWarningFlagsInScope(t *testing.T) {
 	env := buildEnv("vyatta-cfg", 0, 0, 1, nil, true)
-	if env["DEB_CFLAGS_MAINT_APPEND"] != "-Wall -Wextra" || env["DEB_CXXFLAGS_MAINT_APPEND"] != "-Wall -Wextra" {
+	// -Wno-error: a port's own -Werror must not turn the added warnings into
+	// build failures (vyatta-cfg, lu broke the 2026-10-15 nightly); lint counts them.
+	const want = "-Wall -Wextra -Wno-error"
+	if env["DEB_CFLAGS_MAINT_APPEND"] != want || env["DEB_CXXFLAGS_MAINT_APPEND"] != want {
 		t.Errorf("in scope: %v", env)
 	}
 	if _, ok := buildEnv("frr", 0, 0, 1, nil, false)["DEB_CFLAGS_MAINT_APPEND"]; ok {
@@ -159,10 +162,10 @@ func TestBuildEnvAddsWarningFlagsInScope(t *testing.T) {
 // rebuild with them, others keep their cache.
 func TestKeyExtrasIncludeFlagsInScope(t *testing.T) {
 	got := keyExtras(lintScopeManifest())
-	if got["vyatta-cfg"] != "flags=wall-wextra" {
+	if got["vyatta-cfg"] != "flags=wall-wextra-noerror" {
 		t.Errorf("vyatta-cfg = %q", got["vyatta-cfg"])
 	}
-	if got["dp"] != "profiles=pkg.a,pkg.b;flags=wall-wextra" {
+	if got["dp"] != "profiles=pkg.a,pkg.b;flags=wall-wextra-noerror" {
 		t.Errorf("dp = %q", got["dp"])
 	}
 	if _, ok := got["frr"]; ok {

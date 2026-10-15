@@ -29,8 +29,9 @@
 come from the package build log (`work/logs/<name>.log`), not from the lint
 image:
 
-- **C and C++** ports are built with `-Wall -Wextra` added
-  (`DEB_CFLAGS_MAINT_APPEND`, `DEB_CXXFLAGS_MAINT_APPEND`). Every `warning:` in
+- **C and C++** ports are built with `-Wall -Wextra -Wno-error` added
+  (`DEB_CFLAGS_MAINT_APPEND`, `DEB_CXXFLAGS_MAINT_APPEND`; `-Wno-error` keeps a
+  port's own `-Werror` from failing the build on them). Every `warning:` in
   the port's own files is a finding.
 - **Go** ports run staticcheck in their build, next to `go vet`, because it
   needs the build's dependencies. Add `go-staticcheck <!nocheck>` to

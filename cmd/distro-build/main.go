@@ -233,8 +233,10 @@ func buildEnv(name string, uid, gid, jobs int, profiles []string, lintFlags bool
 	return env
 }
 
-// warningFlags are added to the compiler flags of in-scope ports.
-const warningFlags = "-Wall -Wextra"
+// warningFlags are added to the compiler flags of in-scope ports. -Wno-error
+// comes last so a port's own -Werror does not turn the added warnings into
+// build failures: lint counts them from the log instead.
+const warningFlags = "-Wall -Wextra -Wno-error"
 
 // inScope lists the ports the code-quality work covers (spec 2026-10-14 §1):
 // ready danos entries of milestone 1.0, sorted.
@@ -792,7 +794,7 @@ func keyExtras(m *manifest.Manifest) map[string]string {
 		if out[n] != "" {
 			out[n] += ";"
 		}
-		out[n] += "flags=wall-wextra"
+		out[n] += "flags=wall-wextra-noerror"
 	}
 	return out
 }
