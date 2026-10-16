@@ -333,16 +333,25 @@ reports the Debian 13 base and the expected FRR and kernel versions.
 
 ### 8.4 Layer 4: scenarios (nightly, release gate)
 
-`distro-build test --topology <name>` starts 2–4 QEMU VMs connected by socket
-networks. The existing Robot suites (`tests` repo) are adapted: kernel interface
-names instead of `dp0sX`, and `vymgmt` (abandoned 2016) replaced by a small SSH
-helper. Config goes through REST/NETCONF where possible.
+`distro-build test scenario <name>` and `test scenarios` run a Go runner
+(`cmd/scenario`, inside the `nudanos/tester` container) that starts 1–4 QEMU
+routers joined by socket links and drives them through their serial consoles,
+checking over the console (operational commands, configuration actions), HTTPS
+(REST), SNMP and SSH logins; a TACACS+ server runs inside the runner. A
+scenario is a YAML file, `tests/scenarios/<name>/scenario.yaml`: routers and
+their configuration, links, ordered checks, the `show` commands compared with
+2105 (optionally captured at a marked point), and whether it gates. The Robot
+suites of the `tests` repo are the source of the test cases (each scenario's
+README maps its checks to suite cases); they are not run. The runner waits for
+the boot configuration commit before configuring, retries what the network
+needs time for, logs every failed attempt, and keeps transcripts in
+`work/scenarios/<image>/<scenario>/`.
 
 | Scenario | Checkpoint |
 |---|---|
-| BGP (existing suite), OSPF, VRRP, REST API (existing suite) | 1.0 |
-| MPLS-LDP (existing suite, if kernel MPLS covers it) | 1.0, non-gating |
-| SNMP walk, TACACS+ login (tacplus server container) | 1.0 |
+| BGP (existing suite, ten phases), OSPF, VRRP, REST API (existing suite) | 1.0 |
+| MPLS-LDP (existing suite, if kernel MPLS covers it) | 1.0, non-gating: passes on the build server since 2026-10-14 (vyatta-base 1.12, KVM); the earlier "sessions do not establish" result was not re-investigated; gating once it passes in the nightly |
+| SNMP walk, TACACS+ login (pam_tacplus/nss_tacplus; the server runs in the runner) | 1.0 |
 | Kea DHCP server + dhcpcd client | 1.1 (DHCP) |
 | NETCONF get-config / edit-config | 1.1 (NETCONF) |
 | strongswan site-to-site IPsec (existing suite) | 1.1 (VPN) |
@@ -350,11 +359,28 @@ helper. Config goes through REST/NETCONF where possible.
 
 ### 8.5 2105 compatibility fixtures
 
-Boot `binaries/danos-2105-base-amd64.iso` (SHA-256 verified) in QEMU once per
-scenario to capture reference `config.boot` files and `show` outputs, stored in
-`distro/tests/reference/2105/`. Every 2105 config must load unchanged on the new
-build. `show` differences are reviewed and either accepted (e.g. FRR 10.7
-formatting) or fixed.
+The DANOS 2105 ISO (SHA-256 verified) is booted only on a developer's machine,
+never in CI, and never committed or uploaded. With `-reference-iso … -capture`
+each scenario's routers, and the sampler (one router committing each of 24
+`tests/reference/2105/sampler/<feature>.set` inputs, six of them DPDK-only),
+write `config.boot`, `commands.txt` and `show/<command>.txt` under
+`tests/reference/2105/`; 2105 masks secrets in that output. The captures are
+committed, so CI checks against them without the ISO.
+
+`distro-build test fixtures` loads every capture on one NuDanOS router:
+copied in, passed through the boot-time set-aside hook, loaded and committed.
+`show configuration commands` must match 2105's apart from the set-aside lines
+and the base configuration (management address, host name, console users).
+It then boots a configuration holding `cpu-affinity` and requires the setting
+to be set aside at boot, the rest to load, the set-aside file and the login
+notice (docs/kernel-forwarding.md, "2105 configs at boot"). Scenario `show`
+differences are reviewed into `accepted.diff` (FRR 10 formatting so far) or
+fixed.
+
+`load` skips nodes whose YANG module is absent, without an error; the
+set-aside hook still matters because it records what was dropped and removes
+nodes whose module is present but refused by deviation, which would fail the
+commit.
 
 ### 8.6 Pass bars
 
@@ -371,7 +397,7 @@ formatting) or fixed.
 | Stage | Content |
 |---|---|
 | **0: Launch** | Create org, push mirrors, archive `debian`/`drop` repos, create `distro` — done 2026-09-28 (plan 1); `debian`/`drop` repos archived 2026-10-01 (plan 2: 47 — 32 Debian-replaced forks, 15 drops) |
-| **1.0: Boots** | Build tooling, port checklist on the M1 repos, dataplane untangling, Tier 1 packages, ISO, layers 1–4 (1.0 scenarios). `vyatta-service-dhcp`, `netconfd` and `vyatta-security-vpn` are left out of the 1.0 package set (and the ISO) until their 1.1 rewrites; 1.0 interfaces are statically addressed. The ISO boots and installs — 2026-10-03 (plan 3): layer 3 passes (live login, configure, commit, refusal of DPDK-only settings, install image refusing the live default password, the installed system booting with its saved configuration) and the UEFI smoke boot passes |
+| **1.0: Boots** | Build tooling, port checklist on the M1 repos, dataplane untangling, Tier 1 packages, ISO, layers 1–4 (1.0 scenarios). `vyatta-service-dhcp`, `netconfd` and `vyatta-security-vpn` are left out of the 1.0 package set (and the ISO) until their 1.1 rewrites; 1.0 interfaces are statically addressed. The ISO boots and installs — 2026-10-03 (plan 3): layer 3 passes (live login, configure, commit, refusal of DPDK-only settings, install image refusing the live default password, the installed system booting with its saved configuration) and the UEFI smoke boot passes. **Checkpoint 1.0 reached 2026-10-16 (plan 4):** nightly run 38894022730 on 3df4a4a passed layers 1–4 (install/remove/purge, boot test, UEFI smoke boot, every gating scenario: bgp, ospf, vrrp, rest, snmp, tacacs) and the DANOS 2105 fixtures (every captured 2105 configuration loads), and published `nightly-20261016` |
 | **1.1: Rewrites** | Kea/dhcpcd, libnetconf2, strongswan 6/VICI, Go modules (one at a time) |
 | **1.5: Script install** | `installer/install.sh`, CI test on stock Debian 13 |
 | **2: Dataplane** | DPDK 25.11 LTS port (forked librte_sched/librte_acl, ~250 renamed identifiers), vyatta-controller, route broker, NPF firewall/NAT/QoS, nDPI 6.0, flow monitoring |

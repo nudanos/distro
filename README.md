@@ -22,6 +22,40 @@ go build -o distro-build ./cmd/distro-build
 ./distro-build -work /Volumes/nudanos/work -key <fingerprint> repo   # signed apt repo in work/repo
 ```
 
+## Test
+
+Each layer runs inside the `nudanos/tester` container, on the newest ISO in
+`work/image`:
+
+```bash
+./distro-build -work /Volumes/nudanos/work image             # build the ISO
+./distro-build -work /Volumes/nudanos/work test install      # layer 2: install, remove, purge
+./distro-build -work /Volumes/nudanos/work test boot         # layer 3: boot, configure, install, reboot
+./distro-build -work /Volumes/nudanos/work test scenario bgp # layer 4: one scenario (tests/scenarios/<name>)
+./distro-build -work /Volumes/nudanos/work test scenarios    # layer 4: every scenario
+./distro-build -work /Volumes/nudanos/work test fixtures     # every captured DANOS 2105 configuration loads
+```
+
+`test scenarios` fails when a gating scenario fails (`gating: false`, like
+`mpls-ldp`, is reported only); `test fixtures` prints `fixtures: OK (<n>
+configs)`. Transcripts, show dumps and diffs are kept in
+`work/scenarios/<image>/<scenario>/`. Without `/dev/kvm` every timeout is six
+times longer and a full run takes hours: run one at a time.
+
+The 2105 references under `tests/reference/2105/` are committed, so neither CI
+nor these commands need DANOS 2105. To capture them again, on a machine with
+`danos-2105-base-amd64.iso` (SHA-256 in `tests/reference/2105/README.md`; never
+commit or upload it):
+
+```bash
+./distro-build -work /Volumes/nudanos/work -reference-iso ~/Downloads/danos-2105-base-amd64.iso -capture test scenario <name>
+./distro-build -work /Volumes/nudanos/work -reference-iso ~/Downloads/danos-2105-base-amd64.iso -capture test scenario sampler
+```
+
+`sampler` commits each `tests/reference/2105/sampler/<feature>.set` on one
+2105 router and captures it; a feature that already has a capture is skipped
+(delete its directory to capture it again).
+
 ## Build hosts
 
 Every package build, the ISO build and the boot test run inside Debian 13
