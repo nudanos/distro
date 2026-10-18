@@ -21,7 +21,11 @@ func serve(t *testing.T) *tacplus.Client {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { l.Close() })
-	go Serve(l, secret, []User{{"tacadmin", "tac-admin-1", 15, "admin"}, {"tacop", "tac-op-1", 1, "operator"}})
+	go Serve(l, secret, []User{
+		{Name: "tacadmin", Password: "tac-admin-1", Priv: 15, Level: "admin"},
+		{Name: "tacop", Password: "tac-op-1", Priv: 1, Level: "operator"},
+		{Name: "tacdenied", Password: "tac-denied-1", Priv: 15, Level: "admin", DenyAuthor: true},
+	})
 	return &tacplus.Client{Addr: l.Addr().String(), ConnConfig: tacplus.ConnConfig{Secret: []byte(secret)}}
 }
 
@@ -106,7 +110,7 @@ func TestServeLogLogsEachRequest(t *testing.T) {
 	defer l.Close()
 	var mu sync.Mutex
 	var lines []string
-	go ServeLog(l, secret, []User{{"tacadmin", "tac-admin-1", 15, "admin"}}, func(format string, a ...any) {
+	go ServeLog(l, secret, []User{{Name: "tacadmin", Password: "tac-admin-1", Priv: 15, Level: "admin"}}, func(format string, a ...any) {
 		mu.Lock()
 		lines = append(lines, fmt.Sprintf(format, a...))
 		mu.Unlock()
@@ -118,5 +122,25 @@ func TestServeLogLogsEachRequest(t *testing.T) {
 	got := strings.Join(lines, "\n")
 	if !strings.Contains(got, "tacadmin") || !strings.Contains(got, "fail") {
 		t.Errorf("log = %q, want the user and the outcome", got)
+	}
+}
+
+// A user the server authenticates but refuses to authorize: the router must
+// not let it log in (final review, Important 2).
+func TestServeDeniesAuthorizationWhenAsked(t *testing.T) {
+	c := serve(t)
+	if s := pap(t, c, "tacdenied", "tac-denied-1"); s != tacplus.AuthenStatusPass {
+		t.Fatalf("authen status = %d, want pass", s)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	r, err := c.SendAuthorRequest(ctx, &tacplus.AuthorRequest{AuthenMethod: tacplus.AuthenMethodTACACSPlus,
+		AuthenType: tacplus.AuthenTypePAP, AuthenService: tacplus.AuthenServiceLogin, User: "tacdenied",
+		Arg: []string{"service=shell", "cmd="}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Status != tacplus.AuthorStatusFail {
+		t.Errorf("author status = %d, want fail", r.Status)
 	}
 }

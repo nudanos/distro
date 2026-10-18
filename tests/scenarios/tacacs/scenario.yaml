@@ -7,6 +7,8 @@ tacacs:
   users:
     - {name: tacadmin, password: tac-admin-1, priv: 15, level: admin}
     - {name: tacop, password: tac-op-1, priv: 1, level: operator}
+    # authenticated by the server but refused authorization
+    - {name: tacdenied, password: tac-denied-1, priv: 15, level: admin, deny_author: true}
 routers:
   R1:
     config:
@@ -22,6 +24,9 @@ checks:
   - name: a wrong TACACS+ password is refused
     router: R1
     login: {user: tacadmin, password: wrong-password, expect: refused}
+  - name: a TACACS+ user refused authorization cannot log in
+    router: R1
+    login: {user: tacdenied, password: tac-denied-1, expect: refused}
   - name: point at an unreachable server
     router: R1
     action:

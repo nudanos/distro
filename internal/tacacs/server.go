@@ -17,6 +17,9 @@ type User struct {
 	Name, Password string
 	Priv           int
 	Level          string
+	// DenyAuthor: authentication passes, authorization fails (a user the
+	// server knows but may not use this router).
+	DenyAuthor bool `yaml:"deny_author"`
 }
 
 type handler struct {
@@ -78,8 +81,8 @@ func (h handler) HandleAuthenStart(ctx context.Context, a *tacplus.AuthenStart, 
 
 func (h handler) HandleAuthorRequest(ctx context.Context, a *tacplus.AuthorRequest, s *tacplus.ServerSession) *tacplus.AuthorResponse {
 	u, ok := h.users[a.User]
-	h.logf("tacacs: author %q args %v: known=%v", a.User, a.Arg, ok)
-	if !ok {
+	h.logf("tacacs: author %q args %v: known=%v deny=%v", a.User, a.Arg, ok, u.DenyAuthor)
+	if !ok || u.DenyAuthor {
 		return &tacplus.AuthorResponse{Status: tacplus.AuthorStatusFail}
 	}
 	args := []string{fmt.Sprintf("priv-lvl=%d", u.Priv)}
