@@ -47,9 +47,11 @@ Decisions the user took while scoping:
 
 ## 2. `distro-build lint`
 
-- **Where:** a new `distro-build` subcommand, `lint [name…]`, running in the
-  existing builder container. The builder image gains the trixie analyzer
-  packages (§3). Like every other command, it runs with Docker or Podman
+- **Where:** a new `distro-build` subcommand, `lint [name…]`, running in its
+  own `nudanos/lint` image (`lint/`) with the trixie analyzer packages (§3).
+  Amended in Phase A: not the builder image, whose hash is part of every
+  package's cache key, so adding the analyzers there would rebuild every
+  package. Like every other command, it runs with Docker or Podman
   (`-engine`).
 - **What it checks:** each port's source tree as checked out under `work/src`,
   using each language's tools wherever that language is found.
@@ -61,7 +63,9 @@ Decisions the user took while scoping:
   without a reason, so "fix everything" cannot become "silence everything".
 - **Compiler warnings:** C/C++ warnings are read from the package build logs the
   build already keeps (`work/logs/<name>.log`). Any `warning:` in in-scope code
-  is a finding.
+  is a finding. In-scope ports build with `-Wall -Wextra -Wno-error`: the
+  `-Wno-error` keeps a port's own `-Werror` from failing the build on the added
+  warnings (amended in Phase A after vyatta-cfg and lu broke a nightly).
 - **Output:** findings grouped by port, file and rule, then a summary count per
   port. The exit status is non-zero when the ratchet (§4) fails.
 
@@ -71,7 +75,7 @@ Tool defaults, except where noted. Every tool is packaged in Debian 13.
 
 | Language | Tool (trixie version) | Rules |
 |---|---|---|
-| Go | gofmt; staticcheck (`go-staticcheck` 2024.1) | gofmt clean; staticcheck default checks. `go vet` stays in each package's build. |
+| Go | gofmt; staticcheck (`go-staticcheck` 2024.1) | gofmt clean; staticcheck default checks. `go vet` stays in each package's build. Amended in Phase A: staticcheck runs in each Go port's build next to vet, because it needs the build's dependencies, and lint reads its results from the build log like the compiler warnings. |
 | Perl | perltidy (20250105); perlcritic (1.156) | One shared perltidy profile; perlcritic severity 3 ("harsh"). Severity 1 mostly demands POD and version strings in every file. |
 | Shell | shellcheck (0.10.0) | All levels, style included; covers `debian/` maintainer scripts too. |
 | Python | flake8 (7.1.1); pylint (3.3.4) | flake8 defaults; pylint without its docstring and naming-convention checks. |

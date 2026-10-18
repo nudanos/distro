@@ -26,10 +26,13 @@ jobs:
         with:
           path: |
             ${{ runner.temp }}/work/out
+            ${{ runner.temp }}/work/logs
             ${{ runner.temp }}/work/state.json
             ${{ runner.temp }}/work/mirror-state.json
-          key: work-nightly-${{ github.run_id }}
-          restore-keys: work-nightly-
+          # logs: lint reads compiler warnings and staticcheck from the build
+          # logs of packages restored from the cache
+          key: work-nightly-logs-${{ github.run_id }}
+          restore-keys: work-nightly-logs-
       - name: Build, sign, check the package set
         run: |
           go build -o distro-build ./cmd/distro-build
@@ -43,6 +46,15 @@ jobs:
         # the half of the port's consistency test that needs this repo's docs
         working-directory: ${{ runner.temp }}/work/src/vyatta-kernel-forwarding
         run: NUDANOS_KF_DOC="$GITHUB_WORKSPACE/docs/kernel-forwarding.md" prove tests/set-aside-consistency.t
+      - name: Lint (no port gets worse)
+        shell: bash
+        run: |
+          set +e
+          ./distro-build -work "$RUNNER_TEMP/work" lint > "$RUNNER_TEMP/lint.txt"
+          status=$?
+          { echo "### Lint"; echo; grep -E '^lint: ' "$RUNNER_TEMP/lint.txt"; echo; } >> "$GITHUB_STEP_SUMMARY"
+          grep -E '^lint: ' "$RUNNER_TEMP/lint.txt"
+          exit "$status"
       - uses: actions/upload-artifact@v7
         with:
           name: apt-repo

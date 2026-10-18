@@ -56,6 +56,27 @@ commit or upload it):
 2105 router and captures it; a feature that already has a capture is skipped
 (delete its directory to capture it again).
 
+## Lint
+
+`distro-build lint [name…]` checks every ready 1.0 port (or the named ones)
+with the Debian 13 analyzers: gofmt and staticcheck (Go), perltidy and
+perlcritic (Perl), shellcheck, flake8 and pylint (Python), cppcheck and the
+compiler's `-Wall -Wextra` warnings (C/C++). The source analyzers run in the
+`nudanos/lint` image (`lint/`); compiler warnings and staticcheck come from
+each port's build log, so build the ports first.
+
+```bash
+./distro-build -work /Volumes/nudanos/work lint                      # every port, against lint-baseline.json
+./distro-build -work /Volumes/nudanos/work lint vyatta-cfg           # one port
+./distro-build -work /Volumes/nudanos/work -update-baseline lint vyatta-cfg   # lower its allowance after fixes
+```
+
+`lint-baseline.json` holds how many findings each port may still have; lint
+fails when any port has more, or any port missing from it has one. It only
+goes down, and is removed once every port is at zero. A finding is silenced
+only inline, in the tool's own syntax, with `reason: <why>` on the same line;
+a port's `nudanos-lint.yaml` may only list paths to skip (docs/porting.md).
+
 ## Build hosts
 
 Every package build, the ISO build and the boot test run inside Debian 13
