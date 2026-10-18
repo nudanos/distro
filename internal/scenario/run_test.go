@@ -24,6 +24,7 @@ func fakeRouter(conn net.Conn, name string, shows map[string]string) {
 	op, cfg := "\r\nvyatta@"+host+":~$ ", "\r\n[edit]\r\nvyatta@"+host+"# "
 	io.WriteString(conn, "\r\n"+host+" login: ")
 	state := "user"
+	noPager, ended := false, false // the shell setup of the current login
 	buf := make([]byte, 0, 256)
 	b := make([]byte, 256)
 	for {
@@ -41,10 +42,22 @@ func fakeRouter(conn net.Conn, name string, shows map[string]string) {
 			buf = buf[i+1:]
 			reply := ""
 			switch {
+			case state == "user" && line == "":
+				reply = "\r\n" + host + " login: " // the getty reprints its prompt
 			case state == "user":
 				reply, state = line+"\r\nPassword: ", "pass"
 			case state == "pass":
-				reply, state = op, "op"
+				reply, state, noPager = op, "op", false
+			case line == "export VYATTA_PAGER=cat; stty cols 250":
+				reply, noPager = line+op, true
+			case endSessionOnBootCheck && !ended && strings.HasPrefix(line, "systemctl show"):
+				// NuDanOS: the boot commit ends the admin's session; the getty
+				// restarts and prints its prompt again a moment later
+				reply, state, ended = line+"\r\n\r\n"+host+" login: ", "user", true
+				go func() {
+					time.Sleep(50 * time.Millisecond)
+					io.WriteString(conn, "\r\n\r\n"+host+" login: ")
+				}()
 			case line == "configure":
 				reply, state = line+cfg, "cfg"
 			case state == "cfg" && (line == "exit" || line == "exit discard"):
@@ -56,6 +69,9 @@ func fakeRouter(conn net.Conn, name string, shows map[string]string) {
 			case line == "y":
 				conn.Close()
 				return
+			case strings.HasPrefix(line, "show ip ") && !noPager:
+				// the pager would stop here; the output never reaches the route
+				reply = line + "\r\n--More--\r\n" + strings.TrimPrefix(op, "\r\n")
 			default:
 				// output ends with its own newline; the prompt follows directly
 				reply = line + "\r\n" + strings.ReplaceAll(shows[line], "\n", "\r\n") + strings.TrimPrefix(op, "\r\n")
@@ -84,6 +100,27 @@ func fakeStart(shows map[string]string, fail map[string]bool, stopped *sync.Map)
 		go fakeRouter(b, s.Name, shows)
 		stopped.Store(s.Name, false)
 		return topology.NewVM(s, boottest.NewConsole(a, log), func(time.Duration) { stopped.Store(s.Name, true); a.Close() }), nil
+	}
+}
+
+// endSessionOnBootCheck makes fakeRouter end the session at the first boot
+// check, as the NuDanOS boot commit does.
+var endSessionOnBootCheck bool
+
+// A boot commit that ends the session must not leave the new login without
+// the shell setup: show output would stop at the pager.
+func TestRunSetsUpTheShellAfterTheBootCommitEndsTheSession(t *testing.T) {
+	fakeRun(t, map[string]string{"show ip route": "C 10.0.12.0/24 is directly connected, dp0s3\n"}, nil)
+	endSessionOnBootCheck, boottest.WaitInterval = true, 10*time.Millisecond
+	t.Cleanup(func() { endSessionOnBootCheck, boottest.WaitInterval = false, 10*time.Second })
+	// pair without its show list: only the check is under test here
+	tests := scenarioTree(t, "pair", strings.Replace(pair, `show: ["show ip route"]`, "", 1))
+	res, err := Run(context.Background(), Options{Scenario: "pair", ISO: "/iso/n.iso", Work: t.TempDir(), Tests: tests})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Passed {
+		t.Errorf("checks failed after a re-login: %v", res.Failed)
 	}
 }
 

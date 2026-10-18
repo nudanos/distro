@@ -128,11 +128,13 @@ func Run(ctx context.Context, o Options) (res Result, err error) {
 		if err := boottest.Login(c, img.User, img.Password, boottest.LoginPrompt, t(30*time.Minute)); err != nil {
 			return res, fmt.Errorf("%s: %w", name, err)
 		}
-		// no pager, no line wrapping: show output is read whole
-		if _, err := boottest.OpOutput(c, "export VYATTA_PAGER=cat; stty cols 250", t(time.Minute)); err != nil {
+		if err := boottest.WaitBooted(c, img.User, img.Password, t(20*time.Minute)); err != nil {
 			return res, fmt.Errorf("%s: %w", name, err)
 		}
-		if err := boottest.WaitBooted(c, img.User, img.Password, t(20*time.Minute)); err != nil {
+		// no pager, no line wrapping: show output is read whole. After
+		// WaitBooted: the boot commit may end the session, and the new login
+		// would not have it.
+		if _, err := boottest.OpOutput(c, "export VYATTA_PAGER=cat; stty cols 250", t(time.Minute)); err != nil {
 			return res, fmt.Errorf("%s: %w", name, err)
 		}
 		if err := waitInterfaces(c, interfaces(specs, name), t(10*time.Minute)); err != nil {
