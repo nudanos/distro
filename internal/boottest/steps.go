@@ -184,9 +184,25 @@ func Configure(c *Console, cmd string, timeout time.Duration) error {
 	if err := c.Send(cmd); err != nil {
 		return err
 	}
-	_, err := c.Expect(CfgDone, timeout)
-	return err
+	out, err := c.Expect(untilCfgDone, timeout)
+	if err != nil {
+		return err
+	}
+	// "[edit]" also follows a rejected line ("Configuration path: … is not
+	// valid", "Set failed"): look past the command's own echo, which may
+	// itself say "error" (a syslog level).
+	if _, rest, ok := strings.Cut(out, "\n"); ok && rejected.MatchString(rest) {
+		return errorf("%q was rejected:\n%s", cmd, strings.TrimSpace(CfgDone.ReplaceAllString(rest, "")))
+	}
+	return nil
 }
+
+// untilCfgDone is CfgDone with everything printed before it.
+var untilCfgDone = regexp.MustCompile(`(?s)^.*?` + CfgDone.String())
+
+// rejected matches a configuration command's refusal (as fixtures' load
+// check does).
+var rejected = regexp.MustCompile(`(?i)\b(error|fail(ed|ure)?|invalid|not valid)\b`)
 
 // Commit commits in configuration mode. want, if set, is the expected outcome
 // (a refusal); otherwise the commit must succeed. The console accepts logins

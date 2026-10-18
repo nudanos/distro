@@ -361,3 +361,39 @@ func TestOpOutputStripsEscapesAndPrompt(t *testing.T) {
 		t.Errorf("OpOutput = %q", out)
 	}
 }
+
+// configReply answers one configuration command with out and the prompt.
+func configReply(t *testing.T, out string) error {
+	t.Helper()
+	a, vm := net.Pipe()
+	defer a.Close()
+	defer vm.Close()
+	c := NewConsole(a, &bytes.Buffer{})
+	go func() {
+		b := make([]byte, 256)
+		n, _ := vm.Read(b)
+		io.WriteString(vm, strings.TrimRight(string(b[:n]), "\r")+"\r\n"+out+"[edit]\r\nvyatta@node# ")
+	}()
+	return Configure(c, "set system syslog global facility all level error", time.Second)
+}
+
+// A line the router rejects must fail the step, not be dropped while the
+// rest commits (final review, Important 4).
+func TestConfigureFailsOnARejectedLine(t *testing.T) {
+	for _, out := range []string{
+		"\r\n  Configuration path: [system syslog global] is not valid\r\n\r\n",
+		"Set failed\r\n\r\n",
+		"Invalid value for leaf\r\n",
+	} {
+		if err := configReply(t, out); err == nil {
+			t.Errorf("accepted a rejected line: %q", out)
+		}
+	}
+}
+
+// The command's own echo may contain such words ("level error").
+func TestConfigureAcceptsAnEchoThatSaysError(t *testing.T) {
+	if err := configReply(t, ""); err != nil {
+		t.Errorf("rejected an accepted line: %v", err)
+	}
+}
