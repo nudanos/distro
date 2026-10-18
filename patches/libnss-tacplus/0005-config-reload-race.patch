@@ -1,0 +1,352 @@
+Description: survive configuration reloads under concurrent lookups
+ Every entry point re-reads the configuration file when it changes, and
+ reset_config() freed each server's key and cleared its address while
+ another thread was inside lookup_tacacs_user() using them: a commit of a
+ TACACS+ server change could crash configd, which resolves users from many
+ goroutines. 0003's mutex covered only the parse. Parsing now takes a
+ read-write lock for writing, and every entry point that reads the
+ configuration runs under it for reading (its own get_config() call
+ returns the result parsed just before). test/config_threads (make
+ check, built with AddressSanitizer) runs lookups against a listener while
+ the file is rewritten; it reported a heap-use-after-free of a key (strlen)
+ before this change. Lookups still write tac_srv[].not_resp under the read
+ lock: a plain int flag, as before. The test does not check leaks:
+ reset_config() never frees a server's getaddrinfo() result (upstream).
+Author: NuDanOS Maintainers <jon@fernandez.tech>
+Forwarded: no
+Last-Update: 2026-10-18
+---
+diff --git a/Makefile.am b/Makefile.am
+index e4fc996..c225a9b 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -59,8 +59,12 @@ install-data-hook:
+ 
+ # NuDanOS: concurrent group enumeration (configd calls getgrouplist from
+ # many threads)
+-check_PROGRAMS = grent_threads
++check_PROGRAMS = grent_threads config_threads
+ grent_threads_SOURCES = test/grent_threads.c
+ grent_threads_CFLAGS = $(libnss_tacplus_la_CFLAGS)
+ grent_threads_LDADD = -ltacplus_map -ltac -laudit -lpthread
+-TESTS = grent_threads
++config_threads_SOURCES = test/config_threads.c
++config_threads_CFLAGS = $(libnss_tacplus_la_CFLAGS) -fsanitize=address -fno-omit-frame-pointer
++config_threads_LDFLAGS = -fsanitize=address
++config_threads_LDADD = -ltacplus_map -ltac -laudit -lpthread
++TESTS = grent_threads config_threads
+diff --git a/nss_tacplus.c b/nss_tacplus.c
+index b470d4d..4207793 100644
+--- a/nss_tacplus.c
++++ b/nss_tacplus.c
+@@ -343,21 +343,38 @@ static int nss_tacplus_config(int *errnop, const char *cfile, int top)
+ }
+ 
+ /* common get config code at each entry point */
+-static pthread_mutex_t config_lock = PTHREAD_MUTEX_INITIALIZER;
++/*
++ * NuDanOS: the configuration (server table, keys, timeout, source address)
++ * is re-read whenever the file changes, from any thread. Parsing takes
++ * config_lock for writing; each entry point then works under it for
++ * reading (WITH_CONFIG), so a reload cannot free a key or clear an address
++ * another thread is using. config_held marks a thread inside an entry
++ * point: its own get_config() call returns the result parsed just before.
++ */
++static pthread_rwlock_t config_lock = PTHREAD_RWLOCK_INITIALIZER;
++static __thread int config_held;
++static int config_result, config_errno;
+ 
+ static int
+ get_config(int *errp, int level)
+ {
+-    int result;
++    int result, err = 0;
+ 
+-    /* NuDanOS: the parser rewrites the server tables; callers may be
+-     * multithreaded */
+-    pthread_mutex_lock(&config_lock);
+-    result = nss_tacplus_config(errp, config_file, 1);
++    if (config_held) {
++        if (config_errno && errp)
++            *errp = config_errno;
++        return config_result;
++    }
++    pthread_rwlock_wrlock(&config_lock);
++    result = nss_tacplus_config(&err, config_file, 1);
+     conf_parsed = result == 0 ? 2 : 1;
+ 
+     get_remote_addr();
+-    pthread_mutex_unlock(&config_lock);
++    config_result = result;
++    config_errno = err;
++    pthread_rwlock_unlock(&config_lock);
++    if (err && errp)
++        *errp = err;
+ 
+     /* no config file, no servers, etc.
+      * this is a debug because privileges may not allow access
+@@ -369,6 +386,18 @@ get_config(int *errp, int level)
+     return result;
+ }
+ 
++#define WITH_CONFIG(call) do {                                  \
++        int with_err = 0;                                       \
++        enum nss_status with_status;                            \
++        (void)get_config(&with_err, 1);                         \
++        pthread_rwlock_rdlock(&config_lock);                    \
++        config_held = 1;                                        \
++        with_status = (call);                                   \
++        config_held = 0;                                        \
++        pthread_rwlock_unlock(&config_lock);                    \
++        return with_status;                                     \
++    } while (0)
++
+ 
+ /*
+  * Separate function so we can print first time we try to connect,
+@@ -824,7 +853,7 @@ lookup_mapped_uid(struct pwbuf *pb, uid_t uid, uid_t auid, int session)
+  * where we aren't running with privileges to read the tacacs configuration
+  * (since it has the secret key).
+  */
+-enum nss_status _nss_tacplus_getpwnam_r(const char *name, struct passwd *pw,
++static enum nss_status getpwnam_r_unlocked(const char *name, struct passwd *pw,
+     char *buffer, size_t buflen, int *errnop)
+ {
+     enum nss_status status = NSS_STATUS_NOTFOUND;
+@@ -903,7 +932,7 @@ enum nss_status _nss_tacplus_getpwnam_r(const char *name, struct passwd *pw,
+  * Only works while the UID is in use for a mapped user, and returns
+  * the first match from the mapped users.
+  */
+-enum nss_status _nss_tacplus_getpwuid_r(uid_t uid, struct passwd *pw,
++static enum nss_status getpwuid_r_unlocked(uid_t uid, struct passwd *pw,
+     char *buffer, size_t buflen, int *errnop)
+ {
+     struct pwbuf pb;
+@@ -1151,8 +1180,7 @@ static __thread FILE *grent;
+ static __thread char *grbuf;      /* fgetgrent_r's line buffer */
+ static __thread size_t grbuflen;
+ 
+-__attribute__((visibility("default")))
+-enum nss_status _nss_tacplus_setgrent(void)
++static enum nss_status setgrent_unlocked(void)
+ {
+     enum nss_status status = NSS_STATUS_NOTFOUND;
+     static const char *grpname = "/etc/group";
+@@ -1304,8 +1332,7 @@ static int fixup_grent(struct group *entry, struct group *result, char *buf,
+ * No locking needed because our only global is the dirent * for
+ * the runuser directory, and our use of that should be thread safe
+ */
+-__attribute__((visibility("default")))
+-enum nss_status _nss_tacplus_getgrent_r(struct group *gr_result,
++static enum nss_status getgrent_r_unlocked(struct group *gr_result,
+                                         char *buffer, size_t buflen,
+                                         int *errnop)
+ {
+@@ -1325,7 +1352,7 @@ enum nss_status _nss_tacplus_getgrent_r(struct group *gr_result,
+         return errnop && *errnop == ENOENT ? NSS_STATUS_UNAVAIL : status;
+ 
+     if (!grent) {
+-        status = _nss_tacplus_setgrent();
++        status = setgrent_unlocked();
+         if (status != NSS_STATUS_SUCCESS)
+             return status;
+     }
+@@ -1418,8 +1445,7 @@ static enum nss_status find_group(const char *name, gid_t gid,
+     return status;
+ }
+ 
+-__attribute__((visibility("default")))
+-enum nss_status _nss_tacplus_getgrnam_r(const char *name, struct group *gr,
++static enum nss_status getgrnam_r_unlocked(const char *name, struct group *gr,
+                                         char *buffer, size_t buflen,
+                                         int *errnop)
+ {
+@@ -1439,8 +1465,7 @@ enum nss_status _nss_tacplus_getgrnam_r(const char *name, struct group *gr,
+     return find_group(name, 0, gr, buffer, buflen, errnop);
+ }
+ 
+-__attribute__((visibility("default")))
+-enum nss_status _nss_tacplus_getgrgid_r(gid_t gid, struct group *gr,
++static enum nss_status getgrgid_r_unlocked(gid_t gid, struct group *gr,
+                                         char *buffer, size_t buflen,
+                                         int *errnop)
+ {
+@@ -1459,3 +1484,46 @@ enum nss_status _nss_tacplus_getgrgid_r(gid_t gid, struct group *gr,
+ 
+     return find_group(NULL, gid, gr, buffer, buflen, errnop);
+ }
++
++/*
++ * NuDanOS: the NSS entry points that read the configuration, each run
++ * under config_lock (see get_config).
++ */
++enum nss_status _nss_tacplus_getpwnam_r(const char *name, struct passwd *pw,
++    char *buffer, size_t buflen, int *errnop)
++{
++    WITH_CONFIG(getpwnam_r_unlocked(name, pw, buffer, buflen, errnop));
++}
++
++enum nss_status _nss_tacplus_getpwuid_r(uid_t uid, struct passwd *pw,
++    char *buffer, size_t buflen, int *errnop)
++{
++    WITH_CONFIG(getpwuid_r_unlocked(uid, pw, buffer, buflen, errnop));
++}
++
++__attribute__((visibility("default")))
++enum nss_status _nss_tacplus_setgrent(void)
++{
++    WITH_CONFIG(setgrent_unlocked());
++}
++
++__attribute__((visibility("default")))
++enum nss_status _nss_tacplus_getgrent_r(struct group *gr_result,
++    char *buffer, size_t buflen, int *errnop)
++{
++    WITH_CONFIG(getgrent_r_unlocked(gr_result, buffer, buflen, errnop));
++}
++
++__attribute__((visibility("default")))
++enum nss_status _nss_tacplus_getgrnam_r(const char *name, struct group *gr,
++    char *buffer, size_t buflen, int *errnop)
++{
++    WITH_CONFIG(getgrnam_r_unlocked(name, gr, buffer, buflen, errnop));
++}
++
++__attribute__((visibility("default")))
++enum nss_status _nss_tacplus_getgrgid_r(gid_t gid, struct group *gr,
++    char *buffer, size_t buflen, int *errnop)
++{
++    WITH_CONFIG(getgrgid_r_unlocked(gid, gr, buffer, buflen, errnop));
++}
+diff --git a/test/config_threads.c b/test/config_threads.c
+new file mode 100644
+index 0000000..56d2ee2
+--- /dev/null
++++ b/test/config_threads.c
+@@ -0,0 +1,126 @@
++/*
++ * NuDanOS: a long-lived multithreaded caller (configd) resolves TACACS+
++ * users from many threads while the configuration file can change (a commit
++ * of "system login tacplus-server"). Every entry point re-reads a changed
++ * file: reset_config() freed each server's key and cleared its address
++ * while another thread was in lookup_tacacs_user() using them. Lookups must
++ * survive configuration reloads.
++ *
++ * Built from nss_tacplus.c itself so the test can point it at its own
++ * configuration file. A listener on 127.0.0.1 accepts every connection and
++ * discards what it reads, so each lookup goes on to send a request
++ * encrypted with the server's key. Built with AddressSanitizer: a key freed
++ * by a reload while a lookup uses it fails the test.
++ */
++#include "../nss_tacplus.c"
++
++#include <netinet/in.h>
++#include <pthread.h>
++#include <stdatomic.h>
++#include <stdlib.h>
++#include <sys/socket.h>
++
++/*
++ * Leak checking is off: reset_config() drops each server's getaddrinfo()
++ * result without freeing it (upstream, before NuDanOS), and this test
++ * reloads thousands of times. Use-after-free and other errors still fail it.
++ */
++const char *__asan_default_options(void);
++const char *__asan_default_options(void)
++{
++    return "detect_leaks=0";
++}
++
++#define READERS 6
++#define ROUNDS 2000
++
++static char conf[] = "/tmp/tacplus_nss_cfgXXXXXX";
++static atomic_int readers_done;
++static int port;
++
++/* accept and drain connections: a TACACS+ server that never answers */
++static void *listener(void *arg)
++{
++    int ls = *(int *)arg;
++
++    for (;;) {
++        char b[512];
++        int c = accept(ls, NULL, NULL);
++        if (c < 0)
++            return NULL;
++        (void)!read(c, b, sizeof b);
++        close(c);
++    }
++}
++
++static void *lookup(void *arg)
++{
++    char buf[4096];
++    struct passwd pw;
++    int err, i;
++
++    (void)arg;
++    for (i = 0; i < ROUNDS; i++)
++        (void)_nss_tacplus_getpwnam_r("tacuser", &pw, buf, sizeof buf, &err);
++    atomic_fetch_add(&readers_done, 1);
++    return NULL;
++}
++
++/* write the configuration under a new inode: the next lookup re-parses */
++static void *rewrite(void *arg)
++{
++    char tmp[sizeof conf + 4];
++    unsigned n = 0;
++
++    (void)arg;
++    snprintf(tmp, sizeof tmp, "%s.new", conf);
++    while (atomic_load(&readers_done) < READERS) {
++        FILE *f = fopen(tmp, "w");
++        if (!f)
++            break;
++        fprintf(f, "timeout=1\nsecret=key-%u\nserver=127.0.0.1:%d\n"
++                   "secret=other-%u\nserver=127.0.0.1:%d\n", n, port, n, port);
++        fclose(f);
++        rename(tmp, conf);
++        n++;
++    }
++    unlink(tmp);
++    return (void *)(long)n;
++}
++
++int main(void)
++{
++    pthread_t r[READERS], w, l;
++    void *reloads;
++    struct sockaddr_in sa = {.sin_family = AF_INET,
++                             .sin_addr.s_addr = htonl(INADDR_LOOPBACK)};
++    socklen_t salen = sizeof sa;
++    int ls = socket(AF_INET, SOCK_STREAM, 0), fd, i;
++
++    if (ls < 0 || bind(ls, (struct sockaddr *)&sa, sizeof sa) ||
++        listen(ls, 64) || getsockname(ls, (struct sockaddr *)&sa, &salen)) {
++        perror("listener");
++        return 2;
++    }
++    port = ntohs(sa.sin_port);
++    pthread_create(&l, NULL, listener, &ls);
++
++    fd = mkstemp(conf);
++    if (fd < 0 || dprintf(fd, "secret=test\nserver=127.0.0.1:%d\n", port) < 0) {
++        perror("config");
++        return 2;
++    }
++    close(fd);
++    config_file = conf;
++
++    pthread_create(&w, NULL, rewrite, NULL);
++    for (i = 0; i < READERS; i++)
++        pthread_create(&r[i], NULL, lookup, NULL);
++    for (i = 0; i < READERS; i++)
++        pthread_join(r[i], NULL);
++    pthread_join(w, &reloads);
++    unlink(conf);
++    printf("config_threads: OK, %d lookups in %d threads across %ld rewrites\n",
++           READERS * ROUNDS, READERS, (long)reloads);
++    return 0;
++}
