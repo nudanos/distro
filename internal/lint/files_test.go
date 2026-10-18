@@ -108,3 +108,20 @@ func TestConfigSkipGlobs(t *testing.T) {
 		t.Error("a key other than skip was accepted")
 	}
 }
+
+// A skip entry ending in "/" leaves out that directory's whole tree, as
+// vyatta-dataplane needs: only its protobuf build is in scope for 1.0
+// (spec section 1).
+func TestConfigSkipDirectoryTree(t *testing.T) {
+	got := classify(t, map[string]string{
+		"nudanos-lint.yaml":      "skip:\n  - \"src/\"\n",
+		"src/if_var.h":           "int a;\n",
+		"src/pipeline/nodes/x.c": "int b;\n",
+		"protobuf/go/gen.go":     "package g\n",
+		"srcfile.c":              "int c;\n",
+	})
+	want := map[string][]string{"go": {"protobuf/go/gen.go"}, "c": {"srcfile.c"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}

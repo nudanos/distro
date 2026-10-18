@@ -19,7 +19,26 @@ const ConfigFile = "nudanos-lint.yaml"
 
 // Config holds a port's only permitted lint exceptions: paths not to check.
 type Config struct {
-	Skip []string `yaml:"skip"` // path.Match globs, relative to the port root
+	// path.Match globs relative to the port root; an entry ending in "/"
+	// skips that directory's whole tree
+	Skip []string `yaml:"skip"`
+}
+
+// skipped reports whether cfg leaves rel (a path relative to the port root)
+// out.
+func (cfg Config) skipped(rel string, dir bool) bool {
+	for _, g := range cfg.Skip {
+		if tree, ok := strings.CutSuffix(g, "/"); ok {
+			if rel == tree || strings.HasPrefix(rel, tree+"/") {
+				return true
+			}
+			continue
+		}
+		if ok, _ := path.Match(g, rel); ok && !dir {
+			return true
+		}
+	}
+	return false
 }
 
 // LoadConfig reads portDir's nudanos-lint.yaml; a port without one gets the
@@ -115,18 +134,13 @@ func Classify(portDir string, cfg Config) (map[string][]string, error) {
 		}
 		rel = filepath.ToSlash(rel)
 		if d.IsDir() {
-			if skipDir(rel) {
+			if skipDir(rel) || cfg.skipped(rel, true) {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if !d.Type().IsRegular() {
+		if !d.Type().IsRegular() || cfg.skipped(rel, false) {
 			return nil
-		}
-		for _, g := range cfg.Skip {
-			if ok, _ := path.Match(g, rel); ok {
-				return nil
-			}
 		}
 		lang, ok := byExt[path.Ext(rel)]
 		if !ok {

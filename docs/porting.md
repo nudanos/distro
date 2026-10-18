@@ -54,4 +54,5 @@ image:
 A finding is silenced only inline, in the tool's own syntax, with
 `reason: <why>` on the same line; lint fails on a suppression without one. A
 port's only other exception is `nudanos-lint.yaml` with a `skip:` list of
-paths (generated files, test data).
+paths (generated files, test data, code outside the 1.0 build): `path.Match`
+globs, or a directory followed by `/` to skip its whole tree.
