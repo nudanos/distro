@@ -23,9 +23,11 @@ var (
 	cppcheckLine   = regexp.MustCompile(`^(.+?):(\d+):([A-Za-z0-9_]+):(.*)$`)
 )
 
-// cppcheckErrors are the ids cppcheck uses when it could not analyse a file.
-var cppcheckErrors = map[string]bool{"syntaxError": true, "internalError": true,
-	"internalAstError": true, "cppcheckError": true, "unknownMacro": true}
+// cppcheckErrors are the ids cppcheck uses when it failed. syntaxError and
+// unknownMacro (a file it could not analyse, mostly for want of the
+// preprocessor configuration) are findings instead: the port is not clean,
+// but the rest of it is still checked.
+var cppcheckErrors = map[string]bool{"internalError": true, "internalAstError": true, "cppcheckError": true}
 
 func atoi(s string) int { n, _ := strconv.Atoi(s); return n }
 
@@ -101,11 +103,17 @@ func Parse(tool string, out []byte) ([]Finding, error) {
 		return nil, fmt.Errorf("lint: unknown tool %q", tool)
 	}
 	var fs []Finding
+	// pylint's duplicate-code report (R0801) continues on the lines after
+	// it ("==module:[a:b]" and the duplicated code) until the next finding
+	duplicate := false
 	sc := bufio.NewScanner(bytes.NewReader(out))
 	sc.Buffer(make([]byte, 64*1024), 1024*1024)
 	for sc.Scan() {
 		l := strings.TrimRight(sc.Text(), "\r")
 		if strings.TrimSpace(l) == "" {
+			continue
+		}
+		if duplicate && !pylintLine.MatchString(l) && !pylintNoise.MatchString(l) {
 			continue
 		}
 		f, skip, err := p(l)
@@ -114,6 +122,7 @@ func Parse(tool string, out []byte) ([]Finding, error) {
 		}
 		if !skip {
 			fs = append(fs, *f)
+			duplicate = tool == "pylint" && f.Rule == "R0801"
 		}
 	}
 	return fs, sc.Err()

@@ -59,11 +59,12 @@ func TestParseEachTool(t *testing.T) {
 // A tool that could not read a file has not checked it: that is an error,
 // never "no findings" (Review Focus 2).
 func TestParseToolErrorIsAnError(t *testing.T) {
-	for tool, sampleName := range map[string]string{"pylint": "pylint-fatal", "cppcheck": "cppcheck-error"} {
-		_, err := Parse(tool, sample(t, sampleName))
-		if err == nil || !strings.Contains(err.Error(), "syntax") {
-			t.Errorf("%s: err = %v, want an error naming the file", tool, err)
-		}
+	if _, err := Parse("pylint", sample(t, "pylint-fatal")); err == nil || !strings.Contains(err.Error(), "syntax") {
+		t.Errorf("pylint: err = %v, want an error naming the file", err)
+	}
+	// cppcheck itself failing is an error
+	if _, err := Parse("cppcheck", []byte("x.c:0:internalError:Internal error. Token::Match called with varid 0.\n")); err == nil {
+		t.Error("cppcheck internalError was taken for a finding")
 	}
 	// flake8 reports a file it could not parse as E999
 	if _, err := Parse("flake8", []byte("syntax.py:1:8: E999 SyntaxError: invalid syntax\n")); err == nil {
@@ -85,5 +86,41 @@ func TestFindingString(t *testing.T) {
 	f := Finding{Port: "aaa", Tool: "shellcheck", File: "x.sh", Line: 2, Rule: "SC2086", Message: "quote"}
 	if got, want := f.String(), "aaa: x.sh:2: shellcheck SC2086: quote"; got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// pylint's duplicate-code message (R0801) runs over several lines: the
+// files and line ranges ("==name:[a:b]") and the duplicated code itself.
+// They belong to the finding, not to unrecognised output (a real block from
+// vyatta-platform).
+func TestParsePylintDuplicateCode(t *testing.T) {
+	got, err := Parse("pylint", sample(t, "pylint-duplicate"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d findings, want the one R0801 block: %+v", len(got), got)
+	}
+	for _, f := range got {
+		if f.Rule != "R0801" || f.Message != "Similar lines in 2 files" {
+			t.Errorf("finding %+v", f)
+		}
+	}
+}
+
+// cppcheck's syntaxError and unknownMacro mostly mean it lacks the
+// preprocessor configuration (macros it cannot expand), not broken code. The
+// file was not analysed, so it is a finding that keeps the port from zero,
+// not a run error that stops lint for the port (real output: cppcheck-error,
+// and libnss-vrfdns's unknownMacro).
+func TestParseCppcheckUnanalysedFileIsAFinding(t *testing.T) {
+	out := string(sample(t, "cppcheck-error")) +
+		"src/vrffiles-XXX.c:144:unknownMacro:There is an unknown macro here somewhere. Configuration is required. If CONCAT is a macro then please configure it.\n"
+	got, err := Parse("cppcheck", []byte(out))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Rule != "syntaxError" || got[1].Rule != "unknownMacro" {
+		t.Errorf("got %+v", got)
 	}
 }

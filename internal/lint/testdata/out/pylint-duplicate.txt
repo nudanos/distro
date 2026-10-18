@@ -1,0 +1,70 @@
+lib/vyatta/phy/phy.py:1: [R0801(duplicate-code), ] Similar lines in 2 files
+==basephy:[26:88]
+==basesfphelper:[50:102]
+        pass
+
+    @abstractmethod
+    def enable_sgmii(self, bus):
+        """
+        Enable SGMII mode on the PHY. If the PHY uses SGMII by default
+        then this can be a no-op.
+        """
+        pass
+
+    @abstractmethod
+    def set_autoneg_caps(self, bus, caps):
+        """
+        Set auto-negotiate enabled and its capabilities.
+
+        Caps is a map of key to boolean value that describes the set
+        of capabilities to advertise. Capabilities supported are:
+         - 1000full
+         - 1000half
+         - 100full
+         - 100half
+         - 10full
+         - 10half
+        Capabilities not supported should be ignored.
+        """
+        pass
+
+    @abstractmethod
+    def get_linkpartner_caps(self, bus):
+        """
+        Get the capabilities advertised by the link-partner.
+
+        Returns a map of key to boolean value that describes the set
+        of capabilities to advertise. Capabilities that may be
+        supported include:
+         - 1000full
+         - 1000half
+         - 100full
+         - 100half
+         - 10full
+         - 10half
+        """
+        pass
+
+    @abstractmethod
+    def get_linkstatus(self, bus):
+        """
+        Get the link status.
+
+        Returns a tuple of (<linkstatus>, <speed>, <duplex>). Where
+        linkstatus is "up" or "down", speed is an integer number of
+        Mbps used by the link, and duplex is "full", "half", or
+        "unknown" (if auto-negotiated and auto-negotiate still in
+        progress).
+        """
+        pass
+
+    @abstractmethod
+    def set_speed_duplex(self, bus, speed, duplex):
+        """
+        Disable autonegotiate and use the specified speed and duplex.
+        """
+
+-----------------------------------
+Your code has been rated at 7.94/10
+
+
