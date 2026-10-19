@@ -49,7 +49,7 @@ func toolArgs(tool string, files []string) []string {
 	case "pylint":
 		a = []string{"pylint", "--rcfile", "/lint/pylintrc", "--output-format=parseable"}
 	case "cppcheck":
-		a = []string{"cppcheck", "-q", "--enable=warning,style,performance,portability",
+		a = []string{"cppcheck", "-q", "--enable=warning,style,performance,portability", "--check-level=exhaustive",
 			"--suppress=missingIncludeSystem", "--inline-suppr", "--template={file}:{line}:{id}:{message}"}
 	}
 	return append(a, files...)

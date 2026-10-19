@@ -15,7 +15,10 @@ func TestToolArgs(t *testing.T) {
 		"shellcheck": {"shellcheck", "-f", "gcc", "-S", "style", "a", "b"},
 		"flake8":     {"flake8", "a", "b"},
 		"pylint":     {"pylint", "--rcfile", "/lint/pylintrc", "--output-format=parseable", "a", "b"},
-		"cppcheck": {"cppcheck", "-q", "--enable=warning,style,performance,portability",
+		// --check-level=exhaustive: at the normal level cppcheck stops
+		// following branches in long functions and says so
+		// (normalCheckLevelMaxBranches); that file was not fully checked
+		"cppcheck": {"cppcheck", "-q", "--enable=warning,style,performance,portability", "--check-level=exhaustive",
 			"--suppress=missingIncludeSystem", "--inline-suppr", "--template={file}:{line}:{id}:{message}", "a", "b"},
 	}
 	for tool, want := range cases {

@@ -2,4 +2,4 @@
 // finding per analyzer.
 package fixture
 
-func F() {}
+func  F() {}
