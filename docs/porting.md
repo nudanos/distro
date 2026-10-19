@@ -35,7 +35,8 @@ image:
   the port's own files is a finding.
 - **Go** ports run staticcheck in their build, next to `go vet`, because it
   needs the build's dependencies. Add `go-staticcheck <!nocheck>` to
-  Build-Depends and this target, run after `vet` in `override_dh_auto_build`,
+  Build-Depends (Debian installs it as `go-staticcheck`) and this target, run
+  after `vet` in `override_dh_auto_build`,
   using the same package list and `GOPATH` as the port's `vet` target:
 
   ```make
@@ -43,7 +44,7 @@ image:
   	dh_auto_build
 
   staticcheck:
-  	GOPATH=$(GO_PATH) staticcheck <packages> 2>&1 | sed 's/^/nudanos-staticcheck: /' || true
+  	GOPATH=$(GO_PATH) go-staticcheck <packages> 2>&1 | sed 's/^/nudanos-staticcheck: /' || true
   	@echo 'nudanos-staticcheck: done'
   ```
 

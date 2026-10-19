@@ -56,10 +56,14 @@ func FromBuildLog(port string, langs map[string]bool, log []byte) ([]Finding, er
 			continue
 		}
 		if rest, ok := strings.CutPrefix(l, StaticcheckPrefix); ok {
-			if m := staticcheck.FindStringSubmatch(rest); m != nil {
-				add(Finding{Port: port, Tool: "staticcheck", File: strings.TrimPrefix(m[1], buildDir),
-					Line: atoi(m[2]), Rule: m[4], Message: m[3]})
+			m := staticcheck.FindStringSubmatch(rest)
+			if m == nil {
+				// not a finding: staticcheck did not run or could not load
+				// the packages, so the port was not checked
+				return nil, fmt.Errorf("%s: staticcheck did not check the build: %s", port, rest)
 			}
+			add(Finding{Port: port, Tool: "staticcheck", File: strings.TrimPrefix(m[1], buildDir),
+				Line: atoi(m[2]), Rule: m[4], Message: m[3]})
 			continue
 		}
 		if !langs["c"] {

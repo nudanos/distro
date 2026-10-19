@@ -69,3 +69,18 @@ func TestFromBuildLogPerlOnlyNeedsNoLog(t *testing.T) {
 		t.Errorf("got %v, %v", got, err)
 	}
 }
+
+// A staticcheck that could not run or load the packages prints something
+// other than findings before the "done" marker: that port was not checked
+// (Review Focus 2), even though the marker is there.
+func TestFromBuildLogStaticcheckFailureIsAnError(t *testing.T) {
+	for _, line := range []string{
+		"nudanos-staticcheck: /bin/sh: 1: staticcheck: not found",
+		"nudanos-staticcheck: -: could not load package github.com/x/y: no Go files",
+	} {
+		_, err := FromBuildLog("vci", map[string]bool{"go": true}, []byte(line+"\nnudanos-staticcheck: done\n"))
+		if err == nil || !strings.Contains(err.Error(), "vci") {
+			t.Errorf("%q: err = %v", line, err)
+		}
+	}
+}
