@@ -102,8 +102,17 @@ func (a *app) lintCmd(ctx context.Context, names []string) error {
 	if err != nil {
 		return err
 	}
-	dirs, _, err := a.fetch(ctx, m, false)
+	// Linting named ports, like building them, tolerates fetch failures of
+	// unrelated entries; a named port that could not be fetched still fails.
+	dirs, fetchFailed, err := a.fetch(ctx, m, len(names) > 0)
 	if err != nil {
+		return err
+	}
+	keep := map[string]bool{}
+	for _, p := range ports {
+		keep[p] = true
+	}
+	if err := fetchBlocks(keep, fetchFailed); err != nil {
 		return err
 	}
 	dir := filepath.Dir(a.manifest)
