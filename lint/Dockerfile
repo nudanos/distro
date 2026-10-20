@@ -4,6 +4,6 @@
 FROM debian:trixie
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      golang-go perltidy libperl-critic-perl shellcheck flake8 pylint cppcheck \
+      golang-go perltidy libperl-critic-perl shellcheck flake8 pylint cppcheck patch \
  && rm -rf /var/lib/apt/lists/*
 COPY perltidyrc perlcriticrc pylintrc /lint/

@@ -1,7 +1,10 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -56,5 +59,75 @@ func TestChunks(t *testing.T) {
 	got := chunks(files, 200)
 	if len(got) != 3 || len(got[0]) != 200 || len(got[2]) != 50 {
 		t.Errorf("chunk sizes %d", len(got))
+	}
+}
+
+func writePort(t *testing.T, files map[string]string) string {
+	t.Helper()
+	dir := t.TempDir()
+	for p, c := range files {
+		full := filepath.Join(dir, p)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(c), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+// A 3.0 (quilt) port is built with debian/patches applied: lint must check
+// that tree, not the bare checkout.
+func TestPreparedTreeAppliesQuiltSeries(t *testing.T) {
+	dir := writePort(t, map[string]string{
+		"debian/source/format":       "3.0 (quilt)\n",
+		"debian/patches/series":      "# a comment\nfix.patch\n\nother.patch -p0\n",
+		"script.sh":                  "#!/bin/sh\necho hello\n",
+		"debian/patches/fix.patch":   "--- a/script.sh\n+++ b/script.sh\n@@ -1,2 +1,3 @@\n #!/bin/sh\n echo hello\n+echo $1\n",
+		"debian/patches/other.patch": "--- other.txt\n+++ other.txt\n@@ -0,0 +1 @@\n+added\n",
+	})
+	tree, cleanup, err := preparedTree(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if tree == dir {
+		t.Fatal("the checkout itself was returned")
+	}
+	if b, _ := os.ReadFile(filepath.Join(tree, "script.sh")); !strings.Contains(string(b), "echo $1") {
+		t.Errorf("patched script.sh = %q", b)
+	}
+	if b, _ := os.ReadFile(filepath.Join(tree, "other.txt")); string(b) != "added\n" {
+		t.Errorf("-p0 patch: other.txt = %q", b)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "script.sh")); strings.Contains(string(b), "echo $1") {
+		t.Error("the checkout was modified")
+	}
+}
+
+func TestPreparedTreeLeavesOtherPortsAlone(t *testing.T) {
+	dir := writePort(t, map[string]string{"debian/source/format": "3.0 (native)\n", "a.sh": "echo\n"})
+	tree, cleanup, err := preparedTree(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if tree != dir {
+		t.Errorf("tree = %s, want the checkout", tree)
+	}
+}
+
+// A patch that does not apply is an error, never a silently unpatched tree.
+func TestPreparedTreeFailsOnABadPatch(t *testing.T) {
+	dir := writePort(t, map[string]string{
+		"debian/source/format":     "3.0 (quilt)\n",
+		"debian/patches/series":    "bad.patch\n",
+		"script.sh":                "echo hello\n",
+		"debian/patches/bad.patch": "--- a/script.sh\n+++ b/script.sh\n@@ -1 +1 @@\n-echo goodbye\n+echo bye\n",
+	})
+	if _, cleanup, err := preparedTree(dir); err == nil {
+		cleanup()
+		t.Error("a patch that does not apply was accepted")
 	}
 }

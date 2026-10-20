@@ -18,6 +18,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/nudanos/distro/internal/lint"
 )
@@ -117,6 +118,51 @@ func untidy(dir string, files []string) ([]byte, error) {
 	return list.Bytes(), nil
 }
 
+// preparedTree is the tree lint checks: for a 3.0 (quilt) port with a patch
+// series, a temporary copy with debian/patches applied in series order, as
+// the package build does; otherwise dir itself. A patch that does not apply
+// is an error. cleanup removes the copy.
+func preparedTree(dir string) (tree string, cleanup func(), err error) {
+	noop := func() {}
+	format, err := os.ReadFile(filepath.Join(dir, "debian", "source", "format"))
+	if err != nil || !strings.Contains(string(format), "quilt") {
+		return dir, noop, nil
+	}
+	series, err := os.ReadFile(filepath.Join(dir, "debian", "patches", "series"))
+	if err != nil || len(bytes.TrimSpace(series)) == 0 {
+		return dir, noop, nil
+	}
+	tmp, err := os.MkdirTemp("", "lint-quilt")
+	if err != nil {
+		return "", noop, err
+	}
+	cleanup = func() { os.RemoveAll(tmp) }
+	tree = filepath.Join(tmp, "src")
+	if out, err := exec.Command("cp", "-a", dir, tree).CombinedOutput(); err != nil {
+		cleanup()
+		return "", noop, fmt.Errorf("copying %s: %v: %s", dir, err, out)
+	}
+	for _, line := range strings.Split(string(series), "\n") {
+		f := strings.Fields(line)
+		if len(f) == 0 || strings.HasPrefix(f[0], "#") {
+			continue
+		}
+		level := "-p1"
+		for _, o := range f[1:] {
+			if strings.HasPrefix(o, "-p") {
+				level = o
+			}
+		}
+		cmd := exec.Command("patch", level, "-s", "-N", "--no-backup-if-mismatch", "-r", "-",
+			"-d", tree, "-i", filepath.Join(tree, "debian", "patches", f[0]))
+		if out, err := cmd.CombinedOutput(); err != nil {
+			cleanup()
+			return "", noop, fmt.Errorf("applying debian/patches/%s: %v: %s", f[0], err, bytes.TrimSpace(out))
+		}
+	}
+	return tree, cleanup, nil
+}
+
 func check(port, dir string) ([]lint.Finding, error) {
 	cfg, err := lint.LoadConfig(dir)
 	if err != nil {
@@ -177,7 +223,13 @@ func main() {
 		fmt.Fprintln(os.Stderr, "usage: lint -port <name> <dir>")
 		os.Exit(2)
 	}
-	fs, err := check(*port, flag.Arg(0))
+	tree, cleanup, err := preparedTree(flag.Arg(0))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "lint %s: %v\n", *port, err)
+		os.Exit(2)
+	}
+	fs, err := check(*port, tree)
+	cleanup()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "lint %s: %v\n", *port, err)
 		os.Exit(2)
