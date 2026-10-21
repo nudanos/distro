@@ -75,6 +75,21 @@ func TestClassifyByExtensionAndShebang(t *testing.T) {
 	}
 }
 
+// configd templates start #!/opt/vyatta/bin/cliexec and hold $VAR(...)
+// placeholders that configd fills in before bash runs them: a template
+// language, not shell, whatever the extension.
+func TestClassifySkipsConfigdTemplates(t *testing.T) {
+	got := classify(t, map[string]string{
+		"tmplscripts/a/configd_end.sh": "#!/opt/vyatta/bin/cliexec\n>| /etc/x\n",
+		"tmplscripts/a/configd_vrf":    "#!/opt/vyatta/bin/cliexec\nV=$VAR(@)\n",
+		"scripts/real.sh":              "#!/bin/bash\necho hi\n",
+	})
+	want := map[string][]string{"shell": {"scripts/real.sh"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got  %v\nwant %v", got, want)
+	}
+}
+
 // Version control, vendored third-party code, patches and build staging
 // under debian/ are never linted; debian/tests is.
 func TestClassifySkipsByDefault(t *testing.T) {

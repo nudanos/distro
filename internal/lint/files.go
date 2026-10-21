@@ -97,6 +97,14 @@ func byShebang(first string) string {
 	return ""
 }
 
+// isConfigdTemplate reports a configd template script: cliexec runs it
+// after filling in its $VAR(...) placeholders, so it is not shell source.
+func isConfigdTemplate(first string) bool {
+	interp := strings.Fields(strings.TrimPrefix(first, "#!"))
+	return strings.HasPrefix(first, "#!") && len(interp) > 0 &&
+		path.Base(interp[0]) == "cliexec"
+}
+
 func firstLine(p string) string {
 	f, err := os.Open(p)
 	if err != nil {
@@ -145,6 +153,9 @@ func Classify(portDir string, cfg Config) (map[string][]string, error) {
 		lang, ok := byExt[path.Ext(rel)]
 		if !ok {
 			lang = byShebang(firstLine(p))
+		}
+		if lang == "shell" && isConfigdTemplate(firstLine(p)) {
+			return nil
 		}
 		if lang != "" {
 			out[lang] = append(out[lang], rel)
