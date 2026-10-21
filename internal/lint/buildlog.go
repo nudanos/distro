@@ -56,6 +56,10 @@ func FromBuildLog(port string, langs map[string]bool, log []byte) ([]Finding, er
 			continue
 		}
 		if rest, ok := strings.CutPrefix(l, StaticcheckPrefix); ok {
+			if strings.HasPrefix(rest, "\t") {
+				// related information for the finding above it
+				continue
+			}
 			m := staticcheck.FindStringSubmatch(rest)
 			if m == nil {
 				// not a finding: staticcheck did not run or could not load

@@ -43,6 +43,24 @@ func TestFromBuildLogStaticcheck(t *testing.T) {
 	}
 }
 
+// staticcheck follows some findings with indented "related information"
+// lines (S1034's other type assertions): part of the finding above, not a
+// failed run, and not findings of their own.
+func TestFromBuildLogStaticcheckRelatedInformation(t *testing.T) {
+	log := "nudanos-staticcheck: mgmterrorlist.go:26:9: assigning the result of this type assertion to a variable could eliminate type assertions in switch cases (S1034)\n" +
+		"nudanos-staticcheck: \tmgmterrorlist.go:30:12: could eliminate this type assertion\n" +
+		"nudanos-staticcheck: done\n"
+	got, err := FromBuildLog("mgmterror", map[string]bool{"go": true}, []byte(log))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Finding{{Port: "mgmterror", Tool: "staticcheck", File: "mgmterrorlist.go", Line: 26, Rule: "S1034",
+		Message: "assigning the result of this type assertion to a variable could eliminate type assertions in switch cases"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got  %+v\nwant %+v", got, want)
+	}
+}
+
 // A cached package's log can predate the flags: that is not "no warnings"
 // (Review Focus 5).
 func TestFromBuildLogStaleIsAnError(t *testing.T) {
