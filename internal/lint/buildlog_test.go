@@ -30,6 +30,34 @@ func TestFromBuildLogWarnings(t *testing.T) {
 	}
 }
 
+// A warning for a file compiled from a subdirectory (cpputest/ building
+// ../src/client/x.c) names it relative to that directory; make's
+// "Entering directory" lines say which, so it is the same src/ file as
+// the warning from the top-level build.
+func TestFromBuildLogWarningsInSubdirectories(t *testing.T) {
+	log := flagsLine +
+		"make[1]: Entering directory '/build/pkg'\n" +
+		"src/client/x.c:40:36: warning: comparison of integer expressions of different signedness [-Wsign-compare]\n" +
+		"make[2]: Entering directory '/build/pkg/cpputest'\n" +
+		"../src/client/x.c:40:36: warning: comparison of integer expressions of different signedness [-Wsign-compare]\n" +
+		"mocks.c:3:1: warning: unused parameter 'a' [-Wunused-parameter]\n" +
+		"make[2]: Leaving directory '/build/pkg/cpputest'\n" +
+		"src/y.c:9:1: warning: unused parameter 'b' [-Wunused-parameter]\n" +
+		"make[1]: Leaving directory '/build/pkg'\n"
+	got, err := FromBuildLog("vyatta-cfg", cOnly, []byte(log))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Finding{
+		{Port: "vyatta-cfg", Tool: "cc", File: "src/client/x.c", Line: 40, Rule: "-Wsign-compare", Message: "comparison of integer expressions of different signedness"},
+		{Port: "vyatta-cfg", Tool: "cc", File: "cpputest/mocks.c", Line: 3, Rule: "-Wunused-parameter", Message: "unused parameter 'a'"},
+		{Port: "vyatta-cfg", Tool: "cc", File: "src/y.c", Line: 9, Rule: "-Wunused-parameter", Message: "unused parameter 'b'"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got  %+v\nwant %+v", got, want)
+	}
+}
+
 func TestFromBuildLogStaticcheck(t *testing.T) {
 	log := "nudanos-staticcheck: services/x.go:12:2: this value of err is never used (SA4006)\n" +
 		"nudanos-staticcheck: done\n"

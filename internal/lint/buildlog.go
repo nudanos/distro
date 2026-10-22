@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"path"
 	"regexp"
 	"strings"
 )
@@ -19,6 +20,7 @@ const (
 var (
 	ccWarning   = regexp.MustCompile(`^(.+?):(\d+):\d+: warning: (.*) \[(-W[^\]]+)\]$`)
 	staticcheck = regexp.MustCompile(`^(.+?):(\d+):\d+: (.*) \(([A-Z]+\d+)\)$`)
+	makeDir     = regexp.MustCompile(`^make(?:\[\d+\])?: (Entering|Leaving) directory '(.+)'$`)
 )
 
 // buildDir is the package source's path in the builder (dpkg's
@@ -47,6 +49,7 @@ func FromBuildLog(port string, langs map[string]bool, log []byte) ([]Finding, er
 		}
 	}
 	ranStaticcheck := false
+	var dirs []string // make's directory stack: warnings name files relative to the top
 	sc := bufio.NewScanner(bytes.NewReader(log))
 	sc.Buffer(make([]byte, 64*1024), 4*1024*1024)
 	for sc.Scan() {
@@ -73,11 +76,23 @@ func FromBuildLog(port string, langs map[string]bool, log []byte) ([]Finding, er
 		if !langs["c"] {
 			continue
 		}
+		if m := makeDir.FindStringSubmatch(l); m != nil {
+			if m[1] == "Entering" {
+				dirs = append(dirs, m[2])
+			} else if len(dirs) > 0 {
+				dirs = dirs[:len(dirs)-1]
+			}
+			continue
+		}
 		m := ccWarning.FindStringSubmatch(l)
 		if m == nil || strings.HasPrefix(m[1], "/usr/") {
 			continue
 		}
-		add(Finding{Port: port, Tool: "cc", File: strings.TrimPrefix(m[1], buildDir),
+		file := m[1]
+		if !path.IsAbs(file) && len(dirs) > 0 {
+			file = path.Join(dirs[len(dirs)-1], file)
+		}
+		add(Finding{Port: port, Tool: "cc", File: strings.TrimPrefix(file, buildDir),
 			Line: atoi(m[2]), Rule: m[4], Message: m[3]})
 	}
 	if err := sc.Err(); err != nil {
