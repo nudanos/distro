@@ -50,8 +50,12 @@ func toolArgs(tool string, files []string) []string {
 	case "pylint":
 		a = []string{"pylint", "--rcfile", "/lint/pylintrc", "--output-format=parseable"}
 	case "cppcheck":
+		// A header is also checked as a file of its own, where its structs
+		// have no users and every member is reported unused.
 		a = []string{"cppcheck", "-q", "--enable=warning,style,performance,portability", "--check-level=exhaustive",
-			"--suppress=missingIncludeSystem", "--inline-suppr", "--template={file}:{line}:{id}:{message}"}
+			"--suppress=missingIncludeSystem", "--suppress=unusedStructMember:*.h",
+			"--suppress=unusedStructMember:*.hpp", "--suppress=unusedStructMember:*.hh",
+			"--inline-suppr", "--template={file}:{line}:{id}:{message}"}
 	}
 	return append(a, files...)
 }

@@ -21,8 +21,12 @@ func TestToolArgs(t *testing.T) {
 		// --check-level=exhaustive: at the normal level cppcheck stops
 		// following branches in long functions and says so
 		// (normalCheckLevelMaxBranches); that file was not fully checked
+		// unusedStructMember off in headers: checked as a file of its own,
+		// a header's struct has no users, so every member is reported
 		"cppcheck": {"cppcheck", "-q", "--enable=warning,style,performance,portability", "--check-level=exhaustive",
-			"--suppress=missingIncludeSystem", "--inline-suppr", "--template={file}:{line}:{id}:{message}", "a", "b"},
+			"--suppress=missingIncludeSystem", "--suppress=unusedStructMember:*.h",
+			"--suppress=unusedStructMember:*.hpp", "--suppress=unusedStructMember:*.hh",
+			"--inline-suppr", "--template={file}:{line}:{id}:{message}", "a", "b"},
 	}
 	for tool, want := range cases {
 		if got := toolArgs(tool, files); !reflect.DeepEqual(got, want) {
