@@ -97,12 +97,16 @@ func byShebang(first string) string {
 	return ""
 }
 
-// isConfigdTemplate reports a configd template script: cliexec runs it
-// after filling in its $VAR(...) placeholders, so it is not shell source.
+// isConfigdTemplate reports a script that is not shell source: a configd
+// template (cliexec runs it after filling in its $VAR(...) placeholders) or
+// a vcli -f script of Vyatta CLI commands.
 func isConfigdTemplate(first string) bool {
 	interp := strings.Fields(strings.TrimPrefix(first, "#!"))
-	return strings.HasPrefix(first, "#!") && len(interp) > 0 &&
-		path.Base(interp[0]) == "cliexec"
+	if !strings.HasPrefix(first, "#!") || len(interp) == 0 {
+		return false
+	}
+	prog := path.Base(interp[0])
+	return prog == "cliexec" || prog == "vcli"
 }
 
 func firstLine(p string) string {

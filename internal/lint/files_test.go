@@ -76,12 +76,14 @@ func TestClassifyByExtensionAndShebang(t *testing.T) {
 }
 
 // configd templates start #!/opt/vyatta/bin/cliexec and hold $VAR(...)
-// placeholders that configd fills in before bash runs them: a template
-// language, not shell, whatever the extension.
+// placeholders that configd fills in before bash runs them, and vcli -f
+// scripts are Vyatta CLI commands: neither is shell, whatever the extension.
 func TestClassifySkipsConfigdTemplates(t *testing.T) {
 	got := classify(t, map[string]string{
 		"tmplscripts/a/configd_end.sh": "#!/opt/vyatta/bin/cliexec\n>| /etc/x\n",
 		"tmplscripts/a/configd_vrf":    "#!/opt/vyatta/bin/cliexec\nV=$VAR(@)\n",
+		"scripts/revert.sh":            "#!/bin/vcli -f\nconfigure\ncfgcli rollback 1\n",
+		"scripts/0510-tech-support":    "#!/opt/vyatta/bin/vcli -f\nshow version\n",
 		"scripts/real.sh":              "#!/bin/bash\necho hi\n",
 	})
 	want := map[string][]string{"shell": {"scripts/real.sh"}}
