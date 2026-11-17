@@ -1,0 +1,7 @@
+#!/bin/sh -e
+
+# Activation is performed by the user-isolation hook after runtime preflight.
+
+#DEBHELPER#
+
+exit 0

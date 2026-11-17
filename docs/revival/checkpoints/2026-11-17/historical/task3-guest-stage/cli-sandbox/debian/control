@@ -1,0 +1,50 @@
+Source: cli-sandbox
+Section: net
+Priority: optional
+Maintainer: NuDanOS Maintainers <jon@fernandez.tech>
+Build-Depends: debhelper-compat (= 13),
+ dh-yang,
+ dh-python,
+ python3-all,
+ python3-setuptools,
+ python3-yaml,
+ shellcheck,
+ libsystemd-dev,
+ pkg-config,
+ libpam0g-dev
+Standards-Version: 4.7.2
+Rules-Requires-Root: no
+Vcs-Git: https://github.com/nudanos/cli-sandbox.git
+Vcs-Browser: https://github.com/nudanos/cli-sandbox
+
+Package: python3-shared-storage
+Architecture: all
+Depends: python3 (>= 3.5), ${python3:Depends}, ${misc:Depends}
+Description: Python3 module for managing shared storage
+ This package provides function to manage shared mounts
+ and directories
+
+Package: cli-sandbox
+Architecture: all
+Breaks: vyatta-sssd-cfg (<< 0.54)
+Depends: systemd-container,
+ python3 (>= 3.5),
+ python3-shared-storage,
+ python3-yaml,
+ ${python3:Depends},
+ ${misc:Depends},
+Description: Systemd nspawn services for the login session sandbox
+ create a sandbox for the user's login sessions.
+
+Package: pam-sandbox
+Architecture: any
+Depends: cli-sandbox, libpam-runtime, ${shlibs:Depends}, ${misc:Depends}
+Description: PAM module for user sandboxing
+ This package provides the pam-sandbox module that can be used
+ to sandbox user's login sessions
+
+Package: vyatta-system-login-user-isolation-v1-yang
+Architecture: all
+Depends: pam-sandbox, cli-sandbox, mmdebstrap, ${yang:Depends}, ${misc:Depends}
+Description: yang module for vyatta-user-isolation
+ This package provides the user isolation configuration

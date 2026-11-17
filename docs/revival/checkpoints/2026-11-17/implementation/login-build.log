@@ -1,0 +1,318 @@
+Ign:1 file:/pool ./ InRelease
+Ign:2 file:/pool ./ Release
+Get:3 file:/pool ./ Packages [141 kB]
+Get:4 http://deb.debian.org/debian trixie-backports InRelease [54.0 kB]
+Get:5 http://deb.debian.org/debian trixie InRelease [140 kB]
+Get:6 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
+Get:7 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
+Get:8 http://deb.debian.org/debian trixie-backports/main amd64 Packages [300 kB]
+Get:9 http://deb.debian.org/debian trixie/main amd64 Packages [9678 kB]
+Get:10 http://deb.debian.org/debian trixie/main amd64 Components [5175 kB]
+Get:11 http://deb.debian.org/debian trixie-updates/main amd64 Packages [1108 B]
+Get:12 http://deb.debian.org/debian-security trixie-security/main amd64 Packages [301 kB]
+Fetched 15.7 MB in 4s (3837 kB/s)
+Reading package lists...
+Note, using directory './' to get the build dependencies
+Reading package lists...
+Building dependency tree...
+Reading state information...
+The following NEW packages will be installed:
+  cpio dh-python dh-yang libappconfig-perl libfile-slurp-perl libjansson-dev
+  libjson-perl libpam0g-dev libtemplate-perl liburiparser1 libvyatta-cfg-dev
+  libvyatta-config-perl libvyatta-config2 libvyatta-util-dev libvyatta-util1
+0 upgraded, 15 newly installed, 0 to remove and 1 not upgraded.
+Need to get 1254 kB/1494 kB of archives.
+After this operation, 5672 kB of additional disk space will be used.
+Get:1 file:/pool ./ dh-yang 0.5 [2640 B]
+Get:2 file:/pool ./ libvyatta-util1 0.31 [9532 B]
+Get:3 file:/pool ./ libvyatta-config2 1.34 [54.3 kB]
+Get:4 file:/pool ./ libvyatta-config-perl 1.34 [39.0 kB]
+Get:5 file:/pool ./ libvyatta-util-dev 0.31 [9704 B]
+Get:6 file:/pool ./ libvyatta-cfg-dev 1.34 [124 kB]
+Get:7 http://deb.debian.org/debian trixie/main amd64 cpio amd64 2.15+dfsg-2 [252 kB]
+Get:8 http://deb.debian.org/debian trixie/main amd64 dh-python all 6.20250414 [116 kB]
+Get:9 http://deb.debian.org/debian trixie/main amd64 libappconfig-perl all 1.71-2.3 [67.0 kB]
+Get:10 http://deb.debian.org/debian trixie/main amd64 libfile-slurp-perl all 9999.32-2 [26.7 kB]
+Get:11 http://deb.debian.org/debian trixie/main amd64 libjansson-dev amd64 2.14-2+b3 [43.2 kB]
+Get:12 http://deb.debian.org/debian trixie/main amd64 libjson-perl all 4.10000-1 [87.5 kB]
+Get:13 http://deb.debian.org/debian trixie/main amd64 libpam0g-dev amd64 1.7.0-5 [69.5 kB]
+Get:14 http://deb.debian.org/debian trixie/main amd64 libtemplate-perl amd64 2.27-1+b8 [547 kB]
+Get:15 http://deb.debian.org/debian trixie/main amd64 liburiparser1 amd64 0.9.8+dfsg-2 [45.5 kB]
+Fetched 1254 kB in 0s (3979 kB/s)
+Selecting previously unselected package cpio.
+(Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 25519 files and directories currently installed.)
+Preparing to unpack .../00-cpio_2.15+dfsg-2_amd64.deb ...
+Unpacking cpio (2.15+dfsg-2) ...
+Selecting previously unselected package dh-python.
+Preparing to unpack .../01-dh-python_6.20250414_all.deb ...
+Unpacking dh-python (6.20250414) ...
+Selecting previously unselected package dh-yang.
+Preparing to unpack .../02-dh-yang_0.5_all.deb ...
+Unpacking dh-yang (0.5) ...
+Selecting previously unselected package libappconfig-perl.
+Preparing to unpack .../03-libappconfig-perl_1.71-2.3_all.deb ...
+Unpacking libappconfig-perl (1.71-2.3) ...
+Selecting previously unselected package libfile-slurp-perl.
+Preparing to unpack .../04-libfile-slurp-perl_9999.32-2_all.deb ...
+Unpacking libfile-slurp-perl (9999.32-2) ...
+Selecting previously unselected package libjansson-dev:amd64.
+Preparing to unpack .../05-libjansson-dev_2.14-2+b3_amd64.deb ...
+Unpacking libjansson-dev:amd64 (2.14-2+b3) ...
+Selecting previously unselected package libjson-perl.
+Preparing to unpack .../06-libjson-perl_4.10000-1_all.deb ...
+Unpacking libjson-perl (4.10000-1) ...
+Selecting previously unselected package libpam0g-dev:amd64.
+Preparing to unpack .../07-libpam0g-dev_1.7.0-5_amd64.deb ...
+Unpacking libpam0g-dev:amd64 (1.7.0-5) ...
+Selecting previously unselected package libtemplate-perl.
+Preparing to unpack .../08-libtemplate-perl_2.27-1+b8_amd64.deb ...
+Unpacking libtemplate-perl (2.27-1+b8) ...
+Selecting previously unselected package liburiparser1:amd64.
+Preparing to unpack .../09-liburiparser1_0.9.8+dfsg-2_amd64.deb ...
+Unpacking liburiparser1:amd64 (0.9.8+dfsg-2) ...
+Selecting previously unselected package libvyatta-util1.
+Preparing to unpack .../10-libvyatta-util1_0.31_amd64.deb ...
+Unpacking libvyatta-util1 (0.31) ...
+Selecting previously unselected package libvyatta-config2.
+Preparing to unpack .../11-libvyatta-config2_1.34_amd64.deb ...
+Unpacking libvyatta-config2 (1.34) ...
+Selecting previously unselected package libvyatta-config-perl.
+Preparing to unpack .../12-libvyatta-config-perl_1.34_amd64.deb ...
+Unpacking libvyatta-config-perl (1.34) ...
+Selecting previously unselected package libvyatta-util-dev.
+Preparing to unpack .../13-libvyatta-util-dev_0.31_amd64.deb ...
+Unpacking libvyatta-util-dev (0.31) ...
+Selecting previously unselected package libvyatta-cfg-dev.
+Preparing to unpack .../14-libvyatta-cfg-dev_1.34_amd64.deb ...
+Unpacking libvyatta-cfg-dev (1.34) ...
+Setting up dh-python (6.20250414) ...
+Setting up cpio (2.15+dfsg-2) ...
+update-alternatives: using /usr/bin/mt-gnu to provide /usr/bin/mt (mt) in auto mode
+Setting up libfile-slurp-perl (9999.32-2) ...
+Setting up libpam0g-dev:amd64 (1.7.0-5) ...
+Setting up dh-yang (0.5) ...
+Setting up liburiparser1:amd64 (0.9.8+dfsg-2) ...
+Setting up libjson-perl (4.10000-1) ...
+Setting up libvyatta-util1 (0.31) ...
+Setting up libvyatta-config2 (1.34) ...
+Setting up libjansson-dev:amd64 (2.14-2+b3) ...
+Setting up libappconfig-perl (1.71-2.3) ...
+Setting up libvyatta-util-dev (0.31) ...
+Setting up libtemplate-perl (2.27-1+b8) ...
+Setting up libvyatta-config-perl (1.34) ...
+Setting up libvyatta-cfg-dev (1.34) ...
+Processing triggers for man-db (2.13.1-1) ...
+Processing triggers for libc-bin (2.41-12+deb13u4) ...
+dpkg-buildpackage: info: source package vyatta-login
+dpkg-buildpackage: info: source version 2.45
+dpkg-buildpackage: info: source distribution trixie
+dpkg-buildpackage: info: source changed by Jon Fernandez <jon@fernandez.tech>
+ dpkg-source -I -i --before-build .
+dpkg-buildpackage: info: host architecture amd64
+ debian/rules clean
+dh clean --with autoreconf --with yang
+   dh_clean
+ dpkg-source -I -i -b .
+dpkg-source: info: using source format '3.0 (native)'
+dpkg-source: info: building vyatta-login in vyatta-login_2.45.tar.xz
+dpkg-source: info: building vyatta-login in vyatta-login_2.45.dsc
+ debian/rules binary
+dh binary --with autoreconf --with yang
+   dh_update_autotools_config
+   dh_autoreconf
+configure.ac:19: warning: The macro 'AC_HELP_STRING' is obsolete.
+configure.ac:19: You should run autoupdate.
+./lib/autoconf/general.m4:204: AC_HELP_STRING is expanded from...
+configure.ac:19: the top level
+configure.ac:28: installing 'config/compile'
+configure.ac:15: installing 'config/install-sh'
+configure.ac:15: installing 'config/missing'
+   debian/rules override_dh_auto_configure
+make[1]: Entering directory '/build/pkg'
+dh_auto_configure -- --prefix=/opt/vyatta --sysconfdir=/opt/vyatta/etc
+	./configure --build=x86_64-linux-gnu --prefix=/usr --includedir=\${prefix}/include --mandir=\${prefix}/share/man --infodir=\${prefix}/share/info --sysconfdir=/etc --localstatedir=/var --disable-option-checking --disable-silent-rules --libdir=\${prefix}/lib/x86_64-linux-gnu --runstatedir=/run --disable-maintainer-mode --disable-dependency-tracking --prefix=/opt/vyatta --sysconfdir=/opt/vyatta/etc
+checking for a BSD-compatible install... /usr/bin/install -c
+checking whether sleep supports fractional seconds... yes
+checking filesystem timestamp resolution... 0.01
+checking whether build environment is sane... yes
+checking for a race-free mkdir -p... /usr/bin/mkdir -p
+checking for gawk... no
+checking for mawk... mawk
+checking whether make sets $(MAKE)... yes
+checking whether make supports nested variables... yes
+checking xargs -n works... yes
+checking for gcc... gcc
+checking whether the C compiler works... yes
+checking for C compiler default output file name... a.out
+checking for suffix of executables... 
+checking whether we are cross compiling... no
+checking for suffix of object files... o
+checking whether the compiler supports GNU C... yes
+checking whether gcc accepts -g... yes
+checking for gcc option to enable C11 features... none needed
+checking whether gcc understands -c and -o together... yes
+checking whether make supports the include directive... yes (GNU style)
+checking dependency style of gcc... none
+checking for g++... g++
+checking whether the compiler supports GNU C++... yes
+checking whether g++ accepts -g... yes
+checking for g++ option to enable C++11 features... none needed
+checking dependency style of g++... none
+checking dependency style of gcc... none
+checking for perl... /usr/bin/perl
+checking that generated files are newer than configure... done
+configure: creating ./config.status
+config.status: creating Makefile
+config.status: executing depfiles commands
+make[1]: Leaving directory '/build/pkg'
+   dh_auto_build
+	make -j2
+make[1]: Entering directory '/build/pkg'
+Making all in .
+make[2]: Entering directory '/build/pkg'
+make[2]: Nothing to be done for 'all-am'.
+make[2]: Leaving directory '/build/pkg'
+Making all in src
+make[2]: Entering directory '/build/pkg/src'
+cc -c -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=/build/pkg=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC -Wall -Wextra -Werror -Wdate-time -D_FORTIFY_SOURCE=2 pam_vyatta_passwd/pam_vyatta_passwd.c -o pam_vyatta_passwd/pam_vyatta_passwd.o
+cc -g -O2 -Werror=implicit-function-declaration -ffile-prefix-map=/build/pkg=. -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fPIC -Wall -Wextra -Werror -Wdate-time -D_FORTIFY_SOURCE=2 pam_vyatta_passwd/pam_vyatta_passwd.o -o pam_vyatta_passwd/pam_vyatta_passwd.so -Wl,-z,relro -shared -lvyatta-util -lvyatta-config -ljansson -lpam
+make[2]: Leaving directory '/build/pkg/src'
+make[1]: Leaving directory '/build/pkg'
+   debian/rules override_dh_auto_test
+make[1]: Entering directory '/build/pkg'
+dh_auto_test -- VERBOSE=1
+prove t/
+t/local-users-skip-tacacs.t .. ok
+t/update-user-exit-status.t .. ok
+All tests successful.
+Files=2, Tests=4,  0 wallclock secs ( 0.02 usr  0.01 sys +  0.18 cusr  0.06 csys =  0.27 CPU)
+Result: PASS
+make[1]: Leaving directory '/build/pkg'
+   create-stamp debian/debhelper-build-stamp
+   dh_prep
+   debian/rules override_dh_auto_install
+make[1]: Entering directory '/build/pkg'
+dh_auto_install --destdir=debian/vyatta-login
+	make -j2 install DESTDIR=/build/pkg/debian/vyatta-login AM_UPDATE_INFO_DIR=no
+make[2]: Entering directory '/build/pkg'
+Making install in .
+make[3]: Entering directory '/build/pkg'
+make[4]: Entering directory '/build/pkg'
+ /usr/bin/mkdir -p '/build/pkg/debian/vyatta-login/opt/vyatta/bin'
+ /usr/bin/mkdir -p '/build/pkg/debian/vyatta-login/opt/vyatta/sbin'
+ /usr/bin/install -c scripts/check_old_passwords scripts/encrypt_shadow_passwd scripts/show-users-op scripts/system/vyatta_tally_op scripts/vyatta-login-history scripts/vyatta-show-current-user scripts/vyatta-show-login-history '/build/pkg/debian/vyatta-login/opt/vyatta/bin'
+ /usr/bin/install -c scripts/standalone_root_pw_reset scripts/vyatta-passwd-sync scripts/system-login-information scripts/system/vyatta_check_username.pl scripts/system/vyatta_create_account scripts/system/vyatta_tally_rpc scripts/system/vyatta_update_login.pl scripts/system/update_password_quality.pl scripts/vyatta-banner.pl scripts/vyatta-change-password scripts/vyatta-password-rpc '/build/pkg/debian/vyatta-login/opt/vyatta/sbin'
+ /usr/bin/mkdir -p '/build/pkg/debian/vyatta-login/usr/share/pam-configs'
+ /usr/bin/install -c -m 644 usr/share/pam-configs/umask '/build/pkg/debian/vyatta-login/usr/share/pam-configs'
+ /usr/bin/mkdir -p '/build/pkg/debian/vyatta-login/opt/vyatta/share/perl5/Vyatta/Login'
+ /usr/bin/mkdir -p '/build/pkg/debian/vyatta-login/opt/vyatta/preconfig.d'
+ /usr/bin/install -c -m 644 lib/Vyatta/Login/User.pm lib/Vyatta/Login/Password.pm lib/Vyatta/Login/Faillock.pm '/build/pkg/debian/vyatta-login/opt/vyatta/share/perl5/Vyatta/Login'
+ /usr/bin/install -c preconfig.d/5000-banner '/build/pkg/debian/vyatta-login/opt/vyatta/preconfig.d'
+make  install-exec-hook
+ /usr/bin/mkdir -p '/build/pkg/debian/vyatta-login/opt/vyatta/etc/security/'
+make[5]: Entering directory '/build/pkg'
+mkdir -p /build/pkg/debian/vyatta-login/opt/vyatta/etc/pam-configs
+ /usr/bin/install -c -m 644 etc/security/pwquality.config.template '/build/pkg/debian/vyatta-login/opt/vyatta/etc/security/'
+mkdir -p /build/pkg/debian/vyatta-login/opt/vyatta/share/vyatta-op/templates
+cd templates && find  . ! -regex '\(.*~\|.*\.bak\|.*\.swp\|.*#.*#\)' -print0 | cpio -0pd /build/pkg/debian/vyatta-login/opt/vyatta/share/vyatta-op/templates
+2 blocks
+mkdir -p /build/pkg/debian/vyatta-login
+cd tmplscripts && find  . ! -regex '\(.*~\|.*\.bak\|.*\.swp\|.*#.*#\)' -print0 | cpio -0pd /build/pkg/debian/vyatta-login/opt/vyatta/share/tmplscripts
+7 blocks
+mkdir -p /build/pkg/debian/vyatta-login/usr/share/configd/yang
+cd yang && find  . ! -regex '\(.*~\|.*\.bak\|.*\.swp\|.*#.*#\)' -print0 | cpio -0pd /build/pkg/debian/vyatta-login/usr/share/configd/yang
+78 blocks
+make[5]: Leaving directory '/build/pkg'
+make[4]: Leaving directory '/build/pkg'
+make[3]: Leaving directory '/build/pkg'
+Making install in src
+make[3]: Entering directory '/build/pkg/src'
+install -D -m644 pam_vyatta_passwd/pam_vyatta_passwd.so /build/pkg/debian/vyatta-login/usr/lib/x86_64-linux-gnu/security/pam_vyatta_passwd.so
+make[3]: Leaving directory '/build/pkg/src'
+make[2]: Leaving directory '/build/pkg'
+mkdir -p debian/tmp/usr/share
+mv debian/vyatta-login/usr/share/configd debian/tmp/usr/share
+mkdir -p debian/tmp/usr/lib
+mv debian/vyatta-login/usr/lib/x86_64-linux-gnu debian/tmp/usr/lib/
+mkdir -p debian/tmp/opt/vyatta/share/perl5/Vyatta/Login
+mv debian/vyatta-login/opt/vyatta/share/perl5/Vyatta/Login/Faillock.pm debian/tmp/opt/vyatta/share/perl5/Vyatta/Login/
+make[1]: Leaving directory '/build/pkg'
+   dh_install
+   dh_installdocs
+   dh_installchangelogs
+   dh_perl
+   dh_link
+   dh_strip_nondeterminism
+   dh_compress
+   dh_fixperms
+   dh_missing
+   dh_dwz -a
+   dh_strip -a
+   dh_makeshlibs -a
+   dh_shlibdeps -a
+   dh_installdeb
+   dh_yang
+   dh_gencontrol
+   dh_md5sums
+   dh_builddeb
+dpkg-deb: building package 'vyatta-password-renewal-dbgsym' in '../vyatta-password-renewal-dbgsym_2.45_amd64.deb'.
+dpkg-deb: building package 'vyatta-system-login-v1-yang' in '../vyatta-system-login-v1-yang_2.45_all.deb'.
+dpkg-deb: building package 'vyatta-op-reset-system-login-v1-yang' in '../vyatta-op-reset-system-login-v1-yang_2.45_all.deb'.
+dpkg-deb: building package 'vyatta-system-login-radius-routing-instance-v1-yang' in '../vyatta-system-login-radius-routing-instance-v1-yang_2.45_all.deb'.
+dpkg-deb: building package 'vyatta-op-show-system-login-v1-yang' in '../vyatta-op-show-system-login-v1-yang_2.45_all.deb'.
+dpkg-deb: building package 'vyatta-radius-system-user-login-feature' in '../vyatta-radius-system-user-login-feature_2.45_all.deb'.
+dpkg-deb: building package 'vyatta-system-login-history-v1-yang' in '../vyatta-system-login-history-v1-yang_2.45_all.deb'.
+dpkg-deb: building package 'vyatta-login' in '../vyatta-login_2.45_amd64.deb'.
+dpkg-deb: building package 'vyatta-op-show-system-login-history-v1-yang' in '../vyatta-op-show-system-login-history-v1-yang_2.45_all.deb'.
+dpkg-deb: building package 'vyatta-password-renewal' in '../vyatta-password-renewal_2.45_amd64.deb'.
+ dpkg-genbuildinfo -O../vyatta-login_2.45_amd64.buildinfo
+ dpkg-genchanges -O../vyatta-login_2.45_amd64.changes
+dpkg-genchanges: info: including full source code in upload
+ dpkg-source -I -i --after-build .
+dpkg-buildpackage: info: full upload; Debian-native package (full source is included)
+running with root privileges is not recommended!
+W: vyatta-login: old-fsf-address-in-copyright-file
+W: vyatta-op-reset-system-login-v1-yang: old-fsf-address-in-copyright-file
+W: vyatta-op-show-system-login-history-v1-yang: old-fsf-address-in-copyright-file
+W: vyatta-op-show-system-login-v1-yang: old-fsf-address-in-copyright-file
+W: vyatta-password-renewal: old-fsf-address-in-copyright-file
+W: vyatta-radius-system-user-login-feature: old-fsf-address-in-copyright-file
+W: vyatta-system-login-history-v1-yang: old-fsf-address-in-copyright-file
+W: vyatta-system-login-radius-routing-instance-v1-yang: old-fsf-address-in-copyright-file
+W: vyatta-system-login-v1-yang: old-fsf-address-in-copyright-file
+W: vyatta-login: unusual-interpreter /opt/vyatta/bin/cliexec [opt/vyatta/share/tmplscripts/system/login/group/configd_delete.sh]
+W: vyatta-login: unusual-interpreter /opt/vyatta/bin/cliexec [opt/vyatta/share/tmplscripts/system/login/group/configd_update.sh]
+W: vyatta-login: unusual-interpreter /opt/vyatta/bin/cliexec [opt/vyatta/share/tmplscripts/system/login/max-sessions/configd_delete.sh]
+W: vyatta-login: unusual-interpreter /opt/vyatta/bin/cliexec [opt/vyatta/share/tmplscripts/system/login/max-sessions/configd_update.sh]
+W: vyatta-login: unusual-interpreter /opt/vyatta/bin/cliexec [opt/vyatta/share/tmplscripts/system/login/session-timeout/configd_update.sh]
+W: vyatta-login: unusual-interpreter /opt/vyatta/bin/cliexec [opt/vyatta/share/tmplscripts/system/login/user/group/configd_allowed.sh]
+W: vyatta-login: unusual-interpreter /opt/vyatta/bin/cliexpr [opt/vyatta/share/tmplscripts/system/login/user/authentication/encrypted-password/configd_syntax1.cli]
+W: vyatta-login: unusual-interpreter /opt/vyatta/bin/cliexpr [opt/vyatta/share/tmplscripts/system/login/user/authentication/plaintext-password/configd_subst1.cli]
+W: vyatta-login: unusual-interpreter /opt/vyatta/bin/cliexpr [opt/vyatta/share/tmplscripts/system/login/user/authentication/plaintext-password/configd_syntax.cli]
+W: vyatta-login: unusual-interpreter /opt/vyatta/bin/cliexpr [opt/vyatta/share/tmplscripts/system/login/user/authentication/public-keys/configd_validate1.cli]
+W: vyatta-login: unusual-interpreter /opt/vyatta/bin/cliexpr [opt/vyatta/share/tmplscripts/system/login/user/authentication/public-keys/configd_validate2.cli]
+W: vyatta-login: unusual-interpreter /opt/vyatta/bin/cliexpr [opt/vyatta/share/tmplscripts/system/login/user/authentication/public-keys/type/configd_syntax1.cli]
+W: vyatta-login: unusual-interpreter /opt/vyatta/bin/cliexpr [opt/vyatta/share/tmplscripts/system/login/user/configd_syntax1.cli]
+W: vyatta-login: unusual-interpreter /opt/vyatta/bin/cliexpr [opt/vyatta/share/tmplscripts/system/login/user/group/configd_syntax1.cli]
+W: vyatta-login: unusual-interpreter /opt/vyatta/bin/cliexpr [opt/vyatta/share/tmplscripts/system/login/user/group/configd_validate1.cli]

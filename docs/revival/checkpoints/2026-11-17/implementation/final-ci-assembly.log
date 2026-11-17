@@ -1,0 +1,42 @@
+vyatta-debian-pam-configs-config: removed 3, added 3
+  3adffaf6ce2e9bc464b335273b97c34bef3704a893326df77bd3feb854c3bf0f  vyatta-debian-pam-configs-config_1.13.dsc
+  ccc389f42ad3c3885e48d72e944021c90507a4aede1717b687eb219d6da180bc  vyatta-debian-pam-configs-config_1.13.tar.xz
+  87469b6d4863cdde48dbd78379b9c6a39bb3f537d5306b87efa60b07398b2b08  vyatta-debian-pam-configs-config_1.13_all.deb
+cli-sandbox: removed 7, added 7
+  4373994aa7b88c7caf1813c5f06219dff5d9912f56b1d0a4ca73444f6cb9dfbb  cli-sandbox_0.33.dsc
+  21125992a835e8c715f16873f93f10a1b9c9b14150ce0f90cf41581e821efb49  cli-sandbox_0.33.tar.gz
+  e3aa5882e01acc760e8fd519398af270f0fd7959be896b38dd058511fc7ac7d0  cli-sandbox_0.33_all.deb
+  7c210d6226679856c97f939179daf398fe119c32d050c22afb220853740267e5  pam-sandbox-dbgsym_0.33_amd64.deb
+  af8d5cbed815414848b0ca05da81b2e964b19e056011c96c83280969c61c57a9  pam-sandbox_0.33_amd64.deb
+  21a2163df11246aa57365fe379bc4f967ba1becaa153779a0cef5659cb03d9f1  python3-shared-storage_0.33_all.deb
+  321e59e674a364856344f24c365699eaa188c45985ed417b20560263e48960d6  vyatta-system-login-user-isolation-v1-yang_0.33_all.deb
+configd: removed 16, added 16
+  8ff260faf8b89a47fe95e29c21b8501d4c969f46aa9b9b5c98821c4ab9feb215  configd_2.17.dsc
+  c51ac94a86e53e4551834801c30e048d2ee4c41c29156f5161d1cccd1288ec5a  configd_2.17.tar.gz
+  65473065baf3088d35200ef428ce5c5fde4ae24abf022228a6612b9052c4173d  config-utils_2.17_amd64.deb
+  e8f733142af264927deff53d08ab3e62093bac7d2619d34bbc8b985156d401d5  configd-v1-yang_2.17_all.deb
+  8a61dc4929d482bcca7f12133b9b148ffa644d2f993e2591a763ef73971a4474  configd_2.17_amd64.deb
+  118db1d0dcd54d23e8863aa1f32e3f555b2832639583e7d747caffa2475f35e8  golang-github-danos-configd-client-dev_2.17_all.deb
+  da925d92e86a45d94b8c674d786dc901aa7158e2ff9deec30d2424757f91c615  golang-github-danos-configd-rpc-dev_2.17_all.deb
+  918a526401a9fe51846820e9e9bab9265107e5378afa7cbfd44cecd4392d5cfe  ietf-inet-types-yang_2.17_all.deb
+  8cfd6761b9d93324dda18e0bfb4a01b9ed1e59ab8c31546d7b039c32f079b1eb  ietf-netconf-monitoring-yang_2.17_all.deb
+  a9742973f900ebf7b617c9f714f1f219284fb4daab6b8c091a3c3224ddfc7b30  ietf-netconf-with-defaults-yang_2.17_all.deb
+  b0009e6b2180d966fe8454e30db80afbb0449983ae0488fc02503a5983a6ce95  ietf-netconf-yang_2.17_all.deb
+  145fb92520f7001f3ce95786ff511604c9972fc931e56a9a4868ccb2902a2213  ietf-yang-types-yang_2.17_all.deb
+  835bb8e15627947c63c90fa6e2e2957894cc7d27033b2508351f7a5569019e88  vyatta-system-acm-configd-v1-yang_2.17_all.deb
+  e716d1b943ccd066d575e40e4c07da8ad474a92c0a50f8dde1b21dc4cba3339c  yang-utils_2.17_amd64.deb
+  5576ff962199c9146a3503899c340cd7b9db775cc4b8e0d30b58d24fb4c77dc0  yangd-v1-yang_2.17_all.deb
+  ffbaf3726f08b46911ce7769be33097743edc9ee033929a40775ef92a0f6565d  yangd_2.17_amd64.deb
+vyatta-login: removed 12, added 12
+  875a005e2f6142f6dcc350834f65a1afa10b25bff55aa1ad2b2fdf041059dbc0  vyatta-login_2.45.dsc
+  58a0a67c861bde558bcea0332c788eaaee4e00ed0990f132c6d2acf35966c91c  vyatta-login_2.45.tar.xz
+  7addd9b7831548769d8a3482d3fb8bef2aa5cf1d108d7a61f5b936f4fd5e200e  vyatta-login_2.45_amd64.deb
+  7485dfdc9e63636fbcac4fea4f4fb8982ba14789a3540cd446699e944259dc5d  vyatta-op-reset-system-login-v1-yang_2.45_all.deb
+  efbdacc479d4af1c563133e086537338ae37bf496eb11a94fdbd4cdc52955241  vyatta-op-show-system-login-history-v1-yang_2.45_all.deb
+  1dc6bd07ab983336e1025e2927a5cae2fd2b199a86295476c249756fe8c485cd  vyatta-op-show-system-login-v1-yang_2.45_all.deb
+  dc46cfc059592d282dff61d8cc486a1a9af3fc1387a53e291a7b255c631d5902  vyatta-password-renewal-dbgsym_2.45_amd64.deb
+  d68585628fec6afa8aed90cb722cdf7188fa7d1c44c6745855fe894ae32e236e  vyatta-password-renewal_2.45_amd64.deb
+  447747bbff410bbbb60ddaf5d9a5a29d15897415c224217a1f516c9bad2f96d6  vyatta-radius-system-user-login-feature_2.45_all.deb
+  71f1dde69b265402af3d26148f5ee6c705efa4b2e0185d7c6dd0dc6104e5db71  vyatta-system-login-history-v1-yang_2.45_all.deb
+  a58d162f503bd316d62856a8032cb8dacb70d5ccbf8383320f3e5d8a76c4397e  vyatta-system-login-radius-routing-instance-v1-yang_2.45_all.deb
+  76e8218aa110b6d1d4a06491d3951f25c114b0f81f45271290fbbd58e64298c7  vyatta-system-login-v1-yang_2.45_all.deb

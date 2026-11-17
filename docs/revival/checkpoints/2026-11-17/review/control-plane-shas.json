@@ -1,0 +1,266 @@
+[
+  {
+    "repo": "aaa",
+    "sha": "ba179454d70e755df3525939637b9e8d70bee41f"
+  },
+  {
+    "repo": "base-files",
+    "sha": "2274cbfbcbb96bedfcaa4878cd59e4901de99178"
+  },
+  {
+    "repo": "build-iso",
+    "sha": "7f3544386650a877bf90801d4c6c2f365934d100"
+  },
+  {
+    "repo": "cli-sandbox",
+    "sha": "7a3483a262d2b2bb6ded3dd62ecc0b3d68196c6e"
+  },
+  {
+    "repo": "config",
+    "sha": "160bc60115ab149531f6f11c03e6f4a1cad563a0"
+  },
+  {
+    "repo": "configd",
+    "sha": "240e958c481b5024620a5599a665f5b31c222ec4"
+  },
+  {
+    "repo": "dpdk",
+    "sha": "381827f42e00247c47e68073c11a266791542514"
+  },
+  {
+    "repo": "encoding",
+    "sha": "bcdb9bc16a7fe9dd02b68b1170ff878beeae4bac"
+  },
+  {
+    "repo": "ephemerad",
+    "sha": "d9378e90fe1395c0d88d1986b0ffc99db02a2b35"
+  },
+  {
+    "repo": "frr",
+    "sha": "a9d205efd8ac2490b85d4dd59ff169b7fb80aa08"
+  },
+  {
+    "repo": "golang-dbus",
+    "sha": "49cfd9697f799295a6aaceacefbf8ff8cf6aca3d"
+  },
+  {
+    "repo": "golang-github-danos-encoding-rfc7951",
+    "sha": "294d6f0919d04f29e4fcf66966e672bd1a43198b"
+  },
+  {
+    "repo": "golang-github-jsouthworth-objtree",
+    "sha": "b08d7a3920dd59c20c97aafbfbafaeb8c4d87d39"
+  },
+  {
+    "repo": "golang-github-youmark-pkcs8",
+    "sha": "522b767e1353682e2bea7b93d04f7218c7e2c7e4"
+  },
+  {
+    "repo": "golang-jsouthworth-dyn",
+    "sha": "dcdc08b2659be43db8e315673238ba442b00fbd6"
+  },
+  {
+    "repo": "golang-jsouthworth-etm",
+    "sha": "de3fe653a073d3ecae39a0ed2dff000357d78c56"
+  },
+  {
+    "repo": "golang-jsouthworth-hash",
+    "sha": "da12bce20f90cf89f93d6699bd0eac807da3383f"
+  },
+  {
+    "repo": "golang-jsouthworth-immutable",
+    "sha": "6951cf077519c3d0674aeb73b593e0895852f27e"
+  },
+  {
+    "repo": "golang-jsouthworth-seq",
+    "sha": "22ed6b18a2f1c41009036a4f6aaa9b97da90a947"
+  },
+  {
+    "repo": "golang-jsouthworth-transduce",
+    "sha": "3193fcd3ef71793130e717cafe9246782f77f560"
+  },
+  {
+    "repo": "golang-jsouthworth-try",
+    "sha": "c69a13864d957f32ae1c09e61f3055c5eb1b7960"
+  },
+  {
+    "repo": "ifmgrd",
+    "sha": "40e22ccdfd43ab7f408c9fca459625a4d25cc195"
+  },
+  {
+    "repo": "libvci",
+    "sha": "69108123dab1bd64deb5fe3e7e77396e22ddbc7c"
+  },
+  {
+    "repo": "live-boot-vyatta",
+    "sha": "2551a43376ff660867a3fcb6a4153c7b6e48a933"
+  },
+  {
+    "repo": "live-build-desc",
+    "sha": "619a40797c6ba0fdeda8a819921dd8092c93e1a2"
+  },
+  {
+    "repo": "mgmterror",
+    "sha": "654425712c59b2d1e9acc859ab1a669e9b86c93c"
+  },
+  {
+    "repo": "netconfd",
+    "sha": "0153a12ba11d0fde7b4bc97e9802507d49f59627"
+  },
+  {
+    "repo": "notifyd",
+    "sha": "e56073957aa735444b24a7f40d8aea1ce0b46afc"
+  },
+  {
+    "repo": "nudanos-router",
+    "sha": "e45627a7eb7b70a8bcffab5757064c285e59f595"
+  },
+  {
+    "repo": "op",
+    "sha": "aef78452cd05f10aaab10980595aed8fe759ea0b"
+  },
+  {
+    "repo": "opd",
+    "sha": "7399d55997c7e57b76d27a80102bba3067a63f74"
+  },
+  {
+    "repo": "provisiond",
+    "sha": "9ef2b3a2fc8c07c744d4f38f99baa0a29917648c"
+  },
+  {
+    "repo": "routing-instance",
+    "sha": "a5982b5731bd351982f9d2f250dcec39a4e5e6db"
+  },
+  {
+    "repo": "utils",
+    "sha": "b032c485ca464698e3e8f3dfa91978af067d46c4"
+  },
+  {
+    "repo": "vci",
+    "sha": "0499b9e2b4c5ee7883e0f0c397685cfd26d762c4"
+  },
+  {
+    "repo": "vplane-config-npf",
+    "sha": "2103ac7e19ee77eacff30a3d11cf487dfbefee26"
+  },
+  {
+    "repo": "vplane-config-qos",
+    "sha": "19fdc56e29d36b92975843cb30df28541fdaf256"
+  },
+  {
+    "repo": "vrf-manager",
+    "sha": "a9be87ae5d0ea261df034fffee9cab087f301f41"
+  },
+  {
+    "repo": "vyatta-base",
+    "sha": "c850111cadd5cf150a79543aa4838d23afa28bc1"
+  },
+  {
+    "repo": "vyatta-cfg",
+    "sha": "27f64d96841980cec3c451718daff681cca70637"
+  },
+  {
+    "repo": "vyatta-cfg-dataplane",
+    "sha": "513f14364ce2c6f94e5255fda33b324c83828d68"
+  },
+  {
+    "repo": "vyatta-config-mgmt",
+    "sha": "3c03a25b5fe3cbf19df465a15e44161dcb89e968"
+  },
+  {
+    "repo": "vyatta-config-migrate",
+    "sha": "e657ae9fdfb65655b114860f0da4733fa4e2cac0"
+  },
+  {
+    "repo": "vyatta-dataplane",
+    "sha": "5f927126ea7f4d724f1663f823e9346baf627367"
+  },
+  {
+    "repo": "vyatta-debian-lldpd-config",
+    "sha": "405908fd3384cf8f8b20ea61bb41bf40aaf0dd1a"
+  },
+  {
+    "repo": "vyatta-debian-pam-configs-config",
+    "sha": "e8502d8d0e8b59bc95cbb77a79258886d20fea52"
+  },
+  {
+    "repo": "vyatta-debian-passwd-config",
+    "sha": "b1979acf7e155386b15817ff34f44cd905fade5c"
+  },
+  {
+    "repo": "vyatta-debian-ssh-server-config",
+    "sha": "8c337c88d03c2f538f7de3cc74ed8ec6f5cf7822"
+  },
+  {
+    "repo": "vyatta-debian-system-config",
+    "sha": "13cb55fae181a4ad39366185bcc6f555ff2d32e2"
+  },
+  {
+    "repo": "vyatta-debian-systemd-config",
+    "sha": "9cf2be239e99adcd65f61c1a3874f600f17b3d96"
+  },
+  {
+    "repo": "vyatta-hotplug",
+    "sha": "b50efce4714adff73ef49ea0f08534a4a11f8e13"
+  },
+  {
+    "repo": "vyatta-image-tools",
+    "sha": "0405dbdeb2818a4f19136730610cb4ba87058c75"
+  },
+  {
+    "repo": "vyatta-interfaces",
+    "sha": "1e47e9e05928d6fef58f7fb512c22d941f0511ae"
+  },
+  {
+    "repo": "vyatta-kernel-forwarding",
+    "sha": "471ce7e62166d3966b6a648dcff870ebba955229"
+  },
+  {
+    "repo": "vyatta-login",
+    "sha": "64c15c933f59ae552e8044dbd70a6f2d13e6c99b"
+  },
+  {
+    "repo": "vyatta-platform",
+    "sha": "51e7b65044084e9d01223c471b4e02fe352c7130"
+  },
+  {
+    "repo": "vyatta-protocols-frr",
+    "sha": "7b3c841394f68e01dba37b88053f1a20971ae4e7"
+  },
+  {
+    "repo": "vyatta-rest",
+    "sha": "a520840d1bc51a9bef4d86bb61bd2105068fb2a7"
+  },
+  {
+    "repo": "vyatta-route-broker",
+    "sha": "8ee9162d55e8e0e02672acfceb44f562b4b34662"
+  },
+  {
+    "repo": "vyatta-security-vpn",
+    "sha": "40415591d0cbdd68309a22eb24ad324ebd2275e0"
+  },
+  {
+    "repo": "vyatta-service-dhcp",
+    "sha": "af6e2c1d7fc45b73694a90365cfdff469385e878"
+  },
+  {
+    "repo": "vyatta-service-dns",
+    "sha": "aeba9e317112e1afbbd50efbc87651dabb708def"
+  },
+  {
+    "repo": "vyatta-sssd",
+    "sha": "1b21e8402077d21de96b9bfbbd875ced0cfdeb0f"
+  },
+  {
+    "repo": "xpath-plugins",
+    "sha": "b3e2dce52f2721954f01e2b0fc301ecf010520b5"
+  },
+  {
+    "repo": "yang",
+    "sha": "5192f785de8392bb9fa7c0e3bbce866a467ef31d"
+  },
+  {
+    "repo": "yangd",
+    "sha": "4b712a20471faecca895d038e09185017c138aa8"
+  }
+]

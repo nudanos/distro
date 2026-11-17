@@ -1,0 +1,2 @@
+# Preserve checkpoint manifest hashes across Windows/Linux checkouts.
+* -text

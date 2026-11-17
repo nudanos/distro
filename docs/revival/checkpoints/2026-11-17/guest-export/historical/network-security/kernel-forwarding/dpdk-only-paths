@@ -1,0 +1,88 @@
+# Configuration only the DPDK dataplane implements. 50-dpdk-set-aside
+# removes matching nodes from a 2105 boot configuration before it is
+# loaded, so the rest loads on the kernel dataplane. One path per line;
+# "*" matches one node name (a list key); a trailing "!auto" matches only
+# when the leaf's value is not "auto". A "# <package>" line names the
+# DPDK-only package (distro/docs/kernel-forwarding.md) whose configuration
+# the following lines cover; tests/set-aside-consistency.t checks both.
+
+# DPDK features with no kernel-dataplane implementation in 1.0. Firewall
+# and NAT are detected separately as a safety refusal before any removal.
+security firewall
+# an interface's firewall binding (load drops it silently on NuDanOS)
+interfaces * * firewall
+interfaces * * vif * firewall
+service nat
+policy qos
+
+# refused by vyatta-kernel-forwarding-deviations-v1
+interfaces dataplane * cpu-affinity
+interfaces dataplane * receive-cpu-affinity
+interfaces dataplane * transmit-cpu-affinity
+interfaces dataplane * ip gratuitous-arp
+interfaces dataplane * vif * ip gratuitous-arp
+interfaces dataplane * speed !auto
+interfaces dataplane * duplex !auto
+
+# vyatta-system-dataplane-v1-yang
+system dataplane
+system default dataplane
+
+# vyatta-system-hugepages-v1-yang
+system hugepages
+
+# vyatta-interfaces-backplane-v1-yang
+interfaces backplane
+
+# vyatta-interfaces-bonding-qos-v1-yang
+interfaces bonding * policy qos
+interfaces bonding * vif * policy qos
+
+# vyatta-interfaces-bonding-storm-control-v1-yang
+interfaces bonding * storm-control
+interfaces bonding * vif * storm-control
+
+# vyatta-security-storm-control-v1-yang
+security storm-control
+interfaces dataplane * storm-control
+interfaces dataplane * vif * storm-control
+service snmp notification storm-control
+
+# vyatta-interfaces-dataplane-transceiver-v1-yang: no configuration (state groupings only)
+
+# vyatta-interfaces-tcp-mss-v1-yang
+# vyatta-interfaces-switch-vif-tcp-mss-v1-yang
+interfaces * * ip tcp-mss
+interfaces * * ipv6 tcp-mss
+interfaces * * vif * ip tcp-mss
+interfaces * * vif * ipv6 tcp-mss
+
+# vyatta-interfaces-vfp-v1-yang
+# vyatta-interfaces-vfp-unnumbered-v1-yang
+interfaces virtual-feature-point
+
+# vyatta-interfaces-policy-v1-yang
+interfaces * * policy
+interfaces * * vif * policy
+
+# vyatta-interfaces-switch-portmonitor-v1-yang
+# vyatta-service-portmonitor-v1-yang
+service portmonitor
+
+# vyatta-interfaces-vhost-xconnect-v1-yang
+interfaces vhost * xconnect
+interfaces vhost * vif * xconnect
+
+# vyatta-system-sfp-v1-yang
+system sfp
+
+# vyatta-policy-vlan-modify-v1-yang
+policy vlan-modify
+interfaces dataplane * switch-group port-parameters policy vlan-modify
+
+# vyatta-security-mac-limit-v1-yang
+security mac-limit
+interfaces dataplane * switch-group port-parameters vlan-parameters mac-limit
+
+# vyatta-service-gnss-v1-yang
+service gnss

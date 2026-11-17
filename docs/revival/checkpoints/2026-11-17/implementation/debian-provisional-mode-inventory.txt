@@ -1,0 +1,82 @@
+=== verify-baseline ===
+configd 2.15 installed
+vyatta-debian-pam-configs-config 1.12 installed
+vyatta-login 2.43 installed
+vyatta-password-renewal 2.43 installed
+2755 0:103 /usr/bin/ssh-agent
+2755 0:42 /usr/bin/chage
+2755 0:42 /usr/bin/expiry
+2755 0:42 /usr/sbin/unix_chkpwd
+2755 0:8 /usr/sbin/dma
+2755 0:997 /usr/bin/crontab
+4754 0:30 /usr/sbin/pppd
+4754 0:8 /usr/lib/dma/dma-mbox-create
+4754 0:988 /usr/lib/dbus-1.0/dbus-daemon-launch-helper
+4755 0:0 /usr/bin/chfn
+4755 0:0 /usr/bin/chsh
+4755 0:0 /usr/bin/gpasswd
+4755 0:0 /usr/bin/mount
+4755 0:0 /usr/bin/newgrp
+4755 0:0 /usr/bin/passwd
+4755 0:0 /usr/bin/su
+4755 0:0 /usr/bin/sudo
+4755 0:0 /usr/bin/umount
+4755 0:0 /usr/lib/openssh/ssh-keysign
+6755 1:1 /usr/bin/at
+/opt/vyatta/sbin/opd cap_audit_control=ep
+/usr/bin/arping cap_net_raw=ep
+/usr/bin/dumpcap cap_net_admin,cap_net_raw=eip
+/usr/bin/ip cap_dac_override,cap_net_admin,cap_bpf=ep
+/usr/bin/mtr-packet cap_net_raw=ep
+/usr/bin/owping cap_net_raw=p
+/usr/bin/powstream cap_net_raw=p
+/usr/bin/twping cap_net_raw=p
+/usr/libexec/sssd/krb5_child cap_dac_read_search,cap_setgid,cap_setuid=p
+/usr/libexec/sssd/ldap_child cap_dac_read_search=p
+/usr/libexec/sssd/sssd_pam cap_dac_read_search=p
+/usr/sbin/configd cap_audit_control=ep
+=== verify-provisional ===
+cli-sandbox 0.32 installed
+configd 2.16 installed
+pam-sandbox 0.32 installed
+python3-shared-storage 0.32 installed
+vyatta-debian-pam-configs-config 1.13 installed
+vyatta-login 2.44 installed
+vyatta-password-renewal 2.44 installed
+2755 0:103 /usr/bin/ssh-agent
+2755 0:42 /usr/bin/chage
+2755 0:42 /usr/bin/expiry
+2755 0:42 /usr/sbin/unix_chkpwd
+2755 0:8 /usr/sbin/dma
+2755 0:997 /usr/bin/crontab
+4754 0:30 /usr/sbin/pppd
+4754 0:8 /usr/lib/dma/dma-mbox-create
+4754 0:988 /usr/lib/dbus-1.0/dbus-daemon-launch-helper
+4755 0:0 /usr/bin/chfn
+4755 0:0 /usr/bin/chsh
+4755 0:0 /usr/bin/gpasswd
+4755 0:0 /usr/bin/mount
+4755 0:0 /usr/bin/newgrp
+4755 0:0 /usr/bin/passwd
+4755 0:0 /usr/bin/su
+4755 0:0 /usr/bin/sudo
+4755 0:0 /usr/bin/umount
+4755 0:0 /usr/lib/openssh/ssh-keysign
+6755 1:1 /usr/bin/at
+/opt/vyatta/sbin/opd cap_audit_control=ep
+/usr/bin/arping cap_net_raw=ep
+/usr/bin/dumpcap cap_net_admin,cap_net_raw=eip
+/usr/bin/ip cap_dac_override,cap_net_admin,cap_bpf=ep
+/usr/bin/mtr-packet cap_net_raw=ep
+/usr/bin/owping cap_net_raw=p
+/usr/bin/powstream cap_net_raw=p
+/usr/bin/twping cap_net_raw=p
+/usr/libexec/sssd/krb5_child cap_dac_read_search,cap_setgid,cap_setuid=p
+/usr/libexec/sssd/ldap_child cap_dac_read_search=p
+/usr/libexec/sssd/sssd_pam cap_dac_read_search=p
+/usr/sbin/configd cap_audit_control=ep
+775 0:0 /etc
+775 0:0 /etc/initramfs-tools
+775 0:0 /etc/initramfs-tools/conf.d
+775 0:0 /etc/live
+775 0:0 /etc/live/config.conf.d

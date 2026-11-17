@@ -1,0 +1,17 @@
+#!/bin/sh
+# Print the DANOS dataplane name for a predictable PCI path name
+# (ID_NET_NAME_PATH), or nothing when it has none: enp0s3 -> dp0s3,
+# enp2s0f1 -> dp0p2s0f1. Only names the dataplane-ifname patterns in
+# vyatta-interfaces-dataplane-v1.yang accept are printed (no np, v or u
+# suffixes); anything else keeps its kernel name.
+set -eu
+p=${1-}
+case "$p" in
+    enp0s[0-9]*) n="dp0${p#enp0}" ;;
+    enp[0-9]*s[0-9]*) n="dp0${p#en}" ;;
+    *) exit 0 ;;
+esac
+[ "${#n}" -le 15 ] || exit 0
+printf '%s\n' "$n" |
+    grep -Ex 'dp[0-9]+s[0-9]+(f[0-9]+)?(d[0-9]+)?|dp[0-9]+(P[0-9]+)?p[0-9]{1,3}s[0-9]{1,3}(f[0-9]+)?(d[0-9]+)?' || true
+exit 0

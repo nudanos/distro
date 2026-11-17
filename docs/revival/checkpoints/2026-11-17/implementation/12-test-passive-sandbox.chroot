@@ -1,0 +1,10 @@
+#!/bin/sh
+# Local acceptance image only: stage passive sandbox packages; do not enable isolation.
+set -eu
+export DEBIAN_FRONTEND=noninteractive
+apt-get install -y --no-install-recommends cli-sandbox=0.32 pam-sandbox=0.32 python3-shared-storage=0.32
+dpkg-query -W -f='${Package} ${Version} ${db:Status-Status}\n' cli-sandbox pam-sandbox python3-shared-storage
+apt-get autoclean
+audit=$(dpkg --audit)
+if [ -n "$audit" ]; then printf '%s\n' "$audit" >&2; exit 1; fi
+echo 'passive-sandbox: autoclean and dpkg audit passed'

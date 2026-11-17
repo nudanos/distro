@@ -1,0 +1,16 @@
+Source: vyatta-debian-pam-configs-config
+Section: net
+Priority: optional
+Maintainer: NuDanOS Maintainers <jon@fernandez.tech>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.2
+Rules-Requires-Root: no
+Vcs-Git: https://github.com/nudanos/vyatta-debian-pam-configs-config.git
+Vcs-Browser: https://github.com/nudanos/vyatta-debian-pam-configs-config
+
+Package: vyatta-debian-pam-configs-config
+Architecture: all
+Depends: ${misc:Depends}
+Pre-Depends: at, auditd, cron, openssh-server
+Description: Vyatta changes to the Debian default configuration
+ This package includes the Vyatta changes to the Debian default configuration.

@@ -1,0 +1,308 @@
+configd 2.16 SOURCE configd DEPENDS adduser, cli-shell-api, libcap2-bin, lu, provisiond, yangd, libaudit1 (>= 1:2.2.1), libc6 (>= 2.34) PRE 
+yangd 2.16 SOURCE configd DEPENDS adduser, libcap2-bin, lu, yangd-v1-yang, deb-vci-helper PRE 
+config-utils 2.16 SOURCE configd DEPENDS bash (>= 5~) | vyatta-bash (>= 1:4.4-1vyatta12), cli-shell-api, libc6 (>= 2.34) PRE 
+yang-utils 2.16 SOURCE configd DEPENDS libc6 (>= 2.34) PRE 
+vyatta-login 2.44 SOURCE vyatta-login DEPENDS adduser, configd (>= 2.16), libpam-modules, libpam-modules-bin, libpam-runtime (>= 1.0.1-5), libfile-temp-perl, libipc-run3-perl, libnetaddr-ip-perl, libtemplate-perl, libjson-perl, libvyatta-cfgclient-perl, python3, python3-crypt-r, python3-vyatta-cfgclient, util-linux (>= 2.20.1-5), whois, vyatta-debian-pam-configs-config, vyatta-debian-passwd-config, vyatta-debian-system-config, vyatta-debian-systemd-config, vyatta-util (>= 0.16), vyatta-cfg, vyatta-password-renewal (>= 2.44), perl:any PRE 
+vyatta-password-renewal 2.44 SOURCE vyatta-login DEPENDS libc6 (>= 2.25), libjansson4 (>= 2.14), libpam0g (>= 0.99.7.1), libvyatta-config2 (>= 1.34), libipc-run3-perl, perl, python3, libpam-pwquality, python3-vyatta-cfgclient PRE 
+vyatta-system-login-v1-yang 2.44 SOURCE vyatta-login DEPENDS cracklib-runtime, libpwquality-tools, vyatta-login, vyatta-system-v1-yang, vyatta-system-tacplus-v1-yang, configd-v1-yang, vyatta-types-v1-yang, ietf-yang-types-yang PRE 
+cli-sandbox 0.32 SOURCE cli-sandbox DEPENDS systemd-container, python3 (>= 3.5), python3-shared-storage, python3-yaml, python3:any PRE 
+pam-sandbox 0.32 SOURCE cli-sandbox DEPENDS cli-sandbox, libpam-runtime, libc6 (>= 2.33), libpam0g (>= 0.99.7.1), libsystemd0 (>= 221) PRE 
+vyatta-system-login-user-isolation-v1-yang 0.32 SOURCE cli-sandbox DEPENDS pam-sandbox, cli-sandbox, mmdebstrap, vyatta-system-v1-yang, vyatta-system-login-v1-yang, configd-v1-yang PRE 
+vyatta-vci-bus 4.15 SOURCE vyatta-component-infra DEPENDS dbus, ephemerad, lsb-base (>= 3.0-6), notifyd PRE 
+provisiond 2.10 SOURCE provisiond DEPENDS deb-vci-helper, libc6 (>= 2.34) PRE 
+lu 1:0.4 SOURCE lu DEPENDS libc6 (>= 2.34) PRE 
+libvyatta-config2 1.34 SOURCE vyatta-cfg DEPENDS libc6 (>= 2.14), libgcc-s1 (>= 3.0), libjansson4 (>= 2.14), libstdc++6 (>= 13.1), liburiparser1 (>= 0.6.0), libvyatta-util1 (>= 0.31) PRE 
+libvyatta-util1 0.31 SOURCE vyatta-util DEPENDS liburiparser1 (>= 0.6.0), libc6 (>= 2.7) PRE 
+EXTERNAL adduser
+cli-shell-api 1.34 SOURCE vyatta-cfg DEPENDS libvyatta-config2 (>= 1.34), vyatta-curl-wrapper, perl:any, libc6 (>= 2.34), libgcc-s1 (>= 3.0), libjansson4 (>= 2.14), libstdc++6 (>= 5.2), liburiparser1 (>= 0.6.0), libvyatta-util1 (>= 0.31) PRE 
+EXTERNAL libcap2-bin
+EXTERNAL libaudit1
+EXTERNAL libc6
+yangd-v1-yang 2.16 SOURCE configd DEPENDS  PRE 
+deb-vci-helper 4.15 SOURCE vyatta-component-infra DEPENDS vyatta-vci-bus, libc6 (>= 2.34) PRE 
+vyatta-bash 1:7 SOURCE vyatta-bash DEPENDS bash (>= 5~) PRE 
+EXTERNAL libpam-modules
+EXTERNAL libpam-modules-bin
+EXTERNAL libpam-runtime
+EXTERNAL libfile-temp-perl
+EXTERNAL libipc-run3-perl
+EXTERNAL libnetaddr-ip-perl
+EXTERNAL libtemplate-perl
+EXTERNAL libjson-perl
+libvyatta-cfgclient-perl 1.34 SOURCE vyatta-cfg DEPENDS libvyatta-config2 (>= 1.34), libc6 (>= 2.38), libgcc-s1 (>= 3.0), libperl5.40 (>= 5.40.0), libstdc++6 (>= 13.1), liburiparser1 (>= 0.6.0), libvyatta-util1 (>= 0.31) PRE 
+EXTERNAL python3
+EXTERNAL python3-crypt-r
+python3-vyatta-cfgclient 1.34 SOURCE vyatta-cfg DEPENDS libvyatta-config2 (>= 1.34), python3 (<< 3.14), python3 (>= 3.13~), python3:any (>= 3.2~), libc6 (>= 2.14), libgcc-s1 (>= 3.0), libpython3.13 (>= 3.13.0~rc3), libstdc++6 (>= 13.1), liburiparser1 (>= 0.6.0), libvyatta-util1 (>= 0.31) PRE 
+EXTERNAL util-linux
+EXTERNAL whois
+vyatta-debian-pam-configs-config 1.13 SOURCE vyatta-debian-pam-configs-config DEPENDS  PRE at, auditd, cron, openssh-server
+vyatta-debian-passwd-config 1.4 SOURCE vyatta-debian-passwd-config DEPENDS  PRE passwd
+vyatta-debian-system-config 1.24 SOURCE vyatta-debian-system-config DEPENDS adduser, apt, auditd, ddclient, dnsmasq, ipvsadm, isc-dhcp-relay, isc-dhcp-server, man-db, ntpsec, radvd, rsyslog, snmpd, sudo, systemd, udev PRE 
+vyatta-debian-systemd-config 6 SOURCE vyatta-debian-systemd-config DEPENDS vyatta-debian-system-config (>= 1.8) PRE systemd
+vyatta-util 0.31 SOURCE vyatta-util DEPENDS libvyatta-util1 (= 0.31), libc6 (>= 2.34) PRE 
+vyatta-cfg 1.34 SOURCE vyatta-cfg DEPENDS adduser, bsdutils (>= 1:2.13), cli-shell-api (>= 1.34), config-utils, libfile-sync-perl, libio-prompt-perl, libjson-perl, libvyatta-config-perl, libxml-xpath-perl, procps (>= 1:3.2.7-3), sed (>= 4.1.5), sysstat, vcli, vyatta-config-shell, vyatta-op-config-v1-yang, perl:any, libc6 (>= 2.38), libgcc-s1 (>= 3.0), libjansson4 (>= 2.14), libstdc++6 (>= 11), liburiparser1 (>= 0.6.0), libvyatta-util1 (>= 0.31) PRE 
+EXTERNAL perl
+EXTERNAL libjansson4
+EXTERNAL libpam0g
+EXTERNAL libpam-pwquality
+EXTERNAL cracklib-runtime
+EXTERNAL libpwquality-tools
+vyatta-system-v1-yang 1.34 SOURCE vyatta-cfg DEPENDS libdatetime-format-iso8601-perl, libjson-perl, sysstat, perl:any, configd-v1-yang, ietf-yang-types-yang PRE 
+vyatta-system-tacplus-v1-yang 1.37 SOURCE vyatta-tacacs DEPENDS vyatta-cfg (>= 1.16), vyatta-op-show-tacplus-v1-yang, vyatta-tacacs (>= 1.37), vyatta-tacplus-aaa-plugin (>= 1.37), vyatta-system-v1-yang, vyatta-system-login-v1-yang, vyatta-types-v1-yang, configd-v1-yang, vyatta-interfaces-v1-yang, vyatta-dscp-v1-yang PRE 
+configd-v1-yang 2.16 SOURCE configd DEPENDS configd (>= 2.16) PRE 
+vyatta-types-v1-yang 1.34 SOURCE vyatta-cfg DEPENDS ietf-inet-types-yang, ietf-yang-types-yang, configd-v1-yang PRE 
+ietf-yang-types-yang 2.16 SOURCE configd DEPENDS  PRE 
+EXTERNAL systemd-container
+python3-shared-storage 0.32 SOURCE cli-sandbox DEPENDS python3 (>= 3.5), python3:any PRE 
+EXTERNAL python3-yaml
+EXTERNAL libsystemd0
+EXTERNAL mmdebstrap
+EXTERNAL dbus
+ephemerad 0.1.6 SOURCE vci-ephemeral DEPENDS libc6 (>= 2.34), deb-vci-helper PRE 
+EXTERNAL lsb-base
+notifyd 0.1.6 SOURCE notifyd DEPENDS libc6 (>= 2.34), deb-vci-helper PRE 
+EXTERNAL libgcc-s1
+EXTERNAL libstdc++6
+EXTERNAL liburiparser1
+vyatta-curl-wrapper 0.11 SOURCE vyatta-curl-wrapper DEPENDS curl, curl-alternative, libipc-run3-perl, libtry-tiny-perl, perl:any PRE 
+EXTERNAL bash
+EXTERNAL libperl5.40
+EXTERNAL libpython3.13
+EXTERNAL at
+EXTERNAL auditd
+EXTERNAL cron
+EXTERNAL openssh-server
+EXTERNAL passwd
+EXTERNAL apt
+EXTERNAL ddclient
+EXTERNAL dnsmasq
+EXTERNAL ipvsadm
+EXTERNAL isc-dhcp-relay
+EXTERNAL isc-dhcp-server
+EXTERNAL man-db
+ntpsec 1.2.5+dfsg-1+nudanos1 SOURCE ntpsec DEPENDS netbase, python3, python3-ntp (= 1.2.5+dfsg-1+nudanos1), tzdata, systemd | systemd-standalone-sysusers | systemd-sysusers, libbsd0 (>= 0.0), libc6 (>= 2.38), libcap2 (>= 1:2.10), libssl3t64 (>= 3.0.0) PRE init-system-helpers (>= 1.54~)
+EXTERNAL radvd
+EXTERNAL rsyslog
+snmpd 5.9.5.2+dfsg-3+nudanos1 SOURCE net-snmp DEPENDS libc6 (>= 2.38), libcap2 (>= 1:2.10), libsnmp45 (= 5.9.5.2+dfsg-3+nudanos1), debconf (>= 0.5) | debconf-2.0, systemd | systemd-standalone-sysusers | systemd-sysusers, debconf, libsnmp-base PRE init-system-helpers (>= 1.54~)
+EXTERNAL sudo
+EXTERNAL systemd
+EXTERNAL udev
+EXTERNAL bsdutils
+EXTERNAL libfile-sync-perl
+EXTERNAL libio-prompt-perl
+libvyatta-config-perl 1.34 SOURCE vyatta-cfg DEPENDS libc6 (>= 2.34), libgcc-s1 (>= 3.0), libperl5.40 (>= 5.40.0), libstdc++6 (>= 11), liburiparser1 (>= 0.6.0), libvyatta-config2 (>= 1.34), libvyatta-util1 (>= 0.31) PRE 
+EXTERNAL libxml-xpath-perl
+EXTERNAL procps
+EXTERNAL sed
+EXTERNAL sysstat
+vcli 1.34 SOURCE vyatta-cfg DEPENDS bash (>= 5~) | vyatta-bash (>= 1:4.4-1vyatta12), cli-shell-api, config-utils, vyatta-config-shell, vyatta-op-shell PRE 
+vyatta-config-shell 1.34 SOURCE vyatta-cfg DEPENDS bash (>= 5~) | vyatta-bash (>= 1:4.4-1vyatta12), bash-completion, config-utils PRE 
+vyatta-op-config-v1-yang 1.34 SOURCE vyatta-cfg DEPENDS cli-shell-api, vyatta-config-shell, yang-utils, vyatta-opd-extensions-v1-yang, vyatta-op-show-v1-yang PRE 
+EXTERNAL libdatetime-format-iso8601-perl
+vyatta-op-show-tacplus-v1-yang 1.37 SOURCE vyatta-tacacs DEPENDS vyatta-tacacs (>= 1.37), vyatta-opd-extensions-v1-yang, vyatta-op-show-v1-yang, vyatta-op-show-system-v1-yang PRE 
+vyatta-tacacs 1.37 SOURCE vyatta-tacacs DEPENDS vyatta-system | vyatta-cfg-system, vyatta-cfg, vyatta-sssd-cfg, libipc-run3-perl, libnet-ip-perl, libpam-runtime (>= 1.0.5), libreadonly-perl, tacplusd (>= 1.25), libpam-tacplus, libnss-tacplus, libtacplus-map1, libvyatta-interface-perl (>= 1.66), libvyatta-dscp-perl, python3-dbus, python3, perl:any, python3:any PRE 
+vyatta-tacplus-aaa-plugin 1.37 SOURCE vyatta-tacacs DEPENDS libc6 (>= 2.34), configd, vyatta-opd PRE 
+vyatta-interfaces-v1-yang 2.11 SOURCE vyatta-interfaces DEPENDS vyatta-interfaces, libc6 (>= 2.34), configd-v1-yang, vyatta-types-v1-yang, vyatta-system-network-v1-yang PRE 
+vyatta-dscp-v1-yang 1.34 SOURCE vyatta-cfg DEPENDS ietf-inet-types-yang, configd-v1-yang PRE 
+ietf-inet-types-yang 2.16 SOURCE configd DEPENDS  PRE 
+EXTERNAL curl
+curl-alternative 0.11 SOURCE vyatta-curl-wrapper DEPENDS curl PRE 
+EXTERNAL libtry-tiny-perl
+EXTERNAL netbase
+python3-ntp 1.2.5+dfsg-1+nudanos1 SOURCE ntpsec DEPENDS python3, python3:any, libbsd0 (>= 0.0), libc6 (>= 2.29), libssl3t64 (>= 3.0.0) PRE 
+EXTERNAL tzdata
+EXTERNAL libbsd0
+EXTERNAL libcap2
+EXTERNAL libssl3t64
+EXTERNAL init-system-helpers
+libsnmp45 5.9.5.2+dfsg-3+nudanos1 SOURCE net-snmp DEPENDS libc6 (>= 2.38), libnl-3-200 (>= 3.2.21), libnl-route-3-200 (>= 3.2.7), libpci3 (>= 1:3.5.1), libperl5.40 (>= 5.40.0), libsensors5 (>= 1:3.5.0), libssl3t64 (>= 3.0.0), libwrap0 (>= 7.6-4~), libsnmp-base PRE 
+EXTERNAL debconf
+libsnmp-base 5.9.5.2+dfsg-3+nudanos1 SOURCE net-snmp DEPENDS  PRE 
+vyatta-op-shell 1.19 SOURCE opd DEPENDS bash (>= 5~) | vyatta-bash (>= 1:4.4-1vyatta12), bash-completion, less, opc PRE 
+EXTERNAL bash-completion
+vyatta-opd-extensions-v1-yang 1.19 SOURCE opd DEPENDS vyatta-opd PRE 
+vyatta-op-show-v1-yang 2.21 SOURCE vyatta-op DEPENDS vyatta-opd-extensions-v1-yang PRE 
+vyatta-op-show-system-v1-yang 2.43 SOURCE vyatta-cfg-system DEPENDS vyatta-opd-extensions-v1-yang, vyatta-op-show-v1-yang PRE 
+vyatta-system 2.43 SOURCE vyatta-cfg-system DEPENDS adduser, tzdata-legacy, apt-transport-https, at, bash-completion, busybox, console-setup, fonts-terminus, cron, debsums, dmidecode, grub-common, host, ipmitool, iproute2, iputils-arping, isc-dhcp-client, kbd (>= 1.12-14), less, libconfig-inifiles-perl, libfile-slurp-perl, libio-prompt-perl, libipc-system-simple-perl, libnetaddr-ip-perl, libpam-runtime (>= 1.0.1-5), libswitch-perl, libsys-hostname-long-perl, libtemplate-perl, libtime-duration-perl, libvyatta-cfgclient-perl, libvyatta-config-perl, libvyatta-reboot-reason-perl, libxml-bare-perl, lm-sensors, lsof, mgetty, pciutils, procps (>= 1:3.2.7-3), python3, radvd, sudo, systemd, systemd-journal-remote, util-linux (>= 2.20.1-5), vyatta-bash, vyatta-cfg, vyatta-debian-pam-configs-config, vyatta-debian-passwd-config, vyatta-debian-system-config, vyatta-debian-systemd-config, vyatta-login, vyatta-opd, vyatta-util (>= 0.16), vyatta-forwarding, whois, wireshark-common, yang-utils, perl:any PRE 
+vyatta-sssd-cfg 0.56 SOURCE vyatta-sssd DEPENDS ldb-tools, libauthen-pam-perl, libnss-sss, libpam-runtime, lsb-base (>= 3.0-6), python3, python3-vyatta-sssd, sssd-ldap, sssd-tools | sssd, vyatta-cfg, perl:any PRE sssd-common (>= 1.16.3-3danos4)
+EXTERNAL libnet-ip-perl
+EXTERNAL libreadonly-perl
+tacplusd 1.29 SOURCE tacplusd DEPENDS adduser, lsb-base (>= 3.0-6), libc6 (>= 2.34), libglib2.0-0t64 (>= 2.12.0), libsystemd0 (>= 243), libtac3 (>= 1.6.1) PRE 
+libpam-tacplus 1.6.1-1danos3+nudanos1 SOURCE libpam-tacplus DEPENDS libc6 (>= 2.38), libpam0g (>= 0.99.7.1), libtac3 (>= 1.6.1), libtacplus-map1 (>= 1.0.0), libpam-runtime PRE 
+libnss-tacplus 1.0.4-cl5.1.0u11.1+nudanos1 SOURCE libnss-tacplus DEPENDS libaudit1 (>= 1:2.2.1), libc6 (>= 2.34), libtac3 (>= 1.6.1), libtacplus-map1 (>= 1.0.1-cl4u1) PRE 
+libtacplus-map1 1.0.1-cl5.1.0u9+nudanos1 SOURCE libtacplus-map DEPENDS libaudit1 (>= 1:2.4), libc6 (>= 2.33), adduser PRE 
+libvyatta-interface-perl 2.11 SOURCE vyatta-interfaces DEPENDS libconfig-tiny-perl, libfile-slurp-perl, libio-interface-perl, libreadonly-perl, libvyatta-ioctl-perl, libvyatta-portmonitor (>= 3.7), iproute2 (>= 4.19.0-0vyatta2), vyatta-vrrp (>= 3.0) PRE 
+EXTERNAL libvyatta-dscp-perl
+EXTERNAL python3-dbus
+vyatta-opd 1.19 SOURCE opd DEPENDS adduser, libcap2-bin, lsb-base (>= 3.0-6), lu, libaudit1 (>= 1:2.2.1), libc6 (>= 2.34) PRE 
+vyatta-interfaces 2.11 SOURCE vyatta-interfaces DEPENDS ebtables, vyatta-interfaces-base, vplane-config | vyatta-kernel-forwarding, vyatta-cfg (>= 1.17), vyatta-op (>= 1.0), vyatta-system (>= 1.6.1), iproute2 (>= 4.12.0-0vyatta4) PRE 
+vyatta-system-network-v1-yang 2.43 SOURCE vyatta-cfg-system DEPENDS vplane-config (>= 2.47) | vyatta-kernel-forwarding, vyatta-dataplane-cfg-ip4-0 | vyatta-kernel-forwarding, vyatta-dataplane-cfg-pb-vyatta:arp-0 | vyatta-kernel-forwarding, vyatta-dataplane-cfg-pb-vyatta:ip6-0 | vyatta-kernel-forwarding, vyatta-dataplane-cfg-pb-vyatta:nd6-0 | vyatta-kernel-forwarding, vyatta-dataplane-cfg-pb-vyatta:icmp-ratelimit-0 | vyatta-kernel-forwarding, vyatta-forwarding, vyatta-interfaces (>= 1.32), vyatta-system, vyatta-types-v1-yang, vyatta-system-v1-yang, configd-v1-yang PRE 
+EXTERNAL libnl-3-200
+EXTERNAL libnl-route-3-200
+EXTERNAL libpci3
+EXTERNAL libsensors5
+EXTERNAL libwrap0
+EXTERNAL less
+opc 1.19 SOURCE opd DEPENDS libc6 (>= 2.34) PRE 
+EXTERNAL tzdata-legacy
+EXTERNAL apt-transport-https
+EXTERNAL busybox
+EXTERNAL console-setup
+EXTERNAL fonts-terminus
+EXTERNAL debsums
+EXTERNAL dmidecode
+EXTERNAL grub-common
+EXTERNAL host
+EXTERNAL ipmitool
+EXTERNAL iproute2
+EXTERNAL iputils-arping
+EXTERNAL isc-dhcp-client
+EXTERNAL kbd
+EXTERNAL libconfig-inifiles-perl
+EXTERNAL libfile-slurp-perl
+EXTERNAL libipc-system-simple-perl
+EXTERNAL libswitch-perl
+EXTERNAL libsys-hostname-long-perl
+EXTERNAL libtime-duration-perl
+libvyatta-reboot-reason-perl 2.43 SOURCE vyatta-cfg-system DEPENDS  PRE 
+EXTERNAL libxml-bare-perl
+EXTERNAL lm-sensors
+EXTERNAL lsof
+EXTERNAL mgetty
+EXTERNAL pciutils
+EXTERNAL systemd-journal-remote
+EXTERNAL vyatta-forwarding
+EXTERNAL wireshark-common
+EXTERNAL ldb-tools
+EXTERNAL libauthen-pam-perl
+EXTERNAL libnss-sss
+python3-vyatta-sssd 0.56 SOURCE vyatta-sssd DEPENDS libpam-sss, python3, python3-sss, python3:any PRE 
+EXTERNAL sssd-ldap
+EXTERNAL sssd-tools
+EXTERNAL sssd-common
+EXTERNAL libglib2.0-0t64
+libtac3 1.6.1-1danos3+nudanos1 SOURCE libpam-tacplus DEPENDS libc6 (>= 2.25) PRE 
+EXTERNAL libconfig-tiny-perl
+EXTERNAL libio-interface-perl
+EXTERNAL libvyatta-ioctl-perl
+libvyatta-portmonitor 3.9 SOURCE vyatta-service-portmonitor DEPENDS vyatta-cfg (>= 1.26), libconfig-tiny-perl PRE 
+vyatta-vrrp 3.10 SOURCE vyatta-vrrp DEPENDS bmon (>= 3.5), dbus, iftop, iproute2 (>= 4.4.0), keepalived (>= 1.2.24-git66c870aa+vyatta32), vyatta-cfg (>= 0.99.83), vyatta-interfaces (>= 0.5), vyatta-op-network, vyatta-system (>= 1.6.1), python3, python3-gi, python3-pydbus PRE 
+EXTERNAL ebtables
+vyatta-interfaces-base 2.11 SOURCE vyatta-interfaces DEPENDS bmon, ethtool, iftop, libfile-slurp-perl, libfile-remove-perl, libipc-run3-perl, libtry-tiny-perl, libvyatta-cfgclient-perl, libvyatta-dataplane-perl (>= 2.85), libvyatta-dscp-perl, libvyatta-interface-perl, libvyatta-misc-perl, libvyatta-vifconfig-perl, vplane-config | vyatta-kernel-forwarding, vyatta-cfg (>= 0.105.3), vyatta-op (>= 1.0), vyatta-system (>= 1.6.1), vyatta-dataplane-cfg-pb-vyatta:breakout-0 | vyatta-kernel-forwarding, vyatta-dataplane-cfg-pb-vyatta:garp-0 | vyatta-kernel-forwarding, libvyatta-dataplane-proto-support (>= 3.11.2), perl:any PRE 
+vplane-config 2.107 SOURCE vplane-config DEPENDS bmon (>= 3.5), iproute (>= 20120319-vyatta+1), iputils-arping, libconfig-tiny-perl, libdata-validate-ip-perl, libfile-remove-perl, libipc-system-simple-perl, libjson-perl, libmodule-load-conditional-perl, libvyatta-dataplane-perl, libvyatta-interface-perl, libvyatta-vplaned-perl, libsort-key-perl, netplug, vplane-controller (>= 1.2.0), vyatta-cfg (>= 0.104.32), vyatta-dataplane-cfg-affinity-1, vyatta-dataplane-cfg-npf-cfg-2, vyatta-dataplane-op-affinity-0, vyatta-dataplane-op-nd6-2, vyatta-dataplane-op-route-2, vyatta-dataplane-op-route6-1, vyatta-interfaces-dataplane-rpc-v1-yang (>= 2.107), perl:any, python3 PRE 
+vyatta-op 2.21 SOURCE vyatta-op DEPENDS libjansson4, mail-transport-agent, vyatta-bash, vyatta-cfg (>= 0.107), vyatta-op-shell, vyatta-system PRE 
+vyatta-kernel-forwarding 0.6 SOURCE vyatta-kernel-forwarding DEPENDS udev, iptables PRE 
+EXTERNAL libpam-sss
+EXTERNAL python3-sss
+EXTERNAL bmon
+EXTERNAL iftop
+keepalived 1:2.4.3-0nudanos1 SOURCE keepalived DEPENDS iproute2, libc6 (>= 2.38), libglib2.0-0t64 (>= 2.26.0), libmnl0 (>= 1.0.4-1~), libnftnl11 (>= 1.1.2), libnl-3-200 (>= 3.2.27), libnl-genl-3-200 (>= 3.2.7), libpcre2-8-0 (>= 10.22), libsnmp45 (>= 5.9.5.2+dfsg), libssl3t64 (>= 3.0.0), libsystemd0 (>= 214) PRE init-system-helpers (>= 1.54~)
+vyatta-op-network 2.21 SOURCE vyatta-op DEPENDS iptraf-ng, iputils-ping (>= 3:20161105-1vyatta2), libnetaddr-ip-perl, net-tools, traceroute, vplane-config (>= 2.96) | vyatta-kernel-forwarding, vyatta-op, libc6 (>= 2.34), libjansson4 (>= 2.14), libmnl0 (>= 1.0.3-4~) PRE 
+EXTERNAL python3-gi
+EXTERNAL python3-pydbus
+EXTERNAL ethtool
+EXTERNAL libfile-remove-perl
+libvyatta-dataplane-perl 2.107 SOURCE vplane-config DEPENDS libconfig-tiny-perl, libgoogle-protocolbuffers-perl, libipc-run3-perl, libjson-perl, libvyatta-dataplane-proto-support, libzmq-constants-perl, libzmq-libzmq3-perl, vyatta-platform-util (>= 2.1) PRE 
+EXTERNAL libvyatta-misc-perl
+EXTERNAL libvyatta-vifconfig-perl
+libvyatta-dataplane-proto-support 3.14.26 SOURCE vyatta-dataplane DEPENDS perl:any PRE 
+EXTERNAL iproute
+EXTERNAL libdata-validate-ip-perl
+EXTERNAL libmodule-load-conditional-perl
+libvyatta-vplaned-perl 2.107 SOURCE vplane-config DEPENDS libjson-perl, libzmq-libzmq3-perl, libgoogle-protocolbuffers-perl, libmime-base64-perl, libvyatta-dataplane-proto-support, libvyatta-controller-proto-support PRE 
+EXTERNAL libsort-key-perl
+netplug 1.2.9.2-5+vyatta11+nudanos2 SOURCE netplug DEPENDS libc6 (>= 2.34), iproute2 | iproute, lsb-base (>= 3.2-14) PRE 
+vplane-controller 3.7.2 SOURCE vplane-controller DEPENDS adduser, perl:any, libb64-0d (>= 1.2), libc6 (>= 2.38), libczmq4 (>= 4.0.0), libedit2 (>= 2.11-20080614-0), libinih1 (>= 40), libjson-c5 (>= 0.15), libmnl0 (>= 1.0.3-4~), libprotobuf-c1 (>= 1.0.1), libsystemd0, libvplaned1 (>= 3.7.2), libzmq5 (>= 3.2.3+dfsg), lsb-base (>= 3.0-6) PRE 
+EXTERNAL vyatta-dataplane-cfg-affinity-1
+EXTERNAL vyatta-dataplane-cfg-npf-cfg-2
+EXTERNAL vyatta-dataplane-op-affinity-0
+EXTERNAL vyatta-dataplane-op-nd6-2
+EXTERNAL vyatta-dataplane-op-route-2
+EXTERNAL vyatta-dataplane-op-route6-1
+vyatta-interfaces-dataplane-rpc-v1-yang 2.107 SOURCE vplane-config DEPENDS configd-v1-yang, vyatta-types-v1-yang, vplane-config-backend (>= 2.107), vyatta-interfaces-base PRE 
+EXTERNAL mail-transport-agent
+EXTERNAL iptables
+EXTERNAL libmnl0
+EXTERNAL libnftnl11
+EXTERNAL libnl-genl-3-200
+EXTERNAL libpcre2-8-0
+EXTERNAL iptraf-ng
+EXTERNAL iputils-ping
+EXTERNAL net-tools
+EXTERNAL traceroute
+EXTERNAL libgoogle-protocolbuffers-perl
+libzmq-constants-perl 1.04-1vyatta2+nudanos2 SOURCE libzmq-constants-perl DEPENDS perl:any PRE 
+libzmq-libzmq3-perl 1.19-1vyatta5+nudanos2 SOURCE libzmq-libzmq3-perl DEPENDS perl (>= 5.40.1-6+deb13u1), perlapi-5.40.1, libc6 (>= 2.34), libzmq5 (>= 3.2.3+dfsg), libtask-weaken-perl, libzmq-constants-perl (>= 1.04) PRE 
+vyatta-platform-util 2.21 SOURCE vyatta-platform DEPENDS python3-vyatta-platform-detect, python3, detect-hw-router-intf-cap PRE 
+EXTERNAL libmime-base64-perl
+libvyatta-controller-proto-support 3.7.2 SOURCE vplane-controller DEPENDS perl:any, python3, libgoogle-protocolbuffers-perl, python3-protobuf PRE 
+EXTERNAL libb64-0d
+EXTERNAL libczmq4
+EXTERNAL libedit2
+EXTERNAL libinih1
+EXTERNAL libjson-c5
+EXTERNAL libprotobuf-c1
+libvplaned1 3.7.2 SOURCE vplane-controller DEPENDS libb64-0d (>= 1.2), libc6 (>= 2.4), libczmq4 (>= 3.0.2), libjson-c5 (>= 0.15), libprotobuf-c1 (>= 1.0.1) PRE 
+EXTERNAL libzmq5
+vplane-config-backend 2.107 SOURCE vplane-config DEPENDS vyatta-dataplane (>= 3.13.39), libvyatta-vplaned-perl (>= 2.107), python3, perl:any PRE 
+EXTERNAL perlapi-5.40.1
+EXTERNAL libtask-weaken-perl
+python3-vyatta-platform-detect 2.21 SOURCE vyatta-platform DEPENDS python3:any (>= 3.3~), dmidecode PRE 
+EXTERNAL detect-hw-router-intf-cap
+EXTERNAL python3-protobuf
+EXTERNAL vyatta-dataplane
+
+SOURCE VERSIONS:
+cli-sandbox 0.32 BUILD debhelper-compat (= 13), dh-yang, dh-python, python3-all, python3-setuptools, python3-yaml, shellcheck, libsystemd-dev, pkg-config, libpam0g-dev
+configd 2.16 BUILD debhelper-compat (= 13), dh-golang (>= 1.18), dh-vci, dh-yang, golang (>= 1.10), golang-dbus-dev, golang-github-danos-config-dev (>= 1.7), golang-github-danos-encoding-rfc7951-dev (>= 0.5), golang-github-danos-mgmterror-dev (>= 1:1.6), golang-github-danos-utils-args-dev, golang-github-danos-utils-audit-dev, golang-github-danos-utils-exec-dev, golang-github-danos-utils-natsort-dev, golang-github-danos-utils-os-group-dev, golang-github-danos-utils-patherr-dev, golang-github-danos-utils-pathutil-dev, golang-github-danos-utils-shell-dev, golang-github-danos-utils-tsort-dev, golang-github-danos-utils-tty-dev, golang-github-danos-vci-dev (>= 0.3), golang-github-danos-yang-dev, golang-github-fsnotify-fsnotify-dev, golang-go-systemd-dev, golang-golang-x-crypto-dev, libaudit-dev
+keepalived 1:2.4.3-0nudanos1 BUILD autoconf, debhelper-compat (= 13), libglib2.0-dev, libip4tc-dev, libipset-dev, libjson-c-dev, libnfnetlink-dev, libnftnl-dev, libnl-3-dev, libnl-genl-3-dev, libnl-nf-3-dev, libpcre2-dev, libpopt-dev, libsnmp-dev, libssl-dev, libsystemd-dev, linux-libc-dev, pkgconf
+libnss-tacplus 1.0.4-cl5.1.0u11.1+nudanos1 BUILD debhelper (>= 9), autotools-dev, libtac-dev (>= 1.4.1~), libtacplus-map-dev, libaudit-dev, autoconf, dpkg-dev (>= 1.16.1), git
+libpam-tacplus 1.6.1-1danos3+nudanos1 BUILD debhelper-compat (= 13), libpam-dev, dh-autoreconf, autoconf-archive, libtacplus-map-dev
+libtacplus-map 1.0.1-cl5.1.0u9+nudanos1 BUILD debhelper (>= 9), dh-autoreconf, autoconf-archive, libaudit-dev, git
+libzmq-constants-perl 1.04-1vyatta2+nudanos2 BUILD debhelper-compat (= 13)
+libzmq-libzmq3-perl 1.19-1vyatta5+nudanos2 BUILD debhelper-compat (= 13), perl, libanyevent-perl, libdevel-checklib-perl, libtask-weaken-perl, libtest-fatal-perl, libtest-requires-perl, libtest-tcp-perl (>= 1.08), libzmq-constants-perl (>= 1.04), libzmq3-dev | libzmq5-dev, libmodule-install-perl, libmodule-install-readmefrompod-perl, perl (>= 5.10.0-12) | libextutils-parsexs-perl (>= 2.2.1), perl (>= 5.13.11) | libtest-simple-perl (>= 0.98)
+lu 1:0.4 BUILD debhelper-compat (= 13)
+net-snmp 5.9.5.2+dfsg-3+nudanos1 BUILD debhelper-compat (= 12), dh-sequence-installsysusers, libtool, libwrap0-dev, libssl-dev, perl:any, perl-xs-dev, autoconf, automake, procps, pkgconf, libsensors-dev [linux-any], libnl-route-3-dev [linux-any], libcap-dev [linux-any], libmariadb-dev, libpci-dev
+netplug 1.2.9.2-5+vyatta11+nudanos2 BUILD debhelper-compat (= 13), libbsd-dev
+notifyd 0.1.6 BUILD debhelper-compat (= 13), dh-golang, dh-vci, dh-yang, golang-any, golang-github-danos-encoding-rfc7951-dev, golang-github-danos-utils-args-dev, golang-github-danos-vci-dev, golang-github-fsnotify-fsnotify-dev, golang-github-go-ini-ini-dev, golang-jsouthworth-etm-dev, golang-jsouthworth-immutable-dev
+ntpsec 1.2.5+dfsg-1+nudanos1 BUILD debhelper-compat (= 13), dh-apache2, dh-apparmor, dh-python, dh-sequence-installsysusers, asciidoctor, bison, docbook-xsl, libbsd-dev, libcap2-dev [linux-any], libjsmn-dev, libssl-dev, netbase, pkgconf, pps-tools [linux-any], python3, python3-dev, python3-gps, python3-setuptools, systemd-dev, xsltproc, xz-utils
+opd 1.19 BUILD debhelper-compat (= 13), dh-golang (>= 1.18), dh-yang, golang (>= 2:1.4), golang-github-danos-aaa-dev (>= 2.0), golang-github-danos-config-dev, golang-github-danos-mgmterror-dev, golang-github-danos-op-dev, golang-github-danos-utils-args-dev, golang-github-danos-utils-audit-dev, golang-github-danos-utils-guard-dev, golang-github-danos-utils-natsort-dev, golang-github-danos-utils-os-group-dev, golang-github-danos-utils-patherr-dev, golang-github-danos-utils-pathutil-dev, golang-github-danos-utils-shell-dev, golang-github-danos-utils-tty-dev, golang-github-danos-yang-dev (>= 1.1), golang-go-systemd-dev, libaudit-dev, libjansson-dev, libvyatta-util-dev (>= 0.14)
+provisiond 2.10 BUILD debhelper-compat (= 13), dh-golang, dh-vci, golang-any, golang-github-danos-config-dev, golang-github-danos-encoding-rfc7951-dev, golang-github-danos-mgmterror-dev, golang-github-danos-vci-dev (>= 0.4), golang-github-danos-yang-dev
+tacplusd 1.29 BUILD debhelper-compat (= 13), autoconf, automake, cpio, cpputest, dh-autoreconf, libcpputest-dev, libglib2.0-dev, libsystemd-dev, libtac-dev (<< 1.4.0) | libtac-dev (>= 1.6.0), libtac-dev (>= 1.3.9-0vyatta11), pkg-config
+vci-ephemeral 0.1.6 BUILD debhelper-compat (= 13), dh-golang, dh-vci, golang-any, golang-github-danos-encoding-rfc7951-dev, golang-github-danos-vci-dev, golang-github-fsnotify-fsnotify-dev, golang-jsouthworth-dyn-dev, golang-jsouthworth-etm-dev, golang-jsouthworth-immutable-dev
+vplane-config 2.107 BUILD debhelper-compat (= 13), autoconf, automake, dh-autoreconf, dh-python, dh-yang, dh-exec, flake8, libxtables-dev, libtool, perltidy, python3-all, python3-setuptools, python3-zmq, libprotobuf-dev, libjansson-dev, libzmq3-dev, cppzmq-dev, libvyatta-dataplane-proto-dev, libvyatta-controller-proto-dev, libb64-dev, pkg-config, golang-go <!nocheck>, golang-goprotobuf-dev <!nocheck>, golang-github-danos-vyatta-controller-protobuf-dev <!nocheck>, golang-github-danos-vyatta-dataplane-protobuf-dev <!nocheck>, golang-github-zeromq-goczmq-dev <!nocheck>
+vplane-controller 3.7.2 BUILD debhelper-compat (= 13), dh-exec, libinih-dev, libmnl-dev, libzmq3-dev (>= 4.0), libczmq-dev, libedit-dev, libjson-c-dev (>= 0.10), libvrfmanager-vyatta-dev (>= 2.4), cpputest (>= 3.8), pkg-config, meson, linux-libc-dev, libb64-dev, protobuf-c-compiler, protobuf-compiler, libprotobuf-c-dev, perl (>= 5.8.8), libgoogle-protocolbuffers-perl, libsystemd-dev, golang-goprotobuf-dev, libprotobuf-dev, libvyatta-dataplane-proto-support, libjemalloc-dev <pkg.vyatta-controller.jemalloc>
+vyatta-bash 1:7 BUILD debhelper-compat (= 13)
+vyatta-cfg 1.34 BUILD debhelper-compat (= 13), autoconf, automake, bison, chrpath, cpio, cpputest, dh-python, dh-yang, doxygen, flex, libcpputest-dev, libdatetime-format-iso8601-perl, libfile-sync-perl, libjansson-dev, libjson-perl, libperl-dev, libtool, liburiparser-dev, libvyatta-util-dev (>= 0.14), pkg-config, python3-dev, swig (>= 3.0)
+vyatta-cfg-system 2.43 BUILD debhelper-compat (= 13), cpio, dh-yang, libfile-slurp-perl, libfile-temp-perl, libipc-run3-perl, libnetaddr-ip-perl, libtest-mockobject-perl, pylint, python3-dbus, python3-gi, python3-vyatta-cfgclient, ronn | ruby-ronn, shunit2, libtest2-suite-perl, libjson-perl, libjson-xs-perl, libtemplate-perl, libtest-tempdir-tiny-perl, libtest-mockmodule-perl, libarray-utils-perl, tzdata <!nocheck>, tzdata-legacy <!nocheck>
+vyatta-component-infra 4.15 BUILD debhelper-compat (= 13), dbus-x11, dh-golang, golang-dbus-dev (>= 4.0.0~git20160605-0vyatta4), golang-github-danos-encoding-rfc7951-dev, golang-github-danos-mgmterror-dev, golang-github-go-ini-ini-dev, golang-github-jsouthworth-objtree-dev, golang-go (>= 2:1.4), golang-go-systemd-dev
+vyatta-curl-wrapper 0.11 BUILD debhelper-compat (= 13), config-package-dev (>= 5.0)
+vyatta-dataplane 3.14.26 BUILD debhelper-compat (= 13), meson, linux-libc-dev, check <!nocheck !pkg.vyatta-dataplane.protobuf-only>, dh-exec, golang-goprotobuf-dev, lcov <!nocheck !pkg.vyatta-dataplane.protobuf-only>, libbsd-dev <!pkg.vyatta-dataplane.protobuf-only>, libcap-dev <!pkg.vyatta-dataplane.protobuf-only>, libczmq-dev <!pkg.vyatta-dataplane.protobuf-only>, libdpdk-dev (>= 20.11-2vyatta12) <!pkg.vyatta-dataplane.protobuf-only>, libgoogle-protocolbuffers-perl, libinih-dev <!pkg.vyatta-dataplane.protobuf-only>, libjson-c-dev <!nocheck !pkg.vyatta-dataplane.protobuf-only>, libmnl-dev <!pkg.vyatta-dataplane.protobuf-only>, libndpi-dev (>= 3.4) <!pkg.vyatta-dataplane.protobuf-only>, libnuma-dev <!pkg.vyatta-dataplane.protobuf-only>, libosip2-dev <!pkg.vyatta-dataplane.protobuf-only>, libpcap-dev (>= 1.7.0) <!pkg.vyatta-dataplane.protobuf-only>, libprotobuf-c-dev, libprotobuf-dev, libssl-dev <!pkg.vyatta-dataplane.protobuf-only>, librte-acl-rcu-qsbr-dq-support-dev <!pkg.vyatta-dataplane.protobuf-only>, librte-crytpodev-session-sym-pool-empty-dev <!pkg.vyatta-dataplane.protobuf-only>, libsystemd-dev <!pkg.vyatta-dataplane.protobuf-only>, liburcu-dev (>= 0.8.0) <!pkg.vyatta-dataplane.protobuf-only>, libvyatta-dpdk-swport-dev (>= 0.1.23) <!pkg.vyatta-dataplane.protobuf-only>, libzmq3-dev (>= 4.0.4) <!pkg.vyatta-dataplane.protobuf-only>, perl (>= 5.8.8), pkg-config, protobuf-c-compiler, protobuf-compiler, python3
+vyatta-debian-pam-configs-config 1.13 BUILD debhelper-compat (= 13)
+vyatta-debian-passwd-config 1.4 BUILD debhelper-compat (= 13)
+vyatta-debian-system-config 1.24 BUILD debhelper-compat (= 13), config-package-dev, systemd
+vyatta-debian-systemd-config 6 BUILD debhelper-compat (= 13)
+vyatta-interfaces 2.11 BUILD debhelper-compat (= 13), cpio, dh-yang, dh-python, golang-go, golang-github-danos-vci-dev, libconfig-tiny-perl, libreadonly-perl, libfile-slurp-perl, libfile-temp-perl, libio-interface-perl, libnetaddr-ip-perl, libtest-exception-perl, libtest-mockobject-perl, libtest-output-perl, libtest-warn-perl, python3
+vyatta-kernel-forwarding 0.6 BUILD debhelper-compat (= 13), dh-yang
+vyatta-login 2.44 BUILD debhelper-compat (= 13), cpio, dh-yang, dh-python, libvyatta-cfg-dev, libpam0g-dev, libjansson-dev, libfile-slurp-perl <!nocheck>, libipc-run3-perl <!nocheck>, libjson-perl <!nocheck>, libtemplate-perl <!nocheck>
+vyatta-op 2.21 BUILD debhelper-compat (= 13), autoconf, automake, config-package-dev (>= 5.0), cpio, dh-autoreconf, dh-yang, libjansson-dev, libmnl-dev, libparse-syslog-perl, shunit2
+vyatta-platform 2.21 BUILD debhelper-compat (= 13), dh-python, python3, python3-all
+vyatta-service-portmonitor 3.9 BUILD debhelper-compat (= 13), dh-yang
+vyatta-sssd 0.56 BUILD debhelper-compat (= 13), dh-python, dh-yang, python3, python3-setuptools
+vyatta-tacacs 1.37 BUILD debhelper-compat (= 13), golang (>= 2:1.4), golang-dbus-dev, golang-github-danos-aaa-dev (>= 2.0), golang-github-danos-utils-pathutil-dev, dh-golang, dh-python, dh-yang, python3
+vyatta-util 0.31 BUILD debhelper-compat (= 13), autoconf, automake, libtool, liburiparser-dev
+vyatta-vrrp 3.10 BUILD debhelper-compat (= 13), dh-yang, python3, python3-all, python3-setuptools, dh-python, dh-vci, git, python3-pytest, python3-pytest-cov, python3-pytest-lazy-fixtures, python3-pydbus
+
+BUILT configd: golang-1.24 (= 1.24.4-1), golang-dbus (= 5.1.0-1), golang-fsnotify (= 1.8.0-3), golang-github-coreos-go-systemd (= 22.5.0-1), golang-github-danos-aaa (= 2.4), golang-github-danos-config (= 1.12), golang-github-danos-encoding (= 0.12), golang-github-danos-mgmterror (= 1:1.11), golang-github-danos-utils (= 1.10), golang-github-danos-yang (= 2.14), golang-github-go-ini-ini (= 1.67.0-1), golang-github-jsouthworth-objtree (= 1.0-0vyatta5+nudanos3), golang-go.crypto (= 1:0.25.0-1), golang-golang-x-sys (= 0.22.0-1), golang-jsouthworth-dyn (= 1.0.1+nudanos3), golang-jsouthworth-hash (= 1.0+nudanos3), golang-jsouthworth-immutable (= 1.0.1+nudanos2), golang-jsouthworth-seq (= 1.0.1+nudanos2), golang-jsouthworth-transduce (= 1.0.1+nudanos3), golang-jsouthworth-try (= 1.0+nudanos3), vyatta-component-infra (= 4.15)
+
+BUILT yangd: golang-1.24 (= 1.24.4-1), golang-dbus (= 5.1.0-1), golang-fsnotify (= 1.8.0-3), golang-github-coreos-go-systemd (= 22.5.0-1), golang-github-danos-aaa (= 2.4), golang-github-danos-config (= 1.12), golang-github-danos-encoding (= 0.12), golang-github-danos-mgmterror (= 1:1.11), golang-github-danos-utils (= 1.10), golang-github-danos-yang (= 2.14), golang-github-go-ini-ini (= 1.67.0-1), golang-github-jsouthworth-objtree (= 1.0-0vyatta5+nudanos3), golang-go.crypto (= 1:0.25.0-1), golang-golang-x-sys (= 0.22.0-1), golang-jsouthworth-dyn (= 1.0.1+nudanos3), golang-jsouthworth-hash (= 1.0+nudanos3), golang-jsouthworth-immutable (= 1.0.1+nudanos2), golang-jsouthworth-seq (= 1.0.1+nudanos2), golang-jsouthworth-transduce (= 1.0.1+nudanos3), golang-jsouthworth-try (= 1.0+nudanos3), vyatta-component-infra (= 4.15)
+
+BUILT provisiond: golang-1.24 (= 1.24.4-1), golang-dbus (= 5.1.0-1), golang-github-coreos-go-systemd (= 22.5.0-1), golang-github-danos-config (= 1.12), golang-github-danos-encoding (= 0.12), golang-github-danos-mgmterror (= 1:1.11), golang-github-danos-utils (= 1.10), golang-github-danos-yang (= 2.14), golang-github-go-ini-ini (= 1.67.0-1), golang-github-jsouthworth-objtree (= 1.0-0vyatta5+nudanos3), golang-jsouthworth-dyn (= 1.0.1+nudanos3), golang-jsouthworth-hash (= 1.0+nudanos3), golang-jsouthworth-immutable (= 1.0.1+nudanos2), golang-jsouthworth-seq (= 1.0.1+nudanos2), golang-jsouthworth-transduce (= 1.0.1+nudanos3), golang-jsouthworth-try (= 1.0+nudanos3), vyatta-component-infra (= 4.15)
+
+BUILT vyatta-vci-bus: undefined
+
+BUILT deb-vci-helper: golang-1.24 (= 1.24.4-1), golang-dbus (= 5.1.0-1), golang-github-coreos-go-systemd (= 22.5.0-1), golang-github-danos-encoding (= 0.12), golang-github-danos-mgmterror (= 1:1.11), golang-github-danos-utils (= 1.10), golang-github-go-ini-ini (= 1.67.0-1), golang-github-jsouthworth-objtree (= 1.0-0vyatta5+nudanos3)
+
+BUILT ephemerad: undefined
+
+BUILT notifyd: undefined

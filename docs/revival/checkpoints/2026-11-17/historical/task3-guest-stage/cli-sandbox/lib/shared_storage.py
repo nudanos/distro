@@ -1,0 +1,315 @@
+#!/usr/bin/python3
+# Copyright (c) 2020 AT&T intellectual property.
+# All rights reserved
+#
+# SPDX-License-Identifier: LGPL-2.1-only
+
+"""
+Shared Storage Configuration Access Module
+This module uses a config file in /run/vyatta/shared_storage.conf to
+keep the configuration.
+
+One can add/remove shared storage entries to it. The yaml structure is
+as follows. It shouldn't have duplicates.
+mounts:
+  /shared/path:
+    perm: r|rw
+    what: pathname of the device or file
+    size: size of file system, optional
+    exec = False # Allow execution in this directory
+dirs:
+  /var/log/user:
+  perm: r
+"""
+
+import os
+import sys
+import subprocess
+from tempfile import NamedTemporaryFile
+import json
+import yaml
+
+
+# Configuration for shared-storage and read-only directories
+def check_access(top, access, perm):
+    """check if access is allowed on top with given perm. top is
+       the topdirectory for a mount or a directory share.
+    """
+    return ((perm == access or (access == 'r' and perm == 'rw')) and
+            os.path.exists(top) and
+            os.path.isdir(top))
+
+
+def mkdir_p(path):
+    """like mkdir -p - ignores if directory exists - pass on other Errors"""
+    try:
+        os.makedirs(path)
+    except FileExistsError as exc:
+        if not os.path.isdir(path):
+            raise exc from None
+
+
+def cmd_run(cmd, ignore=None):
+    """run a command. Raise exception unless ignore is True"""
+    try:
+        subprocess.run(cmd, check=not ignore)
+    except subprocess.CalledProcessError as exc:
+        raise SharedStorageError(
+            f"comand {exc.cmd} exited with {exc.returncode}") from exc
+
+
+def get_backing_file_name(top, path):
+    """generate file name for loop mount from path"""
+    base = check_output_(['/bin/systemd-escape', '--path', path])
+    return os.path.realpath(f'{top}/{base}.img')
+
+
+def is_child_dir(parent, child):
+    """Check if child is a subdirectory of parent.
+    Expects sanitized paths"""
+    return child.startswith(f"{parent}/")
+
+
+def mount_point(path):
+    """Find the root of the mount point for the path"""
+    if not os.path.isdir(path):
+        path = os.path.dirname(path)
+    while not os.path.ismount(path):
+        path = os.path.dirname(path)
+    return path
+
+
+def check_output_(cmd):
+    """A wrapper for subprocess.check_output to strip trailing newline"""
+    out = subprocess.check_output(cmd)
+    source = out.decode().rstrip('\n')
+    return source
+
+
+def validate_path(path):
+    """Test is path is same as its realpath
+    to avoid symlinks or .. or related paths"""
+    rpath = os.path.abspath(os.path.realpath(path))
+    if path != rpath:
+        raise SharedStorageError(
+            f'Invalid path {path}: realpath {rpath} is different')
+
+
+def get_loopdev_field(name, field):
+    """Return fields for a loop device. May raise
+    subprocess.CalledProcessError.
+    """
+    cmd = '/sbin/losetup -n -l -J'.split(' ') + [name]
+    try:
+        js_str = check_output_(cmd)
+        js = json.loads(js_str)
+        for record in js['loopdevices']:
+            if record['name'] == name:
+                return record[field]
+        return None
+    except json.JSONDecodeError as exc:
+        print(f"decode error in losetup output: {exc!s}")
+    except KeyError:
+        print("No back-file in losetup output")
+    return None
+
+
+def check_mount(what, where):
+    """Verify 'what' is mounted at where directory"""
+    if not os.path.ismount(where):
+        return False
+    source = ''
+    try:
+        cmd1 = '/bin/findmnt -n -o SOURCE'
+        source = check_output_(cmd1.split(' ') + [where])
+        if source.startswith('/dev/loop'):
+            source = get_loopdev_field(source, 'back-file')
+        return source == what
+    except subprocess.CalledProcessError as exc:
+        print(f"Command {exc.cmd} exited with {exc.returncode}",
+              file=sys.stderr)
+        return False
+
+
+class SharedStorageError(Exception):
+    """Exceptions raised by Shared Storage configuration"""
+
+
+class SharedStorage:
+    """
+    SharedStorage(stream=file|string, filename='/run/vyatta/user-share.conf')
+    Holds the configuration for shared storage. It is a collection
+    of directory mounts and read-only directories as specified in
+    vyatta configuration. The configuration is stored in a yaml format.
+    """
+
+    def __init__(self):
+        self.mounts = {}
+        self.dirs = {}
+        self.tree = {}
+
+    def __repr__(self):
+        return f"SharedStorage(mounts:{self.mounts!r} dirs:{self.dirs!r})"
+
+    def load(self, stream=None, conf_file=None):
+        """load configuration from a stream"""
+        if not stream and not conf_file:
+            return
+        # safe_load: PyYAML 6 needs a Loader for load(), and write() stores
+        # plain YAML (safe_dump)
+        try:
+            if stream is None:
+                with open(conf_file, 'r', encoding='utf-8') as cfile:
+                    conf = yaml.safe_load(cfile)
+            else:
+                conf = yaml.safe_load(stream)
+        except FileNotFoundError:
+            return
+        except yaml.YAMLError as exc:
+            raise SharedStorageError(str(exc)) from exc
+        if 'mounts' in conf:
+            self.validate_and_add_mounts(conf['mounts'])
+        if 'dirs' in conf:
+            self.validate_and_add_dirs(conf['dirs'])
+
+    def dump(self):
+        """Return a yaml configuration string"""
+        return yaml.safe_dump({'mounts': self.mounts, 'dirs': self.dirs},
+                              default_flow_style=False)
+
+    def write(self, conf_file=None):
+        """Write configuration to File"""
+        if not conf_file:
+            raise SharedStorageError("No filename to write")
+        mkdir_p(os.path.dirname(conf_file))
+        tfname = None
+        try:
+            with NamedTemporaryFile(dir=os.path.dirname(conf_file),
+                                    prefix=os.path.basename(conf_file),
+                                    delete=False) as tmpf:
+                tfname = tmpf.name
+                tmpf.write(self.dump().encode())
+            os.rename(tfname, conf_file)
+            os.chmod(conf_file, 0o644)
+        except OSError as exc:
+            print(f"failed to create temporary file: {exc!s}")
+        finally:
+            if tfname and os.path.exists(tfname):
+                os.remove(tfname)
+
+    def check_mount_access(self, path, access):
+        """check is a mounted path is allowed the requested access"""
+        perm = self.mounts[path]['perm']
+        if not check_access(path, access, perm):
+            return False
+        return check_mount(self.mounts[path]['what'], path)
+
+    def check_dir_access(self, path, access):
+        """check is a directory path is allowed the requested access"""
+        perm = self.dirs[path]['perm']
+        return check_access(path, access, perm)
+
+    def is_access_allowed(self, path, access='r'):
+        """Check if 'access' is allowed for 'path'"""
+        rpath = os.path.realpath(path)
+        while rpath != '/':
+            if rpath in self.dirs and self.check_dir_access(rpath, access):
+                return True
+            if rpath in self.mounts and self.check_mount_access(rpath, access):
+                return True
+            rpath = os.path.dirname(rpath)
+        return False
+
+    def check_update_mount_tree(self, mnt):
+        """check if mountpoints overlaps"""
+        if not self.tree:
+            self.tree = {'name': '/', 'is_mnt': False, 'children': {}}
+        node = self.tree
+        for pname in mnt.split('/'):
+            tmp = node['children'].get(pname)
+            if not tmp:
+                node['children'][pname] = {'name': pname, 'is_mnt': False,
+                                           'children': {}}
+                node = node['children'][pname]
+            elif tmp['is_mnt']:
+                raise SharedStorageError(f"overlapped mount {mnt}")
+            else:
+                node = tmp
+        node['is_mnt'] = True
+
+    def add_dir(self, path, perm, replace=False):
+        """add a directoty with perm. Raise exception if directory already
+        exists"""
+        if not path:
+            raise SharedStorageError(
+                f"{self.__class__.__name__}.add_dir(): path is None ")
+        if perm and perm not in {'r', 'rw'}:
+            raise SharedStorageError(
+                f"{self.__class__.__name__}.add_dir(): invalid perm: {perm}")
+        validate_path(path)
+        if not replace and path in self.dirs:
+            raise SharedStorageError(
+                f"{self.__class__.__name__}.add_dir(): {path} exists")
+        self.dirs[path] = {'perm': perm}
+
+    # pylint: disable-next=R0913,R0917 ; reason: callers pass all six
+    def add_mount(self, path, perm, what, size, allow_exec, replace=False):
+        """add a mount with perm if possible"""
+        if perm and perm not in {'r', 'rw'}:
+            raise SharedStorageError(
+                f"{self.__class__.__name__}.add_mount(): invalid perm: {perm}")
+        validate_path(path)
+        validate_path(what)
+        if path in self.mounts:
+            if not replace:
+                raise SharedStorageError(
+                    f"{self.__class__.__name__}.add_mount(): {path} exists")
+        else:
+            self.check_update_mount_tree(path)
+        self.mounts[path] = {'perm': perm, 'what': what, 'size': size,
+                             'exec': allow_exec}
+
+    def validate_and_add_dirs(self, cfg):
+        """validate directory entries from yaml config"""
+        if not cfg:
+            return
+        for k, entry in cfg.items():
+            if not entry:
+                perm = 'r'
+            else:
+                perm = entry.get('perm')
+            if not perm:
+                perm = 'r'
+            self.add_dir(k, perm)
+
+    def validate_and_add_mounts(self, cfg):
+        """Validate an yaml configuration tree for shared storage config"""
+        if not cfg:
+            return
+        try:
+            for k, entry in cfg.items():
+                if not entry:
+                    raise SharedStorageError(
+                        f"Invalid mountpoint {k}: mount infor missing")
+                perm = entry.get('perm')
+                if not perm:
+                    perm = 'r'
+                    entry['perm'] = 'r'
+                what = entry.get('what')
+                size = entry.get('size')
+                allow_exec = entry.get('exec')
+                if allow_exec is None:
+                    entry['exec'] = False
+                if not (size and what and os.path.isabs(what)):
+                    raise SharedStorageError(
+                        f"Invalid entry {k}: size({size}) "
+                        f"or device ({what}) missing")
+                self.add_mount(k, perm, what, size, allow_exec)
+        except (AttributeError, TypeError, KeyError) as exc:
+            raise SharedStorageError(
+                f"Error while validating config: {exc!s}") from exc
+
+    def get_current_mounts(self):
+        """returns set of mounts that are currently valid"""
+        return {path for path, info in self.mounts.items()
+                if check_mount(info['what'], path)}

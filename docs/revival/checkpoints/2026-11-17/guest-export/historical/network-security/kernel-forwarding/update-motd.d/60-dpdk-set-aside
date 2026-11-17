@@ -1,0 +1,15 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+# Login notice while a 2105 configuration's DPDK-only settings are set aside
+# (boot-config.d/50-dpdk-set-aside wrote them to this file at boot).
+f=${SET_ASIDE_FILE:-/config/config.boot.dpdk-only}
+[ -e "$f" ] || exit 0
+cat <<NOTICE
+
+Some settings from this router's DANOS 2105 configuration were set aside
+at boot, because they need the DPDK dataplane, which NuDanOS 1.0 does not
+include (it forwards in the kernel). They are kept in:
+    $f
+The original configuration is next to it as config.boot.2105-original.
+
+NOTICE

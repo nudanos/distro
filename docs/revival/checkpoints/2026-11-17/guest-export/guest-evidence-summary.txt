@@ -1,0 +1,72 @@
+FILE 118366c57af3906b002f942017b0b64f10efeced0cbc9e31d07023b598afe7e6  /srv/nudanos/image-step2-final/image-build.log
+lines 8685
+build_complete_markers 1
+bootstrap_audit_pass_markers 1
+sandbox_audit_pass_markers 1
+credential_related_line_count 18
+FILE 769ab72628762b0476959959aaddc9baf11739e8acad64359ee8672f7874ac68  /srv/nudanos/image-step2/image-build-tcg.log
+lines 830
+build_complete_markers 0
+bootstrap_audit_pass_markers 0
+sandbox_audit_pass_markers 0
+credential_related_line_count 12
+FILE f6fc53f881806e8ca48750fa387773c1d70a07cbd8daa4784901fb469330a48e  /srv/nudanos/image-step2/image-build-invalid-ownership.log
+lines 8197
+build_complete_markers 0
+bootstrap_audit_pass_markers 0
+sandbox_audit_pass_markers 1
+credential_related_line_count 17
+FILE 4bfa188001a40e87ee896a96b0cdd9e3ddbe046f7d6c4bab86f61d9c86b43d2d  /srv/nudanos/image-step2/image-build-ungated.log
+lines 402
+build_complete_markers 0
+bootstrap_audit_pass_markers 0
+sandbox_audit_pass_markers 0
+credential_related_line_count 6
+FILE fbcdd444bd319d9fe8371544cf2fe6d8380fd47318f6033615ef82b5609cac9c  /srv/nudanos/image-step2/image-build-whpx-interrupted.log
+lines 684
+build_complete_markers 0
+bootstrap_audit_pass_markers 0
+sandbox_audit_pass_markers 0
+credential_related_line_count 10
+FILE abb4897cdc5d4c1bf6a8b589a5ad083f555bcb4e10f36a208f1d82d624db4a9b  /srv/nudanos/image-step2/image-build-whpx.log
+lines 9372
+build_complete_markers 1
+bootstrap_audit_pass_markers 1
+sandbox_audit_pass_markers 1
+credential_related_line_count 28
+FILE 5bc2825b96a65049bc377436263735e51771f8c9ebf9a1b0656922ae7abd9533  /srv/nudanos/image-step2-local/builder.log
+lines 1725
+build_complete_markers 0
+bootstrap_audit_pass_markers 0
+sandbox_audit_pass_markers 0
+credential_related_line_count 0
+FILE c82b71d1a96afd90d55bce066a67c17e47521e859f4ad50ab021bfd58b2aba9e  /home/builder/rest-auth-red.log
+lines 37
+build_complete_markers 0
+bootstrap_audit_pass_markers 0
+sandbox_audit_pass_markers 0
+credential_related_line_count 5
+FILE 467096a4f219f504837488875892f0db9bfbee8287e34457d2100e63cf269a3b  /home/builder/rest-issuer-red.log
+lines 5
+build_complete_markers 0
+bootstrap_audit_pass_markers 0
+sandbox_audit_pass_markers 0
+credential_related_line_count 0
+FILE 579c97b7a35dd7a0e584999e22746adb3a681da5437bc8693880e33a90476b09  /home/builder/rest-max-red.log
+lines 107
+build_complete_markers 0
+bootstrap_audit_pass_markers 0
+sandbox_audit_pass_markers 0
+credential_related_line_count 1
+FILE a667c9c72e8e54eac7afb4ec6bfec6a2fe78cbd63d68159ebbc353664b48ac5e  /home/builder/rest-startup-green.log
+lines 6
+build_complete_markers 0
+bootstrap_audit_pass_markers 0
+sandbox_audit_pass_markers 0
+credential_related_line_count 0
+FILE 2974585237b6842d1a51e742b2a51ee494aae53500febe435afd9b28b5b26986  /home/builder/rest-startup-red.log
+lines 2
+build_complete_markers 0
+bootstrap_audit_pass_markers 0
+sandbox_audit_pass_markers 0
+credential_related_line_count 0

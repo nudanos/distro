@@ -1,0 +1,10 @@
+test-runtime/acceptance-baseline/boot.py
+test-runtime/acceptance-baseline/install.py
+test-runtime/acceptance-baseline/probes/root-recovery.sh
+test-runtime/acceptance-baseline/rescue.py
+test-runtime/acceptance-baseline/seed-login.py
+test-runtime/acceptance-image-upgrade/boot.py
+test-runtime/acceptance-interim/boot.py
+test-runtime/acceptance-legacy-sandbox/boot.py
+test-runtime/acceptance-legacy-sandbox/build.py
+test-runtime/acceptance-legacy-sandbox/recovery.py

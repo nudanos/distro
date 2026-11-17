@@ -1,0 +1,250 @@
+{
+  "review_date": "2026-11-03",
+  "distro_sha": "864370dc3ff5a6086ce298b147f79ac2c4de315e",
+  "runs": [
+    {
+      "name": "nightly",
+      "sha": "864370dc3ff5a6086ce298b147f79ac2c4de315e",
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/nudanos/distro/actions/runs/41652774933",
+      "id": 41652774933
+    },
+    {
+      "name": "updates",
+      "sha": "864370dc3ff5a6086ce298b147f79ac2c4de315e",
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/nudanos/distro/actions/runs/41491155332",
+      "id": 41491155332
+    },
+    {
+      "name": "nightly",
+      "sha": "864370dc3ff5a6086ce298b147f79ac2c4de315e",
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/nudanos/distro/actions/runs/41477342597",
+      "id": 41477342597
+    },
+    {
+      "name": "nightly",
+      "sha": "864370dc3ff5a6086ce298b147f79ac2c4de315e",
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/nudanos/distro/actions/runs/41311479029",
+      "id": 41311479029
+    },
+    {
+      "name": "nightly",
+      "sha": "864370dc3ff5a6086ce298b147f79ac2c4de315e",
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/nudanos/distro/actions/runs/41201942443",
+      "id": 41201942443
+    },
+    {
+      "name": "nightly",
+      "sha": "864370dc3ff5a6086ce298b147f79ac2c4de315e",
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/nudanos/distro/actions/runs/41059570964",
+      "id": 41059570964
+    },
+    {
+      "name": "nightly",
+      "sha": "864370dc3ff5a6086ce298b147f79ac2c4de315e",
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/nudanos/distro/actions/runs/40878994261",
+      "id": 40878994261
+    },
+    {
+      "name": "nightly",
+      "sha": "864370dc3ff5a6086ce298b147f79ac2c4de315e",
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/nudanos/distro/actions/runs/40692427724",
+      "id": 40692427724
+    },
+    {
+      "name": "nightly",
+      "sha": "864370dc3ff5a6086ce298b147f79ac2c4de315e",
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/nudanos/distro/actions/runs/40502527344",
+      "id": 40502527344
+    },
+    {
+      "name": "updates",
+      "sha": "864370dc3ff5a6086ce298b147f79ac2c4de315e",
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/nudanos/distro/actions/runs/40340723445",
+      "id": 40340723445
+    },
+    {
+      "name": "nightly",
+      "sha": "864370dc3ff5a6086ce298b147f79ac2c4de315e",
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/nudanos/distro/actions/runs/40328043453",
+      "id": 40328043453
+    },
+    {
+      "name": "nightly",
+      "sha": "864370dc3ff5a6086ce298b147f79ac2c4de315e",
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/nudanos/distro/actions/runs/40189548825",
+      "id": 40189548825
+    }
+  ],
+  "nightly_jobs": [
+    {
+      "name": "build",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v7",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-go@v7",
+          "conclusion": "success"
+        },
+        {
+          "name": "Import archive signing key",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/cache@v6",
+          "conclusion": "success"
+        },
+        {
+          "name": "Build, sign, check the package set",
+          "conclusion": "success"
+        },
+        {
+          "name": "Set-aside list covers the DPDK-only packages (spec section 4.4)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Lint (no port gets worse)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/upload-artifact@v7",
+          "conclusion": "success"
+        },
+        {
+          "name": "Image",
+          "conclusion": "success"
+        },
+        {
+          "name": "Layer 2 (install, remove, purge)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Enable KVM",
+          "conclusion": "success"
+        },
+        {
+          "name": "Layer 3 (boot, configure, install, reboot)",
+          "conclusion": "success"
+        },
+        {
+          "name": "UEFI smoke boot",
+          "conclusion": "success"
+        },
+        {
+          "name": "Fixtures (2105 configs load)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Scenarios (layer 4)",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/upload-artifact@v7",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/upload-artifact@v7",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/upload-artifact@v7",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/cache@v6",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-go@v7",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v7",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "release",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/download-artifact@v7",
+          "conclusion": "success"
+        },
+        {
+          "name": "Publish the ISO",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "conclusion": "success"
+        }
+      ]
+    }
+  ],
+  "nightly_test_summary": [
+    "2026-11-03T14:30:13.1394271Z lint: 9923 findings in 48 ports (95 checked)",
+    "2026-11-03T14:41:00.4835696Z install-purge: OK (1097 packages)",
+    "2026-11-03T14:44:14.7926337Z boottest: OK",
+    "2026-11-03T14:44:49.6342970Z boottest: OK",
+    "2026-11-03T14:51:31.9826571Z fixtures: OK (39 configs)",
+    "2026-11-03T14:57:20.0243884Z PASS bgp (gating) 5.7 min",
+    "2026-11-03T15:01:10.8612743Z PASS mpls-ldp (reported) 3.8 min",
+    "2026-11-03T15:04:51.8383690Z PASS ospf (gating) 3.7 min",
+    "2026-11-03T15:05:42.0236542Z PASS rest (gating) 0.8 min",
+    "2026-11-03T15:06:41.7054672Z PASS snmp (gating) 1.0 min",
+    "2026-11-03T15:09:59.3494091Z PASS tacacs (gating) 3.3 min",
+    "2026-11-03T15:11:29.7955054Z PASS vrrp (gating) 1.5 min"
+  ]
+}

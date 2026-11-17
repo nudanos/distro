@@ -1,0 +1,177 @@
+cli-sandbox (0.31) trixie; urgency=medium
+
+  * Code-quality lint fixes (distro docs/porting.md): analyzer findings
+    fixed, see the git log.
+  * The shared storage configuration is read with yaml.safe_load, which
+    PyYAML 6 needs; its loader has unit tests.
+
+ -- NuDanOS Maintainers <jon@fernandez.tech>  Fri, 23 Oct 2026 12:17:29 +0000
+
+cli-sandbox (0.30) trixie; urgency=medium
+
+  * pam-sandbox.prerm: remove the PAM profile postinst copies into
+    /usr/share/pam-configs.
+
+ -- NuDanOS Maintainers <jon@fernandez.tech>  Fri, 02 Oct 2026 13:11:53 -0700
+
+cli-sandbox (0.29) trixie; urgency=medium
+
+  * New cli-sandbox-create, run from the vyatta-system-login-user-isolation
+    postinst: builds the sandbox root with mmdebstrap (replaces the DANOS
+    build-iso hook 0990-create-chroot-fs).
+
+ -- NuDanOS Maintainers <jon@fernandez.tech>  Fri, 02 Oct 2026 08:28:45 -0700
+
+cli-sandbox (0.28) trixie; urgency=medium
+
+  * Port to Debian 13 (trixie): debhelper-compat 13, Standards-Version 4.7.2, Rules-Requires-Root, NuDanOS Vcs.
+
+ -- NuDanOS Maintainers <jon@fernandez.tech>  Mon, 28 Sep 2026 23:08:46 -0700
+
+cli-sandbox (0.27) unstable; urgency=medium
+
+  [ Sharmila Podury ]
+  * Remove vyattacfgpwd user from sandbox
+
+ -- Nachiketa Prachanda <nprachan@vyatta.att-mail.com>  Tue, 12 Oct 2021 10:25:53 -0700
+
+cli-sandbox (0.26) unstable; urgency=medium
+
+  * scripts: only bind existing home directory
+
+ -- Nachiketa Prachanda <nprachan@vyatta.att-mail.com>  Fri, 16 Jul 2021 12:46:02 -0700
+
+cli-sandbox (0.25) unstable; urgency=medium
+
+  [ Sharmila Podury ]
+  * Use the original /etc/pam.d/passwd file
+
+ -- Nachiketa Prachanda <nprachan@vyatta.att-mail.com>  Fri, 21 May 2021 19:15:05 -0700
+
+cli-sandbox (0.24) unstable; urgency=medium
+
+  [ Sharmila Podury ]
+  * Unable to renew password when expired
+
+ -- Nachiketa Prachanda <nprachan@vyatta.att-mail.com>  Fri, 14 May 2021 09:09:34 -0700
+
+cli-sandbox (0.23) unstable; urgency=medium
+
+  [ Duncan Eastoe ]
+  * cli-sandbox: undefined variable cnf_filename
+  * cli-sandbox: unused variable e
+  * cli-sandbox: Add environment argument to sb_run()
+  * cli-sandbox: define common environment values
+  * Add support for sandbox post create hooks
+  * Add support for sandbox init hooks
+  * Remove SSSD specific operations
+  * cli-sandbox: use common vars in cli-sandbox.env
+  * Add support for sandbox post start hooks
+  * Create "/run/cli-sandbox/<user>/ready" on start
+  * cli-sandbox: Add sandbox update/reload support
+  * pam_sandbox.c: wait_for_file() until mtime changes
+  * pam_sandbox.c: reload sandbox on new session
+  * cli-sandbox: generate /etc/passwd and /etc/group
+  * RO bind mount over /etc/passwd and /etc/group
+  * cli-sandbox: restrict perms on per-user "top" dir
+  * cli-sandbox: don't bind mount host /dev/pts
+  * pam_sandbox: free_sandbox_info() before get_machine_info()
+  * cli_sandbox_init: session based keepalive
+
+  [ Nicholas Brown ]
+  * Revert "cli-sandbox: don't bind mount host /dev/pts"
+
+ -- Nicholas Brown <nick.brown@att.com>  Mon, 22 Feb 2021 22:21:43 +0000
+
+cli-sandbox (0.22) unstable; urgency=medium
+
+  * conf: remove default locale from bind mounts
+
+ -- Nachiketa Prachanda <nprachan@vyatta.att-mail.com>  Tue, 08 Sep 2020 10:19:25 -0700
+
+cli-sandbox (0.21) unstable; urgency=medium
+
+  [ Duncan Eastoe ]
+  * cli-sandbox: Handle SSSD pipes directory on tmpfs
+
+ -- Nachiketa Prachanda <nprachan@vyatta.att-mail.com>  Fri, 24 Jul 2020 20:27:24 +0000
+
+cli-sandbox (0.20) unstable; urgency=medium
+
+  * check path existence before setting up bind mounts
+  * change command not found message in sandbox
+
+ -- Nachiketa Prachanda <nprachan@vyatta.att-mail.com>  Mon, 13 Jul 2020 11:16:03 -0700
+
+cli-sandbox (0.19) unstable; urgency=medium
+
+  * shared_storage: fix up file permissions
+  * do not fail on correctly mounted shared storage
+
+ -- Nachiketa Prachanda <nprachan@vyatta.att-mail.com>  Wed, 01 Jul 2020 10:07:10 -0700
+
+cli-sandbox (0.18) unstable; urgency=medium
+
+  [ Duncan Eastoe ]
+  * cli-sandbox: clean sandboxes of deleted users
+  * cli-sandbox: fix NameError raised in _write_env()
+
+ -- Nachiketa Prachanda <nprachan@vyatta.att-mail.com>  Thu, 02 Apr 2020 14:10:59 -0700
+
+cli-sandbox (0.17) unstable; urgency=medium
+
+  [ Duncan Eastoe ]
+  * pam_sandbox: pass passwd struct internally
+  * Use user ID for sandbox machine names
+
+  [ Nachiketa Prachanda ]
+
+ -- Nachiketa Prachanda <nprachan@vyatta.att-mail.com>  Fri, 07 Feb 2020 11:35:36 -0800
+
+cli-sandbox (0.16) unstable; urgency=medium
+
+  [ Nachiketa Prachanda ]
+  * fix flake8 warnings
+  * python-lib: use losetup json output
+
+  [ Duncan Eastoe ]
+  * cli-sandbox: Use argparse mutually excl. group
+  * cli-sandbox: Add --start option
+  * cli-sandbox: Replace _ with . in machine names
+
+  [ Nachiketa Prachanda ]
+
+ -- Nachiketa Prachanda <nprachan@vyatta.att-mail.com>  Tue, 14 Jan 2020 11:28:56 -0800
+
+cli-sandbox (0.15) unstable; urgency=medium
+
+  * yang: add units to shared storage help
+
+ -- Nachiketa Prachanda <nprachan@vyatta.att-mail.com>  Tue, 07 Jan 2020 11:29:59 -0800
+
+cli-sandbox (0.14) unstable; urgency=medium
+
+  [ Vyatta Package Maintainers ]
+  * New SSH errors make syslog more chatty
+
+  [ Nachiketa Prachanda ]
+
+ -- Nachiketa Prachanda <nprachan@vyatta.att-mail.com>  Thu, 14 Nov 2019 10:13:21 -0800
+
+cli-sandbox (0.13) unstable; urgency=medium
+
+  * debian: add yaml dependency
+
+ -- Nachiketa Prachanda <nprachan@vyatta.att-mail.com>  Fri, 08 Nov 2019 10:33:49 -0800
+
+cli-sandbox (0.12) unstable; urgency=medium
+
+  * DANOS Master Import
+
+ -- Vyatta Package Maintainers <DL-vyatta-help@att.com>  Sun, 03 Nov 2019 11:10:08 -0500
+
+cli-sandbox (0.10.1) unstable; urgency=medium
+
+  * DANOS Import
+
+ -- Vyatta Package Maintainers <DL-vyatta-help@att.com>  Sun, 03 Nov 2019 11:10:07 -0500

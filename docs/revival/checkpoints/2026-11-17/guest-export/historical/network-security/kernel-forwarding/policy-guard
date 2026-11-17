@@ -1,0 +1,27 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+# Privileged system-configure preflight. The normal boot hook runs as
+# configd, which cannot install kernel packet filters.
+set -eu
+
+hook=${POLICY_GUARD_HOOK:-/opt/vyatta/etc/boot-config.d/50-dpdk-set-aside}
+boot=${1:-/config/config.boot}
+if /usr/bin/perl "$hook" --check-policy "$boot"; then
+    exit 0
+fi
+
+# Replace only our own tables in one transaction. Leave local input and
+# output alone so the console and any existing management access still work.
+if /usr/sbin/nft -f - <<'RULES'
+destroy table inet nudanos_migration_guard
+add table inet nudanos_migration_guard
+add chain inet nudanos_migration_guard forward { type filter hook forward priority -300; policy drop; }
+destroy table bridge nudanos_migration_guard
+add table bridge nudanos_migration_guard forward { type filter hook forward priority -300; policy drop; }
+RULES
+then
+    echo 'Migration blocked: routed and bridged transit disabled until the configuration is reviewed.' >&2
+else
+    echo 'Migration blocked: could not install the transit guard. Boot configuration will not be applied.' >&2
+fi
+exit 78

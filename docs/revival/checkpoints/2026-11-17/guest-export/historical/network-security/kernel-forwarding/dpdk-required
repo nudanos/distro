@@ -1,0 +1,6 @@
+#!/bin/sh
+# Installed under the names of vplane-config's op scripts (show/monitor
+# dataplane, show interfaces bonding detail, ...). vplane-config is the DPDK
+# dataplane's backend and cannot be installed on a kernel-forwarding system.
+echo "$(basename "$0"): this command requires the DPDK dataplane; this system forwards in the Linux kernel" >&2
+exit 1

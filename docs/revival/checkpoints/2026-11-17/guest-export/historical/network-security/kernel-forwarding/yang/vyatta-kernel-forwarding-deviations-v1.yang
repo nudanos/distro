@@ -1,0 +1,86 @@
+module vyatta-kernel-forwarding-deviations-v1 {
+	namespace "urn:vyatta.com:mgmt:vyatta-kernel-forwarding-deviations:1";
+	prefix vyatta-kernel-forwarding-deviations-v1;
+
+	import vyatta-interfaces-v1 { prefix if; }
+	import vyatta-interfaces-dataplane-v1 { prefix interfaces-dataplane; }
+
+	organization "NuDanOS";
+	contact "NuDanOS Maintainers <jon@fernandez.tech>";
+	description
+		"Refuse dataplane interface settings that only the DPDK dataplane
+		 implements, on systems that forward in the Linux kernel.
+
+		 SPDX-License-Identifier: LGPL-2.1-only";
+
+	revision 2026-10-03 {
+		description "Refuse forced link speed and duplex, and received-GARP
+		             control, which only the DPDK dataplane applies";
+	}
+	revision 2026-10-01 { description "Initial revision"; }
+
+	deviation /if:interfaces/interfaces-dataplane:dataplane/interfaces-dataplane:cpu-affinity {
+		deviate add {
+			must "false()" {
+				error-message "cpu-affinity requires the DPDK dataplane; this system forwards in the Linux kernel";
+			}
+		}
+	}
+	deviation /if:interfaces/interfaces-dataplane:dataplane/interfaces-dataplane:receive-cpu-affinity {
+		deviate add {
+			must "false()" {
+				error-message "receive-cpu-affinity requires the DPDK dataplane; this system forwards in the Linux kernel";
+			}
+		}
+	}
+	deviation /if:interfaces/interfaces-dataplane:dataplane/interfaces-dataplane:transmit-cpu-affinity {
+		deviate add {
+			must "false()" {
+				error-message "transmit-cpu-affinity requires the DPDK dataplane; this system forwards in the Linux kernel";
+			}
+		}
+	}
+
+	deviation /if:interfaces/interfaces-dataplane:dataplane/interfaces-dataplane:speed {
+		deviate add {
+			must "current() = 'auto'" {
+				error-message "a forced link speed requires the DPDK dataplane; this system forwards in the Linux kernel (use auto)";
+			}
+		}
+	}
+	deviation /if:interfaces/interfaces-dataplane:dataplane/interfaces-dataplane:duplex {
+		deviate add {
+			must "current() = 'auto'" {
+				error-message "a forced duplex mode requires the DPDK dataplane; this system forwards in the Linux kernel (use auto)";
+			}
+		}
+	}
+	deviation /if:interfaces/interfaces-dataplane:dataplane/interfaces-dataplane:ip/interfaces-dataplane:gratuitous-arp/interfaces-dataplane:request {
+		deviate add {
+			must "false()" {
+				error-message "gratuitous-arp request control requires the DPDK dataplane; this system forwards in the Linux kernel";
+			}
+		}
+	}
+	deviation /if:interfaces/interfaces-dataplane:dataplane/interfaces-dataplane:ip/interfaces-dataplane:gratuitous-arp/interfaces-dataplane:reply {
+		deviate add {
+			must "false()" {
+				error-message "gratuitous-arp reply control requires the DPDK dataplane; this system forwards in the Linux kernel";
+			}
+		}
+	}
+	deviation /if:interfaces/interfaces-dataplane:dataplane/interfaces-dataplane:vif/interfaces-dataplane:ip/interfaces-dataplane:gratuitous-arp/interfaces-dataplane:request {
+		deviate add {
+			must "false()" {
+				error-message "gratuitous-arp request control requires the DPDK dataplane; this system forwards in the Linux kernel";
+			}
+		}
+	}
+	deviation /if:interfaces/interfaces-dataplane:dataplane/interfaces-dataplane:vif/interfaces-dataplane:ip/interfaces-dataplane:gratuitous-arp/interfaces-dataplane:reply {
+		deviate add {
+			must "false()" {
+				error-message "gratuitous-arp reply control requires the DPDK dataplane; this system forwards in the Linux kernel";
+			}
+		}
+	}
+}

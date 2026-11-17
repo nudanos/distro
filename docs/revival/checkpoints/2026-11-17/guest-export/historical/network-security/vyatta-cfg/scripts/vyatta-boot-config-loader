@@ -1,0 +1,92 @@
+#!/bin/bash
+# Copyright (c) 2019-2020, AT&T Intellectual Property. All rights reserved.
+#
+# Copyright (c) 2010-2011, 2015-2016 by Brocade Communications Systems, Inc.
+# All rights reserved.
+#
+# SPDX-License-Identifier: GPL-2.0-only
+
+BOOT_FILE=$1
+shift
+
+CAPI=${BOOT_CONFIG_CAPI:-/bin/cli-shell-api}
+# Executables run before the boot configuration is loaded, as
+# "<hook> <boot file>" (e.g. to set aside configuration a release cannot
+# load). Ordinary hook failures are logged. EX_CONFIG (78) means that
+# loading or committing the configuration would be unsafe and stops the load.
+HOOK_DIR=${BOOT_CONFIG_HOOK_DIR:-/opt/vyatta/etc/boot-config.d}
+
+do_commit () {
+  cfgcli commit
+}
+
+umask 0002
+
+(
+  echo 'begin boot-config-loader'
+  # set up config session
+  SID=$$
+  SENV=$($CAPI getSessionEnv $SID)
+  eval "$SENV"
+  if ! $CAPI setupSession; then
+    echo 'Cannot set up configuration session.' 1>&2
+    exit 1
+  fi
+
+  # boot-config hooks
+  if [ -d "$HOOK_DIR" ]; then
+    mapfile -d '' paths < <(find "$HOOK_DIR" -mindepth 1 -maxdepth 1 -print0 |
+      LC_ALL=C sort -z)
+    for path in "${paths[@]}"; do
+      hook=${path##*/}
+      if [ ! -f "$path" ] || [ ! -x "$path" ]; then
+        continue
+      fi
+      "$path" "$BOOT_FILE"
+      status=$?
+      if [ $status -eq 0 ]; then
+        echo "boot-config hook $hook: ok"
+      else
+        echo "boot-config hook $hook: failed ($status)" 1>&2
+        if [ "$status" -eq 78 ]; then
+          echo "critical boot-config hook $hook: configuration was not loaded" 1>&2
+          if ! $CAPI teardownSession; then
+            echo 'teardown failed' 1>&2
+          fi
+          exit 78
+        fi
+      fi
+    done
+  fi
+
+  # do load
+  echo 'begin load'
+  if ! $CAPI loadFile "$BOOT_FILE"; then
+    echo 'load finished with failure(s)' 1>&2
+  else
+    echo 'load finished successfully'
+  fi
+
+  # do commit
+  echo 'begin commit'
+  ret=0
+  export COMMIT_VIA=boot-config-loader
+  if ! do_commit ; then
+    echo 'commit failed' 1>&2
+    ret=1
+  else
+    echo 'commit succeeded'
+  fi
+
+  # clean up
+  if ! $CAPI teardownSession; then
+    echo 'teardown failed' 1>&2
+  else
+    echo 'teardown succeeded'
+  fi
+  echo 'end boot-config-loader'
+  exit $ret
+) </dev/null
+
+exit $?
+

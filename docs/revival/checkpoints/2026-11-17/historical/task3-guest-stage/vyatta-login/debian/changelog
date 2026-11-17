@@ -1,0 +1,112 @@
+vyatta-login (2.43) trixie; urgency=medium
+
+  * Do not treat the TACACS+ mapped accounts tacacs0..15 (primary group
+    tacacs) as configurable local users: update() deleted them once
+    vyatta-tacacs had put them in vyatta groups, which broke TACACS+ login.
+
+ -- NuDanOS Maintainers <jon@fernandez.tech>  Tue, 06 Oct 2026 20:07:00 -0700
+
+vyatta-login (2.42) trixie; urgency=medium
+
+  * Vyatta::Login::User judges usermod/useradd by exit status, not by stderr:
+    sss_cache warns there when SSSD is not configured, and every boot
+    configuration with a login user failed to commit. t/ runs at build time.
+
+ -- NuDanOS Maintainers <jon@fernandez.tech>  Fri, 02 Oct 2026 19:19:48 -0700
+
+vyatta-login (2.41) trixie; urgency=medium
+
+  * vyatta-password-renewal.prerm: delete the copied pam-configs/unix before
+    removing the diversion; dpkg refused to rename Debian's file back over it
+    and the package could not be removed.
+
+ -- NuDanOS Maintainers <jon@fernandez.tech>  Fri, 02 Oct 2026 12:58:54 -0700
+
+vyatta-login (2.40) trixie; urgency=medium
+
+  * Port to Debian 13 (trixie): debhelper-compat 13, Standards-Version 4.7.2, Rules-Requires-Root, NuDanOS Vcs.
+
+ -- NuDanOS Maintainers <jon@fernandez.tech>  Mon, 28 Sep 2026 23:09:44 -0700
+
+vyatta-login (2.39) unstable; urgency=medium
+
+  * Remove vyattapwdcfg group
+
+ -- Sharmila Podury <sharmila.podury@att.com>  Wed, 20 Oct 2021 10:06:12 -0700
+
+vyatta-login (2.38) unstable; urgency=medium
+
+  * Remove unneeded lintian-overrides
+  * Remove special group added for password change
+  * Disable password expiry for users with no password
+
+ -- Sharmila Podury <sharmila.podury@att.com>  Tue, 12 Oct 2021 13:38:54 -0700
+
+vyatta-login (2.37) unstable; urgency=medium
+
+  [ Sameer Agrawal ]
+  * Reduce the minsize so that login history archive files are created even for one or smaller number of login history. VRVDR-55493
+  * Fix permissions so that login history is not exposed at operator level. VRVDR-55441
+
+ -- Sharmila Podury <sharmila.podury@att.com>  Tue, 31 Aug 2021 10:03:03 -0700
+
+vyatta-login (2.36) unstable; urgency=medium
+
+  [ Sameer Agrawal ]
+  * Add support to view history/login data. VRVDR-52326
+  * Add help text for the missing login history archive interval options. VRVDR-55421
+  * Fix script index error when fetching login history in case user goes away without logout. VRVDR-55465
+  * Address unbound error when login history count is 0. VRVDR-55410
+
+  [ Charles (Chas) Williams ]
+  * Mark RADIUS configuration as obselete (Bugfix: VRVDR-54148)
+
+  [ Sharmila Podury ]
+  * Perl library licensing incorrect
+  * Show commands 'Last login' date missing in user isolation
+
+ -- Sharmila Podury <sharmila.podury@att.com>  Wed, 28 Jul 2021 06:31:51 -0700
+
+vyatta-login (2.35) unstable; urgency=medium
+
+  * Replace pam_unix in common-password with custom PAM
+
+ -- Sharmila Podury <sharmila.podury@att.com>  Fri, 21 May 2021 17:46:14 -0700
+
+vyatta-login (2.34) unstable; urgency=medium
+
+  * Unable to renew expired passwords
+  * Operator level users are unable to renew password
+  * Operator level users are unable to renew password
+  * User isolation ssh logins fail when renewing password
+  * Bug fixes in opasswd file
+  * Password history config changes default max password age
+
+ -- Sharmila Podury <sharmila.podury@att.com>  Fri, 14 May 2021 11:09:48 -0700
+
+vyatta-login (2.33) unstable; urgency=medium
+
+  [ Sharmila Podury ]
+  * Add Breaks/Replaces to debian/control
+  * Prohibit password reuse
+  * Refactor password history code into a perl module
+
+  [ Duncan Eastoe ]
+  * Add RADIUS pkgs, libraries, configs, etc.
+  * yang: deprecate radius-server configuration
+  * RadiusServer.pm: Log deprecation notice on cfg change
+  * RadiusServer.pm: correctly detect libpam-radius-auth ver.
+  * RadiusServer.pm: Check pam-auth-update exit code
+
+  [ Sharmila Podury ]
+  * Fix code indentation
+  * telnet login reports "Welcome to \S{NAME}"
+  * Fix typo and add temp file to process escape code
+
+ -- Colin Docherty <colin.docherty@att.com>  Wed, 24 Feb 2021 09:13:06 +0000
+
+vyatta-login (2.32) unstable; urgency=medium
+
+  * Initial release.
+
+ -- Sharmila Podury <sharmila.podury@att.com>  Sat, 05 Dec 2020 13:33:35 -0800
