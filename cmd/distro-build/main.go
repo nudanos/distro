@@ -719,6 +719,19 @@ func remoteHead(ctx context.Context, repo, branch string) (string, error) {
 	return head, nil
 }
 
+// remoteDefaultHead is the commit repo's default branch points at.
+func remoteDefaultHead(ctx context.Context, repo string) (string, error) {
+	out, err := exec.CommandContext(ctx, "git", "ls-remote", "--", repo, "HEAD").Output()
+	if err != nil {
+		return "", fmt.Errorf("git ls-remote %s: %w", repo, err)
+	}
+	head, _, ok := strings.Cut(strings.TrimSpace(string(out)), "\t")
+	if !ok {
+		return "", fmt.Errorf("%s: no HEAD", repo)
+	}
+	return head, nil
+}
+
 // checkUpdates reports pinned versions that upstream has superseded.
 func (a *app) checkUpdates(ctx context.Context) error {
 	m, err := manifest.Load(a.manifest)
@@ -734,12 +747,22 @@ func (a *app) checkUpdates(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		d, err := updates.CheckUpstream(e, tags)
-		if err != nil {
-			return err
-		}
-		if d != nil {
-			drift = append(drift, *d)
+		if updates.Untagged(e, tags) {
+			head, err := remoteDefaultHead(ctx, e.Upstream)
+			if err != nil {
+				return err
+			}
+			if d := updates.CheckUpstreamCommit(e, head); d != nil {
+				drift = append(drift, *d)
+			}
+		} else {
+			d, err := updates.CheckUpstream(e, tags)
+			if err != nil {
+				return err
+			}
+			if d != nil {
+				drift = append(drift, *d)
+			}
 		}
 		if e.PackagingBranch != "" {
 			head, err := remoteHead(ctx, e.Packaging, e.PackagingBranch)

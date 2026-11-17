@@ -102,12 +102,41 @@ func CheckPackaging(e manifest.Entry, head string) *Drift {
 	if e.PackagingBranch == "" || head == "" || head == e.PackagingRef {
 		return nil
 	}
-	short := func(c string) string {
-		if len(c) > 7 {
-			return c[:7]
-		}
-		return c
-	}
 	return &Drift{Name: e.Name, Current: short(e.PackagingRef), Latest: short(head),
 		Detail: "packaging " + e.PackagingBranch + " moved past the pin"}
+}
+
+var commit = regexp.MustCompile(`^[0-9a-f]{40}$`)
+
+// Untagged reports whether e follows an upstream that publishes no release
+// tags: e is pinned to a commit and none of tags matches e.TagPattern. Such
+// an entry is checked with CheckUpstreamCommit; once upstream tags a
+// release, CheckUpstream takes over.
+func Untagged(e manifest.Entry, tags []string) bool {
+	if !commit.MatchString(e.Tag) {
+		return false
+	}
+	re, err := regexp.Compile(e.TagPattern)
+	if err != nil {
+		return false // CheckUpstream reports the pattern
+	}
+	_, _, ok := versions.Latest(tags, re)
+	return !ok
+}
+
+// CheckUpstreamCommit reports an entry pinned to a commit once upstream
+// (head is its default branch's current commit) has moved past the pin.
+func CheckUpstreamCommit(e manifest.Entry, head string) *Drift {
+	if head == "" || head == e.Tag {
+		return nil
+	}
+	return &Drift{Name: e.Name, Current: short(e.Tag), Latest: short(head),
+		Detail: "upstream moved past the pinned commit", Held: e.Hold}
+}
+
+func short(c string) string {
+	if len(c) > 7 {
+		return c[:7]
+	}
+	return c
 }

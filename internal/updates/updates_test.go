@@ -89,3 +89,34 @@ func TestCheckPackaging(t *testing.T) {
 		t.Errorf("no followed branch: drift %+v", d)
 	}
 }
+
+// VyOS publishes no tags for libtacplus-map and libnss-tacplus: the manifest
+// pins a commit. check-updates used to stop with "no tag matches" there, so
+// the weekly report was that error and nothing else (distro issue #1).
+func TestUntagged(t *testing.T) {
+	pin := "8f35e7d96d521a42a0e5de836a2d6baddcb3e2e0"
+	e := manifest.Entry{Name: "libtacplus-map", Version: "1.0.1", Tag: pin, TagPattern: `^v(\d+\.\d+\.\d+)$`}
+	if !Untagged(e, nil) || !Untagged(e, []string{"debian/1.0"}) {
+		t.Error("pinned to a commit, no release tag: want untagged")
+	}
+	if Untagged(e, []string{"v1.0.2"}) {
+		t.Error("upstream started tagging releases: the tags are to be compared")
+	}
+	e.Tag = "v1.0.1"
+	if Untagged(e, nil) {
+		t.Error("pinned to a tag that is gone: want the no-tag error, not a commit check")
+	}
+}
+
+func TestCheckUpstreamCommit(t *testing.T) {
+	pin := "8f35e7d96d521a42a0e5de836a2d6baddcb3e2e0"
+	e := manifest.Entry{Name: "libtacplus-map", Version: "1.0.1", Tag: pin, Hold: "VyOS publishes no tags"}
+	if d := CheckUpstreamCommit(e, pin); d != nil {
+		t.Errorf("at the pin: drift %+v", d)
+	}
+	d := CheckUpstreamCommit(e, "2222222222222222222222222222222222222222")
+	if d == nil || d.Current != "8f35e7d" || d.Latest != "2222222" || d.Held != e.Hold ||
+		!strings.Contains(d.Detail, "upstream moved past the pinned commit") {
+		t.Errorf("moved upstream: drift = %+v", d)
+	}
+}
