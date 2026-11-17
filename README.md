@@ -33,12 +33,12 @@ Each layer runs inside the `nudanos/tester` container, on the newest ISO in
 ./distro-build -work /Volumes/nudanos/work test boot         # layer 3: boot, configure, install, reboot
 ./distro-build -work /Volumes/nudanos/work test scenario bgp # layer 4: one scenario (tests/scenarios/<name>)
 ./distro-build -work /Volumes/nudanos/work test scenarios    # layer 4: every scenario
-./distro-build -work /Volumes/nudanos/work test fixtures     # every captured DANOS 2105 configuration loads
+./distro-build -work /Volumes/nudanos/work test fixtures     # captured DANOS 2105 configs load or refuse unsupported policy
 ```
 
 `test scenarios` fails when a gating scenario fails (`gating: false`, like
-`mpls-ldp`, is reported only); `test fixtures` prints `fixtures: OK (<n>
-configs)`. Transcripts, show dumps and diffs are kept in
+`mpls-ldp`, is reported only); `test fixtures` reports loaded configurations
+and verified firewall/NAT policy refusals. Transcripts, show dumps and diffs are kept in
 `work/scenarios/<image>/<scenario>/`. Without `/dev/kvm` every timeout is six
 times longer and a full run takes hours: run one at a time.
 

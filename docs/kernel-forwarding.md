@@ -78,14 +78,22 @@ installs `dpdk-required` under those script names. Kernel-native `show arp` and
 A DANOS 2105 configuration can hold settings only the DPDK dataplane
 implements (above, and the deviations in
 `vyatta-kernel-forwarding-deviations-v1`). One such node makes the whole
-boot configuration fail to load, so `vyatta-kernel-forwarding` sets them
-aside first:
+boot configuration fail to load. `vyatta-kernel-forwarding` sets aside
+unsupported tuning settings but refuses unsupported firewall and NAT policy.
+
+- The preflight for `system-configure.service` checks the boot file and any
+  previously set-aside policy. If the check refuses it, nftables blocks routed
+  and bridged transit and the service does not load the configuration. The
+  preflight leaves local input and output alone. Use the console to review and
+  replace the policy, archive any old side file, then reboot with the corrected
+  configuration. The check accepts generated `config.boot` block syntax and
+  refuses ambiguous syntax without editing it.
 
 - `vyatta-boot-config-loader` (vyatta-cfg) runs every executable in
   `/opt/vyatta/etc/boot-config.d/` as `<hook> <boot file>` before loading,
-  and logs `boot-config hook <name>: ok|failed (<status>)`. A failing hook
-  never stops the boot.
-- `50-dpdk-set-aside` removes the nodes listed in
+  and logs `boot-config hook <name>: ok|failed (<status>)`. Exit status 78
+  (`EX_CONFIG`) aborts load and commit; ordinary hook failures are logged.
+- For permitted migrations, `50-dpdk-set-aside` removes the nodes listed in
   `/usr/share/vyatta-kernel-forwarding/dpdk-only-paths` (one path per line,
   `*` for a list key, a trailing `!auto` for "only when the value is not
   auto", e.g. `interfaces dataplane * speed !auto`). When it removes

@@ -1,7 +1,5 @@
-// Package fixtures checks that DANOS 2105 configurations load on NuDanOS
-// (plan 4): each captured 2105 config.boot is copied into a NuDanOS router,
-// passed through the DPDK set-aside hook, loaded and committed, and what
-// the router then shows is compared with what 2105 showed.
+// Package fixtures checks that supported DANOS 2105 configurations load on
+// NuDanOS, and that configurations with unsupported security policy are refused.
 package fixtures
 
 import (
@@ -35,8 +33,14 @@ const (
 // differs between the 2105 and NuDanOS images and is not compared.
 var baseLine = regexp.MustCompile(fmt.Sprintf(`^set (system host-name|system login user|interfaces dataplane dp0s%d) `, topology.MgmtPCI))
 
-// Check loads every ref on vm and reports each that does not show what 2105
-// showed, apart from the lines the set-aside hook removes by design.
+var hookStatus = regexp.MustCompile(`(?m)^NUDANOS-BOOT-HOOK-STATUS=([0-9]+)\r?$`)
+
+// RefusesPolicy identifies the captures that must fail closed in kernel mode.
+func RefusesPolicy(ref Ref) bool {
+	return ref.Name == "sampler/firewall" || ref.Name == "sampler/nat"
+}
+
+// Check loads supported refs and verifies policy refusal for unsupported refs.
 func Check(ctx context.Context, vm *topology.VM, refs []Ref, t func(time.Duration) time.Duration) []Failure {
 	c := vm.Console
 	list, err := boottest.OpOutput(c, "cat "+pathsFile, t(time.Minute))
@@ -68,8 +72,23 @@ func checkOne(c *boottest.Console, r Ref, pats []pattern, t func(time.Duration) 
 	if err := copyFile(c, refFile, r.ConfigBoot, t); err != nil {
 		return "copying config.boot: " + err.Error()
 	}
-	if out, err := boottest.OpOutput(c, hook+" "+refFile, t(2*time.Minute)); err != nil {
+	cmd := hook + " " + refFile + `; printf '\nNUDANOS-BOOT-HOOK-STATUS=%s\n' "$?"`
+	out, err := boottest.OpOutput(c, cmd, t(2*time.Minute))
+	if err != nil {
 		return "set-aside hook: " + err.Error() + "\n" + out
+	}
+	want := "0"
+	if RefusesPolicy(r) {
+		want = "78"
+	}
+	if status := hookStatus.FindStringSubmatch(out); status == nil || status[1] != want {
+		return fmt.Sprintf("set-aside hook: expected exit status %s:\n%s", want, out)
+	}
+	if RefusesPolicy(r) {
+		if err := checkFile(c, refFile, r.ConfigBoot, t); err != nil {
+			return "refused policy changed the boot file: " + err.Error()
+		}
+		return ""
 	}
 	if err := load(c, refFile, t); err != nil {
 		return err.Error()
@@ -153,6 +172,10 @@ func copyFile(c *boottest.Console, path, content string, t func(time.Duration) t
 	if _, err := c.Expect(boottest.OpPrompt, t(time.Minute)); err != nil {
 		return err
 	}
+	return checkFile(c, path, content, t)
+}
+
+func checkFile(c *boottest.Console, path, content string, t func(time.Duration) time.Duration) error {
 	out, err := boottest.OpOutput(c, "md5sum "+path, t(time.Minute))
 	if err != nil {
 		return err

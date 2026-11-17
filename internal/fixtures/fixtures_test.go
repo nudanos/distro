@@ -35,6 +35,10 @@ var (
 )
 
 func fakeRouterPaths(t *testing.T, show, paths string) *topology.VM {
+	return fakeRouterHook(t, show, paths, 0)
+}
+
+func fakeRouterHook(t *testing.T, show, paths string, hookStatus int) *topology.VM {
 	t.Helper()
 	mu.Lock()
 	seen = nil
@@ -77,6 +81,8 @@ func fakeRouterPaths(t *testing.T, show, paths string) *topology.VM {
 					reply += fmt.Sprintf("\r\n%x  /tmp/ref.boot", md5.Sum(file)) + op
 				case strings.HasPrefix(line, "cat /usr/share/vyatta-kernel-forwarding/dpdk-only-paths"):
 					reply += "\r\n" + strings.ReplaceAll(paths, "\n", "\r\n") + strings.TrimPrefix(op, "\r\n")
+				case strings.HasPrefix(line, hook+" "):
+					reply += fmt.Sprintf("\r\nNUDANOS-BOOT-HOOK-STATUS=%d", hookStatus) + op
 				case line == "show configuration commands":
 					reply += "\r\n" + strings.ReplaceAll(show, "\n", "\r\n") + strings.TrimPrefix(op, "\r\n")
 				case line == "configure":
@@ -114,15 +120,13 @@ set interfaces dataplane dp0s3 address '10.0.0.1/24'
 set interfaces dataplane dp0s3 speed '100m'
 set interfaces dataplane dp0s4 speed 'auto'
 set protocols static route 10.9.0.0/16 next-hop '10.0.0.2'
-set security firewall name OUT default-action 'drop'
 set system host-name 'r1'
 set system login user tmpuser level 'admin'
 `
 
-var ref = Ref{Name: "sampler/firewall", ConfigBoot: "system {\n\thost-name r1\n}\n", Commands: refCommands}
+var ref = Ref{Name: "sampler/tuning", ConfigBoot: "system {\n\thost-name r1\n}\n", Commands: refCommands}
 
-// The set-aside lines (firewall, a speed that is not auto) are absent on
-// NuDanOS by design.
+// A forced speed is set aside; a firewall or NAT policy is refused separately.
 func TestCheckPassesWhenOnlySetAsideLinesDiffer(t *testing.T) {
 	vm := fakeRouter(t, `set interfaces dataplane dp0s10 address '10.0.2.15/24'
 set interfaces dataplane dp0s3 address '10.0.0.1/24'
@@ -144,8 +148,32 @@ set system host-name 'r1'
 set system login user tmpuser level 'admin'
 `)
 	f := Check(context.Background(), vm, []Ref{ref}, identity)
-	if len(f) != 1 || f[0].Name != "sampler/firewall" || !strings.Contains(f[0].Detail, "set protocols static route 10.9.0.0/16 next-hop '10.0.0.2'") {
+	if len(f) != 1 || f[0].Name != ref.Name || !strings.Contains(f[0].Detail, "set protocols static route 10.9.0.0/16 next-hop '10.0.0.2'") {
 		t.Fatalf("failures = %+v; want the missing static route named", f)
+	}
+}
+
+func TestPolicyFixtureIsNeverLoaded(t *testing.T) {
+	policy := Ref{Name: "sampler/firewall", ConfigBoot: "security {\n\tfirewall {\n\t}\n}\n"}
+	vm := fakeRouterHook(t, "", paths, 78)
+	if f := Check(context.Background(), vm, []Ref{policy}, identity); len(f) != 0 {
+		t.Fatalf("policy refusal was not recognized: %+v", f)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	for _, line := range seen {
+		if line == "configure" || strings.HasPrefix(line, "load ") {
+			t.Fatalf("attempted to load a refused configuration: %q", line)
+		}
+	}
+}
+
+func TestPolicyFixtureRejectsSuccessfulHook(t *testing.T) {
+	policy := Ref{Name: "sampler/nat", ConfigBoot: "service {\n\tnat {\n\t}\n}\n"}
+	vm := fakeRouterHook(t, "", paths, 0)
+	f := Check(context.Background(), vm, []Ref{policy}, identity)
+	if len(f) != 1 || !strings.Contains(f[0].Detail, "expected exit status 78") {
+		t.Fatalf("successful migration of policy was not rejected: %+v", f)
 	}
 }
 

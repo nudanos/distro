@@ -224,7 +224,7 @@ func Refs(tests string) ([]fixtures.Ref, error) {
 
 // RunFixtures loads every captured 2105 configuration on one NuDanOS router
 // and then boots the cpu-affinity sampler's (layer 4, plan 4). It prints
-// "fixtures: OK (<n> configs)" or the failures, and returns whether all
+// the load and refusal counts or the failures, and returns whether all
 // passed.
 func RunFixtures(ctx context.Context, o Options, out io.Writer) bool {
 	refs, err := Refs(o.Tests)
@@ -254,7 +254,13 @@ func RunFixtures(ctx context.Context, o Options, out io.Writer) bool {
 		failures = append(failures, fixtures.Failure{Name: "reboot with sampler/cpu-affinity", Detail: err.Error()})
 	}
 	if len(failures) == 0 {
-		fmt.Fprintf(out, "fixtures: OK (%d configs)\n", len(refs))
+		refused := 0
+		for _, ref := range refs {
+			if fixtures.RefusesPolicy(ref) {
+				refused++
+			}
+		}
+		fmt.Fprintf(out, "fixtures: OK (%d loaded, %d policy refusals)\n", len(refs)-refused, refused)
 		return true
 	}
 	for _, f := range failures {
