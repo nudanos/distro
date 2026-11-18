@@ -42,8 +42,10 @@ artifact identities are recorded in the execution ledger.
 
 ## Continue in this order
 
-1. Implement and independently review target-only password persistence and
-   coordinated startup writers; verify immediate reboot without another commit.
+1. Reconcile the actual password renewal path and configd's automatic save;
+   correct the design and verify immediate reboot without another commit.
+   [November18 correction and draft source checkpoints](2026-11-18-status.md)
+   supersede the target-only persistence assumption in the historical plan.
 2. Complete corrected Debian fresh installation, APT and normal image upgrade,
    reboot, lockout/recovery and fresh/legacy sandbox acceptance.
 3. Implement and test native Arch packages and PAM integration against that
