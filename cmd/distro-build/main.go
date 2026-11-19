@@ -80,6 +80,7 @@ type app struct {
 	referenceISO                                  string
 	capture                                       bool
 	initBaseline, updateBaseline                  bool
+	lintSkipOutOfScope                            bool
 }
 
 func (a *app) outRoot() string { return filepath.Join(a.work, "out") }
@@ -653,6 +654,7 @@ func main() {
 	flag.Var(a.local, "local", "use a local checkout for a ready danos entry: name=dir (repeatable)")
 	flag.BoolVar(&a.initBaseline, "init-baseline", false, "lint: write lint-baseline.json from today's counts (refuses if it exists)")
 	flag.BoolVar(&a.updateBaseline, "update-baseline", false, "lint: lower the linted ports in lint-baseline.json to their counts")
+	flag.BoolVar(&a.lintSkipOutOfScope, "lint-skip-out-of-scope", false, "lint: leave out named ports outside the lint scope instead of failing (port CI)")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "usage: distro-build [flags] builder|fetch|plan|build|repo|image|lint|test install|boot|scenario <name>|scenarios|fixtures|check-updates [name…]\n")
 		flag.PrintDefaults()

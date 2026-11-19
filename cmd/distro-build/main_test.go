@@ -209,6 +209,24 @@ func TestLintSpecMounts(t *testing.T) {
 	}
 }
 
+// Every port repository's CI calls one shared workflow, which lints the
+// port it builds. A port outside the lint scope has nothing to check there:
+// with -lint-skip-out-of-scope it is left out instead of failing the build.
+func TestLintSkipOutOfScope(t *testing.T) {
+	m := lintScopeManifest()
+	got, skipped, err := lintTargetsSkipping(m, []string{"frr", "vyatta-cfg"})
+	if err != nil || !reflect.DeepEqual(got, []string{"vyatta-cfg"}) || !reflect.DeepEqual(skipped, []string{"frr"}) {
+		t.Errorf("mixed: %v, skipped %v, %v", got, skipped, err)
+	}
+	got, skipped, err = lintTargetsSkipping(m, []string{"frr"})
+	if err != nil || len(got) != 0 || !reflect.DeepEqual(skipped, []string{"frr"}) {
+		t.Errorf("only out of scope: %v, skipped %v, %v", got, skipped, err)
+	}
+	if _, _, err := lintTargetsSkipping(m, nil); err == nil {
+		t.Error("skipping needs named ports: linting everything has nothing to skip")
+	}
+}
+
 func TestLintNamedOutOfScopeIsAnError(t *testing.T) {
 	m := lintScopeManifest()
 	if got, err := lintTargets(m, nil); err != nil || !reflect.DeepEqual(got, []string{"dp", "vyatta-cfg"}) {

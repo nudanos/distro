@@ -40,6 +40,27 @@ func lintTargets(m *manifest.Manifest, names []string) ([]string, error) {
 	return out, nil
 }
 
+// lintTargetsSkipping is lintTargets for named ports that leaves out, and
+// returns, the ones outside the lint scope instead of failing.
+func lintTargetsSkipping(m *manifest.Manifest, names []string) (ports, skipped []string, err error) {
+	if len(names) == 0 {
+		return nil, nil, fmt.Errorf("-lint-skip-out-of-scope needs the ports to lint")
+	}
+	in := map[string]bool{}
+	for _, n := range inScope(m) {
+		in[n] = true
+	}
+	for _, n := range names {
+		if in[n] {
+			ports = append(ports, n)
+		} else {
+			skipped = append(skipped, n)
+		}
+	}
+	sort.Strings(ports)
+	return ports, skipped, nil
+}
+
 // lintSpec runs the lint binary from binDir over one port's source, read-only
 // and without network.
 func lintSpec(port, src, binDir string) engine.RunSpec {
@@ -98,8 +119,19 @@ func (a *app) lintCmd(ctx context.Context, names []string) error {
 	if err != nil {
 		return err
 	}
-	ports, err := lintTargets(m, names)
-	if err != nil {
+	var ports []string
+	if a.lintSkipOutOfScope {
+		var skipped []string
+		if ports, skipped, err = lintTargetsSkipping(m, names); err != nil {
+			return err
+		}
+		for _, n := range skipped {
+			fmt.Printf("lint: %s is not in lint scope; not checked\n", n)
+		}
+		if len(ports) == 0 {
+			return nil
+		}
+	} else if ports, err = lintTargets(m, names); err != nil {
 		return err
 	}
 	// Linting named ports, like building them, tolerates fetch failures of

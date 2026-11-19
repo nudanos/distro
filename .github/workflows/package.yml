@@ -26,8 +26,11 @@ jobs:
         with:
           path: |
             ${{ runner.temp }}/work/out
+            ${{ runner.temp }}/work/logs
             ${{ runner.temp }}/work/state.json
             ${{ runner.temp }}/work/mirror-state.json
+          # logs: lint reads compiler warnings and staticcheck from the build
+          # log, which a package restored from the cache does not rewrite
           key: work-${{ inputs.package }}-${{ github.run_id }}
           restore-keys: work-${{ inputs.package }}-
       - name: Build this package and its build-dependency closure
@@ -36,6 +39,13 @@ jobs:
           go build -o distro-build ./cmd/distro-build
           ./distro-build -work "$RUNNER_TEMP/work" builder
           ./distro-build -work "$RUNNER_TEMP/work" -jobs 2 -local "${{ inputs.package }}=$GITHUB_WORKSPACE/pkg" build "${{ inputs.package }}"
+      - name: Lint (no worse than lint-baseline.json)
+        # A change that adds findings fails here, before it is merged, rather
+        # than in the next nightly. Ports outside the lint scope are skipped.
+        working-directory: distro
+        run: |
+          ./distro-build -work "$RUNNER_TEMP/work" -local "${{ inputs.package }}=$GITHUB_WORKSPACE/pkg" \
+            -lint-skip-out-of-scope lint "${{ inputs.package }}"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
