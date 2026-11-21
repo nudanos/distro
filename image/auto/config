@@ -2,12 +2,12 @@
 # NuDanOS live image (live-build). Ported from DANOS build-iso.
 # SPDX-License-Identifier: GPL-2.0-only
 set -e
-# Older appliances require md5sum.txt for their normal image upgrade command.
+# The binary hook generates both manifests after the live files are in place.
 lb config noauto \
     --mode debian --distribution trixie \
     --archive-areas "main non-free-firmware" \
     --binary-images iso-hybrid \
-    --checksums "sha256 md5" \
+    --checksums none \
     --bootloaders "grub-pc grub-efi" \
     --debian-installer none --apt-recommends false \
     --linux-packages linux-image --linux-flavours amd64 \
