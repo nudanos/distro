@@ -1,0 +1,16 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0-only
+set -euo pipefail
+
+# Older installers require md5sum.txt. Keep SHA-256 as well. xorriso writes
+# the boot info table into grub_eltorito after this hook; the external image
+# digest covers the finished ISO, including that file.
+test -s live/filesystem.squashfs
+for algorithm in sha256 md5; do
+    manifest="${algorithm}sum.txt"
+    find . -type f \
+        ! -path './boot/grub/grub_eltorito' \
+        ! -path './sha256sum.txt' \
+        ! -path './md5sum.txt' \
+        -print0 | LC_ALL=C sort -z | xargs -0 "${algorithm}sum" > "$manifest"
+done
